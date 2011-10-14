@@ -3,10 +3,10 @@
 // license that can be found in the LICENSE file.
 
 /*
-Package inotify implements a wrapper for the Linux inotify system.
+Package fsnotify implements a wrapper for the Linux inotify system.
 
 Example:
-    watcher, err := inotify.NewWatcher()
+    watcher, err := fsotify.NewWatcher()
     if err != nil {
         log.Fatal(err)
     }
@@ -24,7 +24,7 @@ Example:
     }
 
 */
-package inotify
+package fsnotify
 
 import (
 	"fmt"
@@ -35,8 +35,8 @@ import (
 )
 
 type Event struct {
-	Mask   uint32 // Mask of events
-	Cookie uint32 // Unique cookie associating related events (for rename(2))
+	mask   uint32 // Mask of events
+	cookie uint32 // Unique cookie associating related events (for rename(2))
 	Name   string // File name (optional)
 }
 
@@ -94,7 +94,7 @@ func (w *Watcher) Close() os.Error {
 
 // AddWatch adds path to the watched file set.
 // The flags are interpreted as described in inotify_add_watch(2).
-func (w *Watcher) AddWatch(path string, flags uint32) os.Error {
+func (w *Watcher) addWatch(path string, flags uint32) os.Error {
 	if w.isClosed {
 		return os.NewError("inotify instance already closed")
 	}
@@ -118,7 +118,7 @@ func (w *Watcher) AddWatch(path string, flags uint32) os.Error {
 
 // Watch adds path to the watched file set, watching all events.
 func (w *Watcher) Watch(path string) os.Error {
-	return w.AddWatch(path, IN_ALL_EVENTS)
+	return w.addWatch(path, IN_ALL_EVENTS)
 }
 
 // RemoveWatch removes path from the watched file set.
@@ -179,8 +179,8 @@ func (w *Watcher) readEvents() {
 			// Point "raw" to the event in the buffer
 			raw := (*syscall.InotifyEvent)(unsafe.Pointer(&buf[offset]))
 			event := new(Event)
-			event.Mask = uint32(raw.Mask)
-			event.Cookie = uint32(raw.Cookie)
+			event.mask = uint32(raw.Mask)
+			event.cookie = uint32(raw.Cookie)
 			nameLen := uint32(raw.Len)
 			// If the event happened to the watched directory or the watched file, the kernel
 			// doesn't append the filename to the event, but we would like to always fill the
@@ -207,7 +207,7 @@ func (w *Watcher) readEvents() {
 func (e *Event) String() string {
 	var events string = ""
 
-	m := e.Mask
+	m := e.mask
 	for _, b := range eventBits {
 		if m&b.Value != 0 {
 			m &^= b.Value
@@ -222,7 +222,7 @@ func (e *Event) String() string {
 		events = " == " + events[1:]
 	}
 
-	return fmt.Sprintf("%q: %#x%s", e.Name, e.Mask, events)
+	return fmt.Sprintf("%q: %#x%s", e.Name, e.mask, events)
 }
 
 const (
