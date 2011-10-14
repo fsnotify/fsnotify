@@ -34,11 +34,23 @@ import (
 	"unsafe"
 )
 
-type Event struct {
+type FileEvent struct {
 	mask   uint32 // Mask of events
 	cookie uint32 // Unique cookie associating related events (for rename(2))
 	Name   string // File name (optional)
 }
+
+// IsDelete reports whether the FileEvent was triggerd by a delete
+func (e *FileEvent) IsDelete() bool { return (e.mask & IN_DELETE_SELF) == IN_DELETE_SELF }
+
+// IsModify reports whether the FileEvent was triggerd by a file modification
+func (e *FileEvent) IsModify() bool { return (e.mask & IN_MODIFY) == IN_MODIFY }
+
+// IsAttribute reports whether the FileEvent was triggerd by a change of attributes
+func (e *FileEvent) IsAttribute() bool { return (e.mask & IN_ATTRIB) == IN_ATTRIB }
+
+// IsRename reports whether the FileEvent was triggerd by a change name
+func (e *FileEvent) IsRename() bool { return (e.mask & IN_MOVE_SELF) == IN_MOVE_SELF }
 
 type watch struct {
 	wd    uint32 // Watch descriptor (as returned by the inotify_add_watch() syscall)
@@ -50,7 +62,7 @@ type Watcher struct {
 	watches  map[string]*watch // Map of inotify watches (key: path)
 	paths    map[int]string    // Map of watched paths (key: watch descriptor)
 	Error    chan os.Error     // Errors are sent on this channel
-	Event    chan *Event       // Events are returned on this channel
+	Event    chan *FileEvent   // Events are returned on this channel
 	done     chan bool         // Channel for sending a "quit message" to the reader goroutine
 	isClosed bool              // Set to true when Close() is first called
 }
@@ -65,7 +77,7 @@ func NewWatcher() (*Watcher, os.Error) {
 		fd:      fd,
 		watches: make(map[string]*watch),
 		paths:   make(map[int]string),
-		Event:   make(chan *Event),
+		Event:   make(chan *FileEvent),
 		Error:   make(chan os.Error),
 		done:    make(chan bool, 1),
 	}
@@ -118,7 +130,7 @@ func (w *Watcher) addWatch(path string, flags uint32) os.Error {
 
 // Watch adds path to the watched file set, watching all events.
 func (w *Watcher) Watch(path string) os.Error {
-	return w.addWatch(path, IN_ALL_EVENTS)
+	return w.addWatch(path, OS_AGNOSTIC_EVENTS)
 }
 
 // RemoveWatch removes path from the watched file set.
@@ -178,7 +190,7 @@ func (w *Watcher) readEvents() {
 		for offset <= uint32(n-syscall.SizeofInotifyEvent) {
 			// Point "raw" to the event in the buffer
 			raw := (*syscall.InotifyEvent)(unsafe.Pointer(&buf[offset]))
-			event := new(Event)
+			event := new(FileEvent)
 			event.mask = uint32(raw.Mask)
 			event.cookie = uint32(raw.Cookie)
 			nameLen := uint32(raw.Len)
@@ -204,7 +216,7 @@ func (w *Watcher) readEvents() {
 
 // String formats the event e in the form
 // "filename: 0xEventMask = IN_ACCESS|IN_ATTRIB_|..."
-func (e *Event) String() string {
+func (e *FileEvent) String() string {
 	var events string = ""
 
 	m := e.mask
@@ -255,6 +267,8 @@ const (
 	IN_MOVED_TO      uint32 = syscall.IN_MOVED_TO
 	IN_MOVE_SELF     uint32 = syscall.IN_MOVE_SELF
 	IN_OPEN          uint32 = syscall.IN_OPEN
+
+	OS_AGNOSTIC_EVENTS = IN_ATTRIB | IN_MODIFY | IN_MOVE_SELF | IN_DELETE
 
 	// Special events
 	IN_ISDIR      uint32 = syscall.IN_ISDIR
