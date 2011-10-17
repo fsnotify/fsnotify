@@ -216,29 +216,6 @@ func (w *Watcher) readEvents() {
 	}
 }
 
-// String formats the event e in the form
-// "filename: 0xEventMask = NOTE_EXTEND|NOTE_ATTRIB|..."
-func (e *FileEvent) String() string {
-	var events string = ""
-
-	m := e.mask
-	for _, b := range eventBits {
-		if m&b.Value != 0 {
-			m &^= b.Value
-			events += "|" + b.Name
-		}
-	}
-
-	if m != 0 {
-		events += fmt.Sprintf("|%#x", m)
-	}
-	if len(events) > 0 {
-		events = " == " + events[1:]
-	}
-
-	return fmt.Sprintf("%q: %#x%s", e.Name, e.mask, events)
-}
-
 const (
 	// Flags (from <sys/event.h>)
 	NOTE_DELETE = 0x0001 /* vnode was removed */
@@ -255,16 +232,3 @@ const (
 	// Block for 100 ms on each call to kevent
 	keventWaitTime = 100e6
 )
-
-var eventBits = []struct {
-	Value uint32
-	Name  string
-}{
-	{NOTE_DELETE, "NOTE_DELETE"},
-	{NOTE_WRITE, "NOTE_WRITE"},
-	{NOTE_EXTEND, "NOTE_EXTEND"},
-	{NOTE_ATTRIB, "NOTE_ATTRIB"},
-	{NOTE_LINK, "NOTE_LINK"},
-	{NOTE_RENAME, "NOTE_RENAME"},
-	{NOTE_REVOKE, "NOTE_REVOKE"},
-}

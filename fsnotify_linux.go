@@ -214,29 +214,6 @@ func (w *Watcher) readEvents() {
 	}
 }
 
-// String formats the event e in the form
-// "filename: 0xEventMask = IN_ACCESS|IN_ATTRIB_|..."
-func (e *FileEvent) String() string {
-	var events string = ""
-
-	m := e.mask
-	for _, b := range eventBits {
-		if m&b.Value != 0 {
-			m &^= b.Value
-			events += "|" + b.Name
-		}
-	}
-
-	if m != 0 {
-		events += fmt.Sprintf("|%#x", m)
-	}
-	if len(events) > 0 {
-		events = " == " + events[1:]
-	}
-
-	return fmt.Sprintf("%q: %#x%s", e.Name, e.mask, events)
-}
-
 const (
 	// Options for inotify_init() are not exported
 	// IN_CLOEXEC    uint32 = syscall.IN_CLOEXEC

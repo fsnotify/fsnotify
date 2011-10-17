@@ -2,6 +2,9 @@ include $(GOROOT)/src/Make.inc
 
 TARG=exp/fsnotify
 
+GOFILES=\
+	fsnotify.go
+
 GOFILES_linux=\
 	fsnotify_linux.go\
 
