@@ -40,8 +40,13 @@ type FileEvent struct {
 	Name   string // File name (optional)
 }
 
+// IsCreate reports whether the FileEvent was triggerd by a creation
+func (e *FileEvent) IsCreate() bool { return (e.mask & IN_CREATE) == IN_CREATE }
+
 // IsDelete reports whether the FileEvent was triggerd by a delete
-func (e *FileEvent) IsDelete() bool { return (e.mask & IN_DELETE_SELF) == IN_DELETE_SELF }
+func (e *FileEvent) IsDelete() bool {
+	return (e.mask&IN_DELETE_SELF) == IN_DELETE_SELF || (e.mask&IN_DELETE) == IN_DELETE
+}
 
 // IsModify reports whether the FileEvent was triggerd by a file modification
 func (e *FileEvent) IsModify() bool { return (e.mask & IN_MODIFY) == IN_MODIFY }
@@ -205,8 +210,10 @@ func (w *Watcher) readEvents() {
 				// The filename is padded with NUL bytes. TrimRight() gets rid of those.
 				event.Name += "/" + strings.TrimRight(string(bytes[0:nameLen]), "\000")
 			}
-			// Send the event on the events channel
-			w.Event <- event
+			// Send the events that are not ignored on the events channel
+			if (event.mask & IN_IGNORED) == 0 {
+				w.Event <- event
+			}
 
 			// Move to the next event in the buffer
 			offset += syscall.SizeofInotifyEvent + nameLen
@@ -253,27 +260,3 @@ const (
 	IN_Q_OVERFLOW uint32 = syscall.IN_Q_OVERFLOW
 	IN_UNMOUNT    uint32 = syscall.IN_UNMOUNT
 )
-
-var eventBits = []struct {
-	Value uint32
-	Name  string
-}{
-	{IN_ACCESS, "IN_ACCESS"},
-	{IN_ATTRIB, "IN_ATTRIB"},
-	{IN_CLOSE, "IN_CLOSE"},
-	{IN_CLOSE_NOWRITE, "IN_CLOSE_NOWRITE"},
-	{IN_CLOSE_WRITE, "IN_CLOSE_WRITE"},
-	{IN_CREATE, "IN_CREATE"},
-	{IN_DELETE, "IN_DELETE"},
-	{IN_DELETE_SELF, "IN_DELETE_SELF"},
-	{IN_MODIFY, "IN_MODIFY"},
-	{IN_MOVE, "IN_MOVE"},
-	{IN_MOVED_FROM, "IN_MOVED_FROM"},
-	{IN_MOVED_TO, "IN_MOVED_TO"},
-	{IN_MOVE_SELF, "IN_MOVE_SELF"},
-	{IN_OPEN, "IN_OPEN"},
-	{IN_ISDIR, "IN_ISDIR"},
-	{IN_IGNORED, "IN_IGNORED"},
-	{IN_Q_OVERFLOW, "IN_Q_OVERFLOW"},
-	{IN_UNMOUNT, "IN_UNMOUNT"},
-}

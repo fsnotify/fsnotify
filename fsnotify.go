@@ -7,6 +7,10 @@ import "fmt"
 func (e *FileEvent) String() string {
 	var events string = ""
 
+	if e.IsCreate() {
+		events += "|" + "CREATE"
+	}
+
 	if e.IsDelete() {
 		events += "|" + "DELETE"
 	}
