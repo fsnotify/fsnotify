@@ -17,7 +17,7 @@ func TestFsnotifyEvents(t *testing.T) {
 		t.Fatalf("NewWatcher() failed: %s", err)
 	}
 
-    const testDir string = "_test"
+	const testDir string = "_test"
 
 	// Add a watch for testDir
 	err = watcher.Watch(testDir)
@@ -53,12 +53,12 @@ func TestFsnotifyEvents(t *testing.T) {
 
 	// Create a file
 	// This should add at least one event to the fsnotify event queue
-    var f *os.File
+	var f *os.File
 	f, err = os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
 		t.Fatalf("creating test file failed: %s", err)
 	}
-    f.Sync()
+	f.Sync()
 
 	// Add a watch for testFile
 	err = watcher.Watch(testFile)
@@ -66,17 +66,19 @@ func TestFsnotifyEvents(t *testing.T) {
 		t.Fatalf("Watcher.Watch() failed: %s", err)
 	}
 
-    f.WriteString("data")
-    f.Sync()
-    f.Close()
+	f.WriteString("data")
+	f.Sync()
+	f.Close()
 
-    os.Remove(testFile)
+	os.Remove(testFile)
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500e6) // 500 ms
 	if eventsReceived == 0 {
 		t.Fatal("fsnotify event hasn't been received after 500 ms")
 	}
+
+	t.Logf("Received %d events.", eventsReceived)
 
 	// Try closing the fsnotify instance
 	t.Log("calling Close()")

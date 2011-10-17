@@ -268,7 +268,7 @@ const (
 	IN_MOVE_SELF     uint32 = syscall.IN_MOVE_SELF
 	IN_OPEN          uint32 = syscall.IN_OPEN
 
-	OS_AGNOSTIC_EVENTS = IN_ATTRIB | IN_MODIFY | IN_MOVE_SELF | IN_DELETE
+	OS_AGNOSTIC_EVENTS = IN_CREATE | IN_ATTRIB | IN_MODIFY | IN_MOVE_SELF | IN_DELETE
 
 	// Special events
 	IN_ISDIR      uint32 = syscall.IN_ISDIR
