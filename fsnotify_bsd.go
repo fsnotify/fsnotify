@@ -33,9 +33,13 @@ import (
 )
 
 type FileEvent struct {
-	mask uint32 // Mask of events
-	Name string // File name (optional)
+	mask   uint32 // Mask of events
+	Name   string // File name (optional)
+	create bool   // set by fsnotify package if found new file
 }
+
+// IsCreate reports whether the FileEvent was triggerd by a creation
+func (e *FileEvent) IsCreate() bool { return e.create }
 
 // IsDelete reports whether the FileEvent was triggerd by a delete
 func (e *FileEvent) IsDelete() bool { return (e.mask & NOTE_DELETE) == NOTE_DELETE }
@@ -54,7 +58,7 @@ type Watcher struct {
 	watches  map[string]int      // Map of watched file diescriptors (key: path)
 	paths    map[int]string      // Map of watched paths (key: watch descriptor)
 	Error    chan os.Error       // Errors are sent on this channel
-	Event    chan *FileEvent         // Events are returned on this channel
+	Event    chan *FileEvent     // Events are returned on this channel
 	done     chan bool           // Channel for sending a "quit message" to the reader goroutine
 	isClosed bool                // Set to true when Close() is first called
 	kbuf     [1]syscall.Kevent_t // An event buffer for Add/Remove watch
@@ -113,7 +117,7 @@ func (w *Watcher) addWatch(path string, flags uint32) os.Error {
 		if fd == -1 {
 			return &os.PathError{"kevent_add_watch", path, os.Errno(errno)}
 		}
-        watchfd = fd
+		watchfd = fd
 
 		w.watches[path] = watchfd
 		w.paths[watchfd] = path
@@ -171,7 +175,7 @@ func (w *Watcher) readEvents() {
 	for {
 		if len(events) == 0 {
 			n, errno = syscall.Kevent(w.kq, nil, eventbuf[:], twait)
-		    events = eventbuf[0:n]
+			events = eventbuf[0:n]
 		}
 		// See if there is a message on the "done" channel
 		var done bool
