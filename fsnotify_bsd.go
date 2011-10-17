@@ -30,6 +30,8 @@ import (
 	"fmt"
 	"os"
 	"syscall"
+	"io/ioutil"
+	"path"
 )
 
 type FileEvent struct {
@@ -54,14 +56,15 @@ func (e *FileEvent) IsAttribute() bool { return (e.mask & NOTE_ATTRIB) == NOTE_A
 func (e *FileEvent) IsRename() bool { return (e.mask & NOTE_RENAME) == NOTE_RENAME }
 
 type Watcher struct {
-	kq       int                 // File descriptor (as returned by the kqueue() syscall)
-	watches  map[string]int      // Map of watched file diescriptors (key: path)
-	paths    map[int]string      // Map of watched paths (key: watch descriptor)
-	Error    chan os.Error       // Errors are sent on this channel
-	Event    chan *FileEvent     // Events are returned on this channel
-	done     chan bool           // Channel for sending a "quit message" to the reader goroutine
-	isClosed bool                // Set to true when Close() is first called
-	kbuf     [1]syscall.Kevent_t // An event buffer for Add/Remove watch
+	kq       int                  // File descriptor (as returned by the kqueue() syscall)
+	watches  map[string]int       // Map of watched file diescriptors (key: path)
+	paths    map[int]string       // Map of watched paths (key: watch descriptor)
+	finfo    map[int]*os.FileInfo // Map of file information (isDir, isReg; key: watch descriptor)
+	Error    chan os.Error        // Errors are sent on this channel
+	Event    chan *FileEvent      // Events are returned on this channel
+	done     chan bool            // Channel for sending a "quit message" to the reader goroutine
+	isClosed bool                 // Set to true when Close() is first called
+	kbuf     [1]syscall.Kevent_t  // An event buffer for Add/Remove watch
 }
 
 // NewWatcher creates and returns a new kevent instance using kqueue(2)
@@ -74,6 +77,7 @@ func NewWatcher() (*Watcher, os.Error) {
 		kq:      fd,
 		watches: make(map[string]int),
 		paths:   make(map[int]string),
+		finfo:   make(map[int]*os.FileInfo),
 		Event:   make(chan *FileEvent),
 		Error:   make(chan os.Error),
 		done:    make(chan bool, 1),
@@ -130,6 +134,9 @@ func (w *Watcher) addWatch(path string, flags uint32) os.Error {
 	} else if (watchEntry.Flags & syscall.EV_ERROR) == syscall.EV_ERROR {
 		return &os.PathError{"kevent_add_watch", path, os.Errno(int(watchEntry.Data))}
 	}
+
+	fi, _ := os.Stat(path)
+	w.finfo[watchfd] = fi
 
 	return nil
 }
@@ -211,11 +218,39 @@ func (w *Watcher) readEvents() {
 			fileEvent.mask = uint32(watchEvent.Fflags)
 			fileEvent.Name = w.paths[int(watchEvent.Ident)]
 
-			// Send the event on the events channel
-			w.Event <- fileEvent
+			fileInfo := w.finfo[int(watchEvent.Ident)]
+			if fileInfo.IsDirectory() && fileEvent.IsModify() {
+				w.sendDirectoryChangeEvents(fileEvent.Name)
+			} else {
+				// Send the event on the events channel
+				w.Event <- fileEvent
+			}
 
 			// Move to next event
 			events = events[1:]
+		}
+	}
+}
+
+// sendDirectoryEvents searches the directory for newly created files
+// and sends them over the event channel. This functionality is to have
+// the BSD version of fsnotify mach linux fsnotify which provides a 
+// create event for files created in a watched directory.
+func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
+	// Get all files
+	files, _ := ioutil.ReadDir(dirPath)
+
+	// Search for new files
+	for _, fileInfo := range files {
+		if fileInfo.IsRegular() == true {
+			filePath := path.Join(dirPath, fileInfo.Name)
+			if w.watches[filePath] == 0 {
+				// Send create event
+				fileEvent := new(FileEvent)
+				fileEvent.Name = filePath
+				fileEvent.create = true
+				w.Event <- fileEvent
+			}
 		}
 	}
 }
