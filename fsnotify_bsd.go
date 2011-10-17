@@ -238,7 +238,10 @@ func (w *Watcher) readEvents() {
 // create event for files created in a watched directory.
 func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 	// Get all files
-	files, _ := ioutil.ReadDir(dirPath)
+	files, err := ioutil.ReadDir(dirPath)
+	if err != nil {
+		w.Error <- err
+	}
 
 	// Search for new files
 	for _, fileInfo := range files {
