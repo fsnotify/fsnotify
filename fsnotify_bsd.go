@@ -249,7 +249,10 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 			filePath := path.Join(dirPath, fileInfo.Name)
 			if w.watches[filePath] == 0 {
 				// Watch file to mimic linux fsnotify
-				w.addWatch(filePath, NOTE_DELETE|NOTE_WRITE|NOTE_RENAME)
+				e := w.addWatch(filePath, NOTE_DELETE|NOTE_WRITE|NOTE_RENAME)
+				if e != nil {
+					w.Error <- e
+				}
 
 				// Send create event
 				fileEvent := new(FileEvent)
