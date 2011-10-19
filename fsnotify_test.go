@@ -224,6 +224,12 @@ func TestFsnotifyRename(t *testing.T) {
 	f.Sync()
 	f.Close()
 
+	// Add a watch for testFile
+	err = watcher.Watch(testFile)
+	if err != nil {
+		t.Fatalf("Watcher.Watch() failed: %s", err)
+	}
+
 	cmd := exec.Command("mv", testFile, testFileRenamed)
 	err = cmd.Run()
 	if err != nil {
