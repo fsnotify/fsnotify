@@ -308,15 +308,15 @@ func TestFsnotifyAttrib(t *testing.T) {
 	}
 	f.Sync()
 
+	f.WriteString("data")
+	f.Sync()
+	f.Close()
+
 	// Add a watch for testFile
 	err = watcher.Watch(testFile)
 	if err != nil {
 		t.Fatalf("Watcher.Watch() failed: %s", err)
 	}
-
-	f.WriteString("data")
-	f.Sync()
-	f.Close()
 
 	cmd := exec.Command("chmod", "0700", testFile)
 	err = cmd.Run()
