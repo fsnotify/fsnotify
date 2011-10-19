@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 	"testing"
+	"exec"
 )
 
 func TestFsnotifyEvents(t *testing.T) {
@@ -200,7 +201,7 @@ func TestFsnotifyRename(t *testing.T) {
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
-			if event.Name == testDir || event.Name == testFile {
+			if event.Name == testDir || event.Name == testFile || event.Name == testFileRenamed {
 				eventsReceived++
 				t.Logf("event received: %s", event)
 			} else {
@@ -223,7 +224,11 @@ func TestFsnotifyRename(t *testing.T) {
 	f.Sync()
 	f.Close()
 
-    os.Rename(testFile, testFileRenamed)
+	cmd := exec.Command("mv", testFile, testFileRenamed)
+	err = cmd.Run()
+	if err != nil {
+		t.Fatalf("rename failed: %s", err)
+	}
 
 	os.Remove(testFileRenamed)
 
@@ -307,7 +312,11 @@ func TestFsnotifyAttrib(t *testing.T) {
 	f.Sync()
 	f.Close()
 
-    os.Chmod(testFile, 766)
+	cmd := exec.Command("chmod", "0700", testFile)
+	err = cmd.Run()
+	if err != nil {
+		t.Fatalf("chmod failed: %s", err)
+	}
 
 	os.Remove(testFile)
 
