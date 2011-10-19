@@ -37,18 +37,20 @@ func TestFsnotifyDirOnly(t *testing.T) {
 
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
-	var eventsReceived = 0
 	var createReceived = 0
+	var modifyReceived = 0
 	var deleteReceived = 0
 	done := make(chan bool)
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
 			if event.Name == testDir || event.Name == testFile {
-				eventsReceived++
 				t.Logf("event received: %s", event)
 				if event.IsDelete() {
 					deleteReceived++
+				}
+				if event.IsModify() {
+					modifyReceived++
 				}
 				if event.IsDelete() {
 					createReceived++
@@ -77,12 +79,11 @@ func TestFsnotifyDirOnly(t *testing.T) {
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500e6) // 500 ms
-	if eventsReceived == 0 {
-		t.Fatal("fsnotify event hasn't been received after 500 ms")
-	}
-
 	if createReceived == 0 {
 		t.Fatal("fsnotify create events have not been received after 500 ms")
+	}
+	if modifyReceived == 0 {
+		t.Fatal("fsnotify modify events have not been received after 500 ms")
 	}
 	if deleteReceived == 0 {
 		t.Fatal("fsnotify delete events have not been received after 500 ms")
@@ -127,14 +128,12 @@ func TestFsnotifyRename(t *testing.T) {
 
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
-	var eventsReceived = 0
 	var renameReceived = 0
 	done := make(chan bool)
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
 			if event.Name == testDir || event.Name == testFile || event.Name == testFileRenamed {
-				eventsReceived++
 				if event.IsRename() {
 					renameReceived++
 				}
@@ -175,10 +174,6 @@ func TestFsnotifyRename(t *testing.T) {
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500e6) // 500 ms
-	if eventsReceived == 0 {
-		t.Fatal("fsnotify event hasn't been received after 500 ms")
-	}
-
 	if renameReceived == 0 {
 		t.Fatal("fsnotify rename events have not been received after 500 ms")
 	}
@@ -221,14 +216,12 @@ func TestFsnotifyAttrib(t *testing.T) {
 
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
-	var eventsReceived = 0
 	var attribReceived = 0
 	done := make(chan bool)
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
 			if event.Name == testDir || event.Name == testFile {
-				eventsReceived++
 				if event.IsAttribute() {
 					attribReceived++
 				}
@@ -269,10 +262,6 @@ func TestFsnotifyAttrib(t *testing.T) {
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500e6) // 500 ms
-	if eventsReceived == 0 {
-		t.Fatal("fsnotify event hasn't been received after 500 ms")
-	}
-
 	if attribReceived == 0 {
 		t.Fatal("fsnotify attribute events have not received after 500 ms")
 	}
