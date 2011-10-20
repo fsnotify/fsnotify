@@ -125,6 +125,9 @@ func (w *Watcher) addWatch(path string, flags uint32) os.Error {
 
 		w.watches[path] = watchfd
 		w.paths[watchfd] = path
+
+		fi, _ := os.Stat(path)
+		w.finfo[watchfd] = fi
 	}
 	syscall.SetKevent(watchEntry, watchfd, syscall.EVFILT_VNODE, syscall.EV_ADD|syscall.EV_CLEAR)
 
@@ -134,9 +137,6 @@ func (w *Watcher) addWatch(path string, flags uint32) os.Error {
 	} else if (watchEntry.Flags & syscall.EV_ERROR) == syscall.EV_ERROR {
 		return &os.PathError{"kevent_add_watch", path, os.Errno(int(watchEntry.Data))}
 	}
-
-	fi, _ := os.Stat(path)
-	w.finfo[watchfd] = fi
 
 	return nil
 }

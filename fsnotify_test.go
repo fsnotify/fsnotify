@@ -75,6 +75,8 @@ func TestFsnotifyDirOnly(t *testing.T) {
 	f.Sync()
 	f.Close()
 
+	time.Sleep(200e6) // give system time to sync write change before delete
+
 	os.Remove(testFile)
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
@@ -170,8 +172,6 @@ func TestFsnotifyRename(t *testing.T) {
 		t.Fatalf("rename failed: %s", err)
 	}
 
-	os.Remove(testFileRenamed)
-
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500e6) // 500 ms
 	if renameReceived == 0 {
@@ -188,6 +188,8 @@ func TestFsnotifyRename(t *testing.T) {
 	case <-time.After(1e9):
 		t.Fatal("event stream was not closed after 1 second")
 	}
+
+	os.Remove(testFileRenamed)
 }
 
 func TestFsnotifyAttrib(t *testing.T) {
@@ -258,8 +260,6 @@ func TestFsnotifyAttrib(t *testing.T) {
 		t.Fatalf("chmod failed: %s", err)
 	}
 
-	os.Remove(testFile)
-
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500e6) // 500 ms
 	if attribReceived == 0 {
@@ -276,6 +276,8 @@ func TestFsnotifyAttrib(t *testing.T) {
 	case <-time.After(1e9):
 		t.Fatal("event stream was not closed after 1 second")
 	}
+
+	os.Remove(testFile)
 }
 
 func TestFsnotifyClose(t *testing.T) {
