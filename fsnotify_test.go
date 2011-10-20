@@ -70,12 +70,11 @@ func TestFsnotifyDirOnly(t *testing.T) {
 		t.Fatalf("creating test file failed: %s", err)
 	}
 	f.Sync()
+	time.Sleep(200e6) // give system time to sync write change before delete
 
 	f.WriteString("data")
 	f.Sync()
 	f.Close()
-
-	time.Sleep(200e6) // give system time to sync write change before delete
 
 	os.Remove(testFile)
 
