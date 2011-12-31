@@ -124,7 +124,7 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 	}
 	wd, errno := syscall.InotifyAddWatch(w.fd, path, flags)
 	if wd == -1 {
-		return &os.PathError{"inotify_add_watch", path, os.Errno(errno)}
+		return errno
 	}
 
 	if !found {
@@ -159,7 +159,7 @@ func (w *Watcher) readEvents() {
 	var (
 		buf   [syscall.SizeofInotifyEvent * 4096]byte // Buffer for a maximum of 4096 raw events
 		n     int                                     // Number of bytes read with read()
-		errno int                                     // Syscall errno
+		errno error                                   // Syscall errno
 	)
 
 	for {
@@ -174,7 +174,7 @@ func (w *Watcher) readEvents() {
 		// If EOF or a "done" message is received
 		if n == 0 || done {
 			errno := syscall.Close(w.fd)
-			if errno == -1 {
+			if errno != nil {
 				w.Error <- os.NewSyscallError("close", errno)
 			}
 			close(w.Event)
