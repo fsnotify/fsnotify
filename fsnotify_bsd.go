@@ -27,11 +27,12 @@ Example:
 package fsnotify
 
 import (
+	"errors"
 	"fmt"
-	"os"
-	"syscall"
 	"io/ioutil"
+	"os"
 	"path"
+	"syscall"
 )
 
 type FileEvent struct {
@@ -56,19 +57,19 @@ func (e *FileEvent) IsAttribute() bool { return (e.mask & NOTE_ATTRIB) == NOTE_A
 func (e *FileEvent) IsRename() bool { return (e.mask & NOTE_RENAME) == NOTE_RENAME }
 
 type Watcher struct {
-	kq       int                  // File descriptor (as returned by the kqueue() syscall)
-	watches  map[string]int       // Map of watched file diescriptors (key: path)
-	paths    map[int]string       // Map of watched paths (key: watch descriptor)
-	finfo    map[int]*os.FileInfo // Map of file information (isDir, isReg; key: watch descriptor)
-	Error    chan os.Error        // Errors are sent on this channel
-	Event    chan *FileEvent      // Events are returned on this channel
-	done     chan bool            // Channel for sending a "quit message" to the reader goroutine
-	isClosed bool                 // Set to true when Close() is first called
-	kbuf     [1]syscall.Kevent_t  // An event buffer for Add/Remove watch
+	kq       int                 // File descriptor (as returned by the kqueue() syscall)
+	watches  map[string]int      // Map of watched file diescriptors (key: path)
+	paths    map[int]string      // Map of watched paths (key: watch descriptor)
+	finfo    map[int]os.FileInfo // Map of file information (isDir, isReg; key: watch descriptor)
+	Error    chan error          // Errors are sent on this channel
+	Event    chan *FileEvent     // Events are returned on this channel
+	done     chan bool           // Channel for sending a "quit message" to the reader goroutine
+	isClosed bool                // Set to true when Close() is first called
+	kbuf     [1]syscall.Kevent_t // An event buffer for Add/Remove watch
 }
 
 // NewWatcher creates and returns a new kevent instance using kqueue(2)
-func NewWatcher() (*Watcher, os.Error) {
+func NewWatcher() (*Watcher, error) {
 	fd, errno := syscall.Kqueue()
 	if fd == -1 {
 		return nil, os.NewSyscallError("kqueue", errno)
@@ -77,9 +78,9 @@ func NewWatcher() (*Watcher, os.Error) {
 		kq:      fd,
 		watches: make(map[string]int),
 		paths:   make(map[int]string),
-		finfo:   make(map[int]*os.FileInfo),
+		finfo:   make(map[int]os.FileInfo),
 		Event:   make(chan *FileEvent),
-		Error:   make(chan os.Error),
+		Error:   make(chan error),
 		done:    make(chan bool, 1),
 	}
 
@@ -90,7 +91,7 @@ func NewWatcher() (*Watcher, os.Error) {
 // Close closes a kevent watcher instance
 // It sends a message to the reader goroutine to quit and removes all watches
 // associated with the kevent instance
-func (w *Watcher) Close() os.Error {
+func (w *Watcher) Close() error {
 	if w.isClosed {
 		return nil
 	}
@@ -107,9 +108,9 @@ func (w *Watcher) Close() os.Error {
 
 // AddWatch adds path to the watched file set.
 // The flags are interpreted as described in kevent(2).
-func (w *Watcher) addWatch(path string, flags uint32) os.Error {
+func (w *Watcher) addWatch(path string, flags uint32) error {
 	if w.isClosed {
-		return os.NewError("kevent instance already closed")
+		return errors.New("kevent instance already closed")
 	}
 
 	watchEntry := &w.kbuf[0]
@@ -119,7 +120,7 @@ func (w *Watcher) addWatch(path string, flags uint32) os.Error {
 	if !found {
 		fd, errno := syscall.Open(path, syscall.O_NONBLOCK|syscall.O_RDONLY, 0700)
 		if fd == -1 {
-			return &os.PathError{"kevent_add_watch", path, os.Errno(errno)}
+			return errno
 		}
 		watchfd = fd
 
@@ -133,24 +134,24 @@ func (w *Watcher) addWatch(path string, flags uint32) os.Error {
 
 	wd, errno := syscall.Kevent(w.kq, w.kbuf[:], nil, nil)
 	if wd == -1 {
-		return &os.PathError{"kevent_add_watch", path, os.Errno(errno)}
+		return errno
 	} else if (watchEntry.Flags & syscall.EV_ERROR) == syscall.EV_ERROR {
-		return &os.PathError{"kevent_add_watch", path, os.Errno(int(watchEntry.Data))}
+		return errors.New("kevent add error")
 	}
 
 	return nil
 }
 
 // Watch adds path to the watched file set, watching all events.
-func (w *Watcher) Watch(path string) os.Error {
+func (w *Watcher) Watch(path string) error {
 	return w.addWatch(path, NOTE_ALLEVENTS)
 }
 
 // RemoveWatch removes path from the watched file set.
-func (w *Watcher) RemoveWatch(path string) os.Error {
+func (w *Watcher) RemoveWatch(path string) error {
 	watchfd, ok := w.watches[path]
 	if !ok {
-		return os.NewError(fmt.Sprintf("can't remove non-existent kevent watch for: %s", path))
+		return errors.New(fmt.Sprintf("can't remove non-existent kevent watch for: %s", path))
 	}
 	syscall.Close(watchfd)
 	watchEntry := &w.kbuf[0]
@@ -159,9 +160,9 @@ func (w *Watcher) RemoveWatch(path string) os.Error {
 	if success == -1 {
 		return os.NewSyscallError("kevent_rm_watch", errno)
 	} else if (watchEntry.Flags & syscall.EV_ERROR) == syscall.EV_ERROR {
-		return os.NewSyscallError("kevent_rm_watch", int(watchEntry.Data))
+		return errors.New("kevent rm error")
 	}
-	w.watches[path] = 0, false
+	delete(w.watches, path)
 	return nil
 }
 
@@ -173,7 +174,7 @@ func (w *Watcher) readEvents() {
 		events   []syscall.Kevent_t   // Received events
 		twait    *syscall.Timespec    // Time to block waiting for events
 		n        int                  // Number of events returned from kevent
-		errno    int                  // Syscall errno
+		errno    error                // Syscall errno
 	)
 	events = eventbuf[0:0]
 	twait = new(syscall.Timespec)
@@ -194,7 +195,7 @@ func (w *Watcher) readEvents() {
 		// If "done" message is received
 		if done {
 			errno := syscall.Close(w.kq)
-			if errno == -1 {
+			if errno != nil {
 				w.Error <- os.NewSyscallError("close", errno)
 			}
 			close(w.Event)
@@ -219,7 +220,7 @@ func (w *Watcher) readEvents() {
 			fileEvent.Name = w.paths[int(watchEvent.Ident)]
 
 			fileInfo := w.finfo[int(watchEvent.Ident)]
-			if fileInfo.IsDirectory() && fileEvent.IsModify() {
+			if fileInfo.IsDir() && fileEvent.IsModify() {
 				w.sendDirectoryChangeEvents(fileEvent.Name)
 			} else {
 				// Send the event on the events channel
@@ -245,8 +246,8 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 
 	// Search for new files
 	for _, fileInfo := range files {
-		if fileInfo.IsRegular() == true {
-			filePath := path.Join(dirPath, fileInfo.Name)
+		if fileInfo.IsDir() == false {
+			filePath := path.Join(dirPath, fileInfo.Name())
 			if w.watches[filePath] == 0 {
 				// Watch file to mimic linux fsnotify
 				e := w.addWatch(filePath, NOTE_DELETE|NOTE_WRITE|NOTE_RENAME)

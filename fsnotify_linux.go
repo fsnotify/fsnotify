@@ -27,6 +27,7 @@ Example:
 package fsnotify
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -66,14 +67,14 @@ type Watcher struct {
 	fd       int               // File descriptor (as returned by the inotify_init() syscall)
 	watches  map[string]*watch // Map of inotify watches (key: path)
 	paths    map[int]string    // Map of watched paths (key: watch descriptor)
-	Error    chan os.Error     // Errors are sent on this channel
+	Error    chan error        // Errors are sent on this channel
 	Event    chan *FileEvent   // Events are returned on this channel
 	done     chan bool         // Channel for sending a "quit message" to the reader goroutine
 	isClosed bool              // Set to true when Close() is first called
 }
 
 // NewWatcher creates and returns a new inotify instance using inotify_init(2)
-func NewWatcher() (*Watcher, os.Error) {
+func NewWatcher() (*Watcher, error) {
 	fd, errno := syscall.InotifyInit()
 	if fd == -1 {
 		return nil, os.NewSyscallError("inotify_init", errno)
@@ -83,7 +84,7 @@ func NewWatcher() (*Watcher, os.Error) {
 		watches: make(map[string]*watch),
 		paths:   make(map[int]string),
 		Event:   make(chan *FileEvent),
-		Error:   make(chan os.Error),
+		Error:   make(chan error),
 		done:    make(chan bool, 1),
 	}
 
@@ -94,7 +95,7 @@ func NewWatcher() (*Watcher, os.Error) {
 // Close closes an inotify watcher instance
 // It sends a message to the reader goroutine to quit and removes all watches
 // associated with the inotify instance
-func (w *Watcher) Close() os.Error {
+func (w *Watcher) Close() error {
 	if w.isClosed {
 		return nil
 	}
@@ -111,9 +112,9 @@ func (w *Watcher) Close() os.Error {
 
 // AddWatch adds path to the watched file set.
 // The flags are interpreted as described in inotify_add_watch(2).
-func (w *Watcher) addWatch(path string, flags uint32) os.Error {
+func (w *Watcher) addWatch(path string, flags uint32) error {
 	if w.isClosed {
-		return os.NewError("inotify instance already closed")
+		return errors.New("inotify instance already closed")
 	}
 
 	watchEntry, found := w.watches[path]
@@ -134,21 +135,21 @@ func (w *Watcher) addWatch(path string, flags uint32) os.Error {
 }
 
 // Watch adds path to the watched file set, watching all events.
-func (w *Watcher) Watch(path string) os.Error {
+func (w *Watcher) Watch(path string) error {
 	return w.addWatch(path, OS_AGNOSTIC_EVENTS)
 }
 
 // RemoveWatch removes path from the watched file set.
-func (w *Watcher) RemoveWatch(path string) os.Error {
+func (w *Watcher) RemoveWatch(path string) error {
 	watch, ok := w.watches[path]
 	if !ok {
-		return os.NewError(fmt.Sprintf("can't remove non-existent inotify watch for: %s", path))
+		return errors.New(fmt.Sprintf("can't remove non-existent inotify watch for: %s", path))
 	}
 	success, errno := syscall.InotifyRmWatch(w.fd, watch.wd)
 	if success == -1 {
 		return os.NewSyscallError("inotify_rm_watch", errno)
 	}
-	w.watches[path] = nil, false
+	delete(w.watches, path)
 	return nil
 }
 
@@ -185,7 +186,7 @@ func (w *Watcher) readEvents() {
 			continue
 		}
 		if n < syscall.SizeofInotifyEvent {
-			w.Error <- os.NewError("inotify: short read in readEvents()")
+			w.Error <- errors.New("inotify: short read in readEvents()")
 			continue
 		}
 

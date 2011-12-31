@@ -6,9 +6,9 @@ package fsnotify
 
 import (
 	"os"
-	"time"
+	"os/exec"
 	"testing"
-	"exec"
+	"time"
 )
 
 func TestFsnotifyDirOnly(t *testing.T) {
