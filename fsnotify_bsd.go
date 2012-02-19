@@ -129,6 +129,9 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 
 		fi, _ := os.Stat(path)
 		w.finfo[watchfd] = fi
+		if fi.IsDir() {
+			w.watchDirectoryFiles(path)
+		}
 	}
 	syscall.SetKevent(watchEntry, watchfd, syscall.EVFILT_VNODE, syscall.EV_ADD|syscall.EV_CLEAR)
 
@@ -233,11 +236,32 @@ func (w *Watcher) readEvents() {
 	}
 }
 
+func (w *Watcher) watchDirectoryFiles(dirPath string) {
+	// Get all files
+	files, err := ioutil.ReadDir(dirPath)
+	if err != nil {
+		w.Error <- err
+	}
+
+	// Search for new files
+	for _, fileInfo := range files {
+		if fileInfo.IsDir() == false {
+			filePath := path.Join(dirPath, fileInfo.Name())
+			// Watch file to mimic linux fsnotify
+			e := w.addWatch(filePath, NOTE_DELETE|NOTE_WRITE|NOTE_RENAME)
+			if e != nil {
+				w.Error <- e
+			}
+		}
+	}
+}
+
 // sendDirectoryEvents searches the directory for newly created files
 // and sends them over the event channel. This functionality is to have
 // the BSD version of fsnotify mach linux fsnotify which provides a 
 // create event for files created in a watched directory.
 func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
+	w.watchDirectoryFiles(dirPath)
 	// Get all files
 	files, err := ioutil.ReadDir(dirPath)
 	if err != nil {
@@ -249,12 +273,6 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 		if fileInfo.IsDir() == false {
 			filePath := path.Join(dirPath, fileInfo.Name())
 			if w.watches[filePath] == 0 {
-				// Watch file to mimic linux fsnotify
-				e := w.addWatch(filePath, NOTE_DELETE|NOTE_WRITE|NOTE_RENAME)
-				if e != nil {
-					w.Error <- e
-				}
-
 				// Send create event
 				fileEvent := new(FileEvent)
 				fileEvent.Name = filePath

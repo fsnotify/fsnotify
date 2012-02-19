@@ -83,19 +83,20 @@ func TestFsnotifyDirOnly(t *testing.T) {
 		t.Fatalf("creating test file failed: %s", err)
 	}
 	f.Sync()
-	time.Sleep(200e6) // give system time to sync write change before delete
 
 	f.WriteString("data")
 	f.Sync()
 	f.Close()
 
+	time.Sleep(200e6) // give system time to sync write change before delete
+
 	os.Remove(testFile)
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500e6) // 500 ms
-//	if createReceived == 0 {
-//		t.Fatal("fsnotify create events have not been received after 500 ms")
-//	}
+	if createReceived > 0 {
+		t.Fatal("fsnotify create events should not occur in this test!")
+	}
 	if modifyReceived == 0 {
 		t.Fatal("fsnotify modify events have not been received after 500 ms")
 	}
