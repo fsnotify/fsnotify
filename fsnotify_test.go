@@ -20,6 +20,12 @@ func TestFsnotifyDirOnly(t *testing.T) {
 
 	const testDir string = "_test"
 
+	// Create directory to watch
+	if os.Mkdir(testDir, 0777) != nil {
+		t.Fatalf("Failed to create test directory: %s", err)
+	}
+	defer os.RemoveAll(testDir)
+
 	// Create a file before watching directory
 	// This should NOT add any events to the fsnotify event queue
 	{
@@ -125,6 +131,12 @@ func TestFsnotifyRename(t *testing.T) {
 
 	const testDir string = "_test"
 
+	// Create directory to watch
+	if os.Mkdir(testDir, 0777) != nil {
+		t.Fatalf("Failed to create test directory: %s", err)
+	}
+	defer os.RemoveAll(testDir)
+
 	// Add a watch for testDir
 	err = watcher.Watch(testDir)
 	if err != nil {
@@ -213,6 +225,12 @@ func TestFsnotifyAttrib(t *testing.T) {
 	}
 
 	const testDir string = "_test"
+
+	// Create directory to watch
+	if os.Mkdir(testDir, 0777) != nil {
+		t.Fatalf("Failed to create test directory: %s", err)
+	}
+	defer os.RemoveAll(testDir)
 
 	// Add a watch for testDir
 	err = watcher.Watch(testDir)
