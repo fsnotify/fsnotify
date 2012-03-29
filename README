@@ -18,5 +18,5 @@ Example:
         }
     }
 
-TODO:
-Get Windows to pass same tests as BSD and Linux
+Issues:
+Windows does not seem to have an attribute change notification
