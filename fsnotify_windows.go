@@ -409,7 +409,7 @@ func (w *Watcher) readEvents() {
                 var offset uint32
                 for {
                         if n == 0 {
-                                w.Event <- &Event{mask: FS_Q_OVERFLOW}
+                                w.Event <- &FileEvent{mask: FS_Q_OVERFLOW}
                                 w.Error <- errors.New("short read in readEvents()")
                                 break
                         }
