@@ -19,4 +19,12 @@ Example:
     }
 
 Issues:
-Windows does not seem to have an attribute change notification
+It appears that windows does not have an attribute change notification
+http://msdn.microsoft.com/en-us/library/windows/desktop/aa364391(v=vs.85).aspx
+
+Notifications:
+IsCreate()
+IsDelete()
+IsModify()
+IsAttribute() * NOT SUPPORTED ON WINDOWS *
+IsRename()

@@ -30,7 +30,7 @@ type FileEvent struct {
 func (e *FileEvent) IsCreate() bool { return (e.mask & FS_CREATE) == FS_CREATE}
 
 // IsDelete reports whether the FileEvent was triggerd by a delete
-func (e *FileEvent) IsDelete() bool { return (e.mask & FS_DELETE) == FS_DELETE }
+func (e *FileEvent) IsDelete() bool { return ((e.mask & FS_DELETE) == FS_DELETE || (e.mask & FS_DELETE_SELF) == FS_DELETE_SELF }
 
 // IsModify reports whether the FileEvent was triggerd by a file modification
 func (e *FileEvent) IsModify() bool { return (e.mask & FS_MODIFY) == FS_MODIFY }
