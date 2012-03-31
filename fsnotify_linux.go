@@ -51,11 +51,8 @@ func (e *FileEvent) IsDelete() bool {
 	return (e.mask&IN_DELETE_SELF) == IN_DELETE_SELF || (e.mask&IN_DELETE) == IN_DELETE
 }
 
-// IsModify reports whether the FileEvent was triggerd by a file modification
-func (e *FileEvent) IsModify() bool { return (e.mask & IN_MODIFY) == IN_MODIFY }
-
-// IsAttribute reports whether the FileEvent was triggerd by a change of attributes
-func (e *FileEvent) IsAttribute() bool { return (e.mask & IN_ATTRIB) == IN_ATTRIB }
+// IsModify reports whether the FileEvent was triggerd by a file modification or attribute change
+func (e *FileEvent) IsModify() bool { return ((e.mask & IN_MODIFY) == IN_MODIFY || (e.mask & IN_ATTRIB) == IN_ATTRIB) }
 
 // IsRename reports whether the FileEvent was triggerd by a change name
 func (e *FileEvent) IsRename() bool { return (e.mask & IN_MOVE_SELF) == IN_MOVE_SELF }
