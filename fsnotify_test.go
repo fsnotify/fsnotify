@@ -255,7 +255,7 @@ func TestFsnotifyAttrib(t *testing.T) {
 		for event := range eventstream {
 			// Only count relevant events
 			if event.Name == testDir || event.Name == testFile {
-				if event.IsAttribute() {
+				if event.IsModify() {
 					attribReceived++
 				}
 				t.Logf("event received: %s", event)

@@ -19,10 +19,6 @@ func (e *FileEvent) String() string {
 		events += "|" + "MODIFY"
 	}
 
-	if e.IsAttribute() {
-		events += "|" + "ATTRIB"
-	}
-
 	if e.IsRename() {
 		events += "|" + "RENAME"
 	}

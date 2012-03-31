@@ -30,13 +30,10 @@ type FileEvent struct {
 func (e *FileEvent) IsCreate() bool { return (e.mask & FS_CREATE) == FS_CREATE}
 
 // IsDelete reports whether the FileEvent was triggerd by a delete
-func (e *FileEvent) IsDelete() bool { return ((e.mask & FS_DELETE) == FS_DELETE || (e.mask & FS_DELETE_SELF) == FS_DELETE_SELF }
+func (e *FileEvent) IsDelete() bool { return ((e.mask & FS_DELETE) == FS_DELETE || (e.mask & FS_DELETE_SELF) == FS_DELETE_SELF) }
 
-// IsModify reports whether the FileEvent was triggerd by a file modification
-func (e *FileEvent) IsModify() bool { return (e.mask & FS_MODIFY) == FS_MODIFY }
-
-// IsAttribute reports whether the FileEvent was triggerd by a change of attributes
-func (e *FileEvent) IsAttribute() bool { return (e.mask & FS_ATTRIB) == FS_ATTRIB }
+// IsModify reports whether the FileEvent was triggerd by a file modification or attribute change
+func (e *FileEvent) IsModify() bool { return ((e.mask & FS_MODIFY) == FS_MODIFY || (e.mask & FS_ATTRIB) == FS_ATTRIB) }
 
 // IsRename reports whether the FileEvent was triggerd by a change name
 func (e *FileEvent) IsRename() bool { return ((e.mask & FS_MOVE) == FS_MOVE || (e.mask & FS_MOVE_SELF) == FS_MOVE_SELF || (e.mask & FS_MOVED_FROM) == FS_MOVED_FROM || (e.mask & FS_MOVED_TO) == FS_MOVED_TO) }
