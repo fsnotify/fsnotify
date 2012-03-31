@@ -1,5 +1,11 @@
 File system notifications for Go
 
+Cross platform, works on:
+Windows
+Linux
+BSD
+OSX
+
 Example:
     watcher, err := fsnotify.NewWatcher()
     if err != nil {
@@ -18,13 +24,8 @@ Example:
         }
     }
 
-Issues:
-It appears that windows does not have an attribute change notification
-http://msdn.microsoft.com/en-us/library/windows/desktop/aa364391(v=vs.85).aspx
-
 Notifications:
 IsCreate()
 IsDelete()
 IsModify()
-IsAttribute() * NOT SUPPORTED ON WINDOWS *
 IsRename()
