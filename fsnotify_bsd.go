@@ -50,10 +50,7 @@ func (e *FileEvent) IsCreate() bool { return e.create }
 func (e *FileEvent) IsDelete() bool { return (e.mask & NOTE_DELETE) == NOTE_DELETE }
 
 // IsModify reports whether the FileEvent was triggerd by a file modification
-func (e *FileEvent) IsModify() bool { return (e.mask & NOTE_WRITE) == NOTE_WRITE }
-
-// IsAttribute reports whether the FileEvent was triggerd by a change of attributes
-func (e *FileEvent) IsAttribute() bool { return (e.mask & NOTE_ATTRIB) == NOTE_ATTRIB }
+func (e *FileEvent) IsModify() bool { return ((e.mask & NOTE_WRITE) == NOTE_WRITE || (e.mask & NOTE_ATTRIB) == NOTE_ATTRIB) }
 
 // IsRename reports whether the FileEvent was triggerd by a change name
 func (e *FileEvent) IsRename() bool { return (e.mask & NOTE_RENAME) == NOTE_RENAME }
