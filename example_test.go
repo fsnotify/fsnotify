@@ -1,5 +1,10 @@
 package fsnotify_test
 
+import (
+	"github.com/howeyc/fsnotify"
+	"log"
+)
+
 func ExampleWatcher() {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
