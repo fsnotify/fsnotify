@@ -212,14 +212,12 @@ func (w *Watcher) readEvents() {
 			if errno != nil && errno != syscall.EINTR {
 				w.Error <- os.NewSyscallError("kevent", errno)
 				continue
-			} else {
+			}
+
+			// Received some events
+			if n > 0 {
 				events = eventbuf[0:n]
 			}
-		}
-
-		// Timeout, no big deal
-		if n == 0 {
-			continue
 		}
 
 		// Flush the events we recieved to the events channel
