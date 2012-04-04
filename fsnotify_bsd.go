@@ -50,7 +50,9 @@ func (e *FileEvent) IsCreate() bool { return e.create }
 func (e *FileEvent) IsDelete() bool { return (e.mask & NOTE_DELETE) == NOTE_DELETE }
 
 // IsModify reports whether the FileEvent was triggerd by a file modification
-func (e *FileEvent) IsModify() bool { return ((e.mask & NOTE_WRITE) == NOTE_WRITE || (e.mask & NOTE_ATTRIB) == NOTE_ATTRIB) }
+func (e *FileEvent) IsModify() bool {
+	return ((e.mask&NOTE_WRITE) == NOTE_WRITE || (e.mask&NOTE_ATTRIB) == NOTE_ATTRIB)
+}
 
 // IsRename reports whether the FileEvent was triggerd by a change name
 func (e *FileEvent) IsRename() bool { return (e.mask & NOTE_RENAME) == NOTE_RENAME }
@@ -183,10 +185,6 @@ func (w *Watcher) readEvents() {
 	*twait = syscall.NsecToTimespec(keventWaitTime)
 
 	for {
-		if len(events) == 0 {
-			n, errno = syscall.Kevent(w.kq, nil, eventbuf[:], twait)
-			events = eventbuf[0:n]
-		}
 		// See if there is a message on the "done" channel
 		var done bool
 		select {
@@ -204,9 +202,19 @@ func (w *Watcher) readEvents() {
 			close(w.Error)
 			return
 		}
-		if n < 0 {
-			w.Error <- os.NewSyscallError("kevent", errno)
-			continue
+
+		// Get new events
+		if len(events) == 0 {
+			n, errno = syscall.Kevent(w.kq, nil, eventbuf[:], twait)
+
+			// EINTR is okay, basically the syscall was interrupted before 
+			// timeout expired.
+			if errno != nil && errno != syscall.EINTR {
+				w.Error <- os.NewSyscallError("kevent", errno)
+				continue
+			} else {
+				events = eventbuf[0:n]
+			}
 		}
 
 		// Timeout, no big deal
