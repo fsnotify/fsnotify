@@ -5,7 +5,7 @@ import (
 	"log"
 )
 
-func ExampleWatcher() {
+func ExampleNewWatcher() {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatal(err)
