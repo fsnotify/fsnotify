@@ -104,15 +104,20 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 		}
 
 		// Follow Symlinks
+		// Unfortunately, Linux can add bogus symlinks to watch list without
+		// issue, and Windows can't do symlinks period (AFAIK). To  maintain
+		// consistency, we will act like everything is fine. There will simply
+		// be no file events for broken symlinks.
+		// Hence the returns of nil on errors.
 		for fi.Mode()&os.ModeSymlink == os.ModeSymlink {
 			path, errstat = os.Readlink(path)
 			if errstat != nil {
-				return errstat
+				return nil
 			}
 
 			fi, errstat = os.Lstat(path)
 			if errstat != nil {
-				return errstat
+				return nil
 			}
 		}
 

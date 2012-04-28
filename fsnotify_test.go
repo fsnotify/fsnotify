@@ -252,9 +252,9 @@ func TestFsnotifyFakeSymlink(t *testing.T) {
 		t.Fatalf("Watcher.Watch() failed: %s", err)
 	}
 
-	// We expect this event to be received immediately, as they happen during Watch() call
-	if errorsReceived == 0 {
-		t.Fatal("fsnotify errors have not been received.")
+	// Should not be error, just no events for broken links (watching nothing)
+	if errorsReceived > 0 {
+		t.Fatal("fsnotify errors have been received.")
 	}
 
 	// Try closing the fsnotify instance
