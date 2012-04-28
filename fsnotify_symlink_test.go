@@ -55,4 +55,3 @@ func TestFsnotifyFakeSymlink(t *testing.T) {
 	t.Log("calling Close()")
 	watcher.Close()
 }
-
