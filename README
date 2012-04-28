@@ -7,14 +7,12 @@ BSD
 OSX
 
 Example:
+// Note that it is possible for Watch() to send errors over the Error channel.
     watcher, err := fsnotify.NewWatcher()
     if err != nil {
         log.Fatal(err)
     }
-    err = watcher.Watch("/tmp")
-    if err != nil {
-        log.Fatal(err)
-    }
+
     for {
         select {
         case ev := <-watcher.Event:
@@ -22,6 +20,11 @@ Example:
         case err := <-watcher.Error:
             log.Println("error:", err)
         }
+    }
+
+    err = watcher.Watch("/tmp")
+    if err != nil {
+        log.Fatal(err)
     }
 
 Notifications:

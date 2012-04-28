@@ -10,10 +10,7 @@ func ExampleNewWatcher() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = watcher.Watch("/tmp")
-	if err != nil {
-		log.Fatal(err)
-	}
+
 	for {
 		select {
 		case ev := <-watcher.Event:
@@ -21,5 +18,10 @@ func ExampleNewWatcher() {
 		case err := <-watcher.Error:
 			log.Println("error:", err)
 		}
+	}
+
+	err = watcher.Watch("/tmp")
+	if err != nil {
+		log.Fatal(err)
 	}
 }

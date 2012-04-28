@@ -217,6 +217,51 @@ func TestFsnotifyRename(t *testing.T) {
 	os.Remove(testFileRenamed)
 }
 
+func TestFsnotifyFakeSymlink(t *testing.T) {
+	// Create an fsnotify watcher instance and initialize it
+	watcher, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("NewWatcher() failed: %s", err)
+	}
+
+	const testDir string = "_test"
+
+	// Create directory to watch
+	if os.Mkdir(testDir, 0777) != nil {
+		t.Fatalf("Failed to create test directory: %s", err)
+	}
+	defer os.RemoveAll(testDir)
+
+	if os.Symlink("_test/zzz", "_test/zzznew") != nil {
+		t.Fatalf("Failed to create bogus symlink: %s", err)
+	}
+	t.Logf("Created bogus symlink")
+
+	var errorsReceived = 0
+	// Receive errors on the error channel on a separate goroutine
+	go func() {
+		for errors := range watcher.Error {
+			t.Logf("Received error: %s", errors)
+			errorsReceived++
+		}
+	}()
+
+	// Add a watch for testDir
+	err = watcher.Watch(testDir)
+	if err != nil {
+		t.Fatalf("Watcher.Watch() failed: %s", err)
+	}
+
+	// We expect this event to be received immediately, as they happen during Watch() call
+	if errorsReceived == 0 {
+		t.Fatal("fsnotify errors have not been received.")
+	}
+
+	// Try closing the fsnotify instance
+	t.Log("calling Close()")
+	watcher.Close()
+}
+
 func TestFsnotifyAttrib(t *testing.T) {
 	// Create an fsnotify watcher instance and initialize it
 	watcher, err := NewWatcher()

@@ -98,6 +98,24 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 
 	watchfd, found := w.watches[path]
 	if !found {
+		fi, errstat := os.Lstat(path)
+		if errstat != nil {
+			return errstat
+		}
+
+		// Follow Symlinks
+		for fi.Mode()&os.ModeSymlink == os.ModeSymlink {
+			path, errstat = os.Readlink(path)
+			if errstat != nil {
+				return errstat
+			}
+
+			fi, errstat = os.Lstat(path)
+			if errstat != nil {
+				return errstat
+			}
+		}
+
 		fd, errno := syscall.Open(path, syscall.O_NONBLOCK|syscall.O_RDONLY, 0700)
 		if fd == -1 {
 			return errno
@@ -107,7 +125,6 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 		w.watches[path] = watchfd
 		w.paths[watchfd] = path
 
-		fi, _ := os.Stat(path)
 		w.finfo[watchfd] = fi
 		if fi.IsDir() {
 			w.watchDirectoryFiles(path)
