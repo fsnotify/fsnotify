@@ -7,7 +7,6 @@ BSD
 OSX
 
 Example:
-// Note that it is possible for Watch() to send errors over the Error channel.
     watcher, err := fsnotify.NewWatcher()
     if err != nil {
         log.Fatal(err)
