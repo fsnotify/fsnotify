@@ -132,7 +132,10 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 
 		w.finfo[watchfd] = fi
 		if fi.IsDir() {
-			w.watchDirectoryFiles(path)
+			errdir := w.watchDirectoryFiles(path)
+			if errdir != nil {
+				return errdir
+			}
 		}
 	}
 	syscall.SetKevent(watchEntry, watchfd, syscall.EVFILT_VNODE, syscall.EV_ADD|syscall.EV_CLEAR)
@@ -242,11 +245,11 @@ func (w *Watcher) readEvents() {
 	}
 }
 
-func (w *Watcher) watchDirectoryFiles(dirPath string) {
+func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 	// Get all files
 	files, err := ioutil.ReadDir(dirPath)
 	if err != nil {
-		w.Error <- err
+		return err
 	}
 
 	// Search for new files
@@ -256,10 +259,12 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) {
 			// Watch file to mimic linux fsnotify
 			e := w.addWatch(filePath, NOTE_DELETE|NOTE_WRITE|NOTE_RENAME)
 			if e != nil {
-				w.Error <- e
+				return e
 			}
 		}
 	}
+
+	return nil
 }
 
 // sendDirectoryEvents searches the directory for newly created files
