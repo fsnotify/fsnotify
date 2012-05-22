@@ -81,11 +81,13 @@ func (w *Watcher) Close() error {
 	}
 	w.isClosed = true
 
-	// Send "quit" message to the reader goroutine
-	w.done <- true
+	// Remove all watches
 	for path := range w.watches {
 		w.RemoveWatch(path)
 	}
+
+	// Send "quit" message to the reader goroutine
+	w.done <- true
 
 	return nil
 }
@@ -153,14 +155,12 @@ func (w *Watcher) readEvents() {
 
 		// If EOF or a "done" message is received
 		if n == 0 || done {
-			errno := syscall.Close(w.fd)
-			if errno != nil {
-				w.Error <- os.NewSyscallError("close", errno)
-			}
+			syscall.Close(w.fd)
 			close(w.Event)
 			close(w.Error)
 			return
 		}
+
 		if n < 0 {
 			w.Error <- os.NewSyscallError("read", errno)
 			continue
