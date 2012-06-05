@@ -11,16 +11,18 @@ func ExampleNewWatcher() {
 		log.Fatal(err)
 	}
 
-	for {
-		select {
-		case ev := <-watcher.Event:
-			log.Println("event:", ev)
-		case err := <-watcher.Error:
-			log.Println("error:", err)
+	go func() {
+		for {
+			select {
+			case ev := <-watcher.Event:
+				log.Println("event:", ev)
+			case err := <-watcher.Error:
+				log.Println("error:", err)
+			}
 		}
-	}
+	}()
 
-	err = watcher.Watch("/tmp")
+	err = watcher.Watch("/tmp/foo")
 	if err != nil {
 		log.Fatal(err)
 	}
