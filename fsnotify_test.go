@@ -90,6 +90,7 @@ func TestFsnotifyDirOnly(t *testing.T) {
 	}
 	f.Sync()
 
+	time.Sleep(time.Millisecond)
 	f.WriteString("data")
 	f.Sync()
 	f.Close()

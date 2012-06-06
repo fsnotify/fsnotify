@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 	"syscall"
 )
 
@@ -109,9 +109,9 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 		// consistency, we will act like everything is fine. There will simply
 		// be no file events for broken symlinks.
 		// Hence the returns of nil on errors.
-		for fi.Mode()&os.ModeSymlink == os.ModeSymlink {
-			path, errstat = os.Readlink(path)
-			if errstat != nil {
+		if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
+			path, err := filepath.EvalSymlinks(path)
+			if err != nil {
 				return nil
 			}
 
@@ -255,7 +255,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 	// Search for new files
 	for _, fileInfo := range files {
 		if fileInfo.IsDir() == false {
-			filePath := path.Join(dirPath, fileInfo.Name())
+			filePath := filepath.Join(dirPath, fileInfo.Name())
 			// Watch file to mimic linux fsnotify
 			e := w.addWatch(filePath, NOTE_DELETE|NOTE_WRITE|NOTE_RENAME)
 			if e != nil {
@@ -272,7 +272,6 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 // the BSD version of fsnotify mach linux fsnotify which provides a 
 // create event for files created in a watched directory.
 func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
-	w.watchDirectoryFiles(dirPath)
 	// Get all files
 	files, err := ioutil.ReadDir(dirPath)
 	if err != nil {
@@ -282,7 +281,7 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 	// Search for new files
 	for _, fileInfo := range files {
 		if fileInfo.IsDir() == false {
-			filePath := path.Join(dirPath, fileInfo.Name())
+			filePath := filepath.Join(dirPath, fileInfo.Name())
 			if w.watches[filePath] == 0 {
 				// Send create event
 				fileEvent := new(FileEvent)
@@ -292,6 +291,7 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 			}
 		}
 	}
+	w.watchDirectoryFiles(dirPath)
 }
 
 const (
