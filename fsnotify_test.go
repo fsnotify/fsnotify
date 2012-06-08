@@ -234,12 +234,6 @@ func TestFsnotifyAttrib(t *testing.T) {
 	}
 	defer os.RemoveAll(testDir)
 
-	// Add a watch for testDir
-	err = watcher.Watch(testDir)
-	if err != nil {
-		t.Fatalf("Watcher.Watch() failed: %s", err)
-	}
-
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Error {
@@ -247,7 +241,7 @@ func TestFsnotifyAttrib(t *testing.T) {
 		}
 	}()
 
-	const testFile string = "_test/TestFsnotifyEvents.testfile"
+	const testFile string = "_test/TestFsnotifyAttrib.testfile"
 
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
