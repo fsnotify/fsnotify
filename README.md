@@ -40,3 +40,5 @@ For each event:
 * IsDelete()
 * IsModify()
 * IsRename()
+
+[GoDoc](http://go.pkgdoc.org/github.com/howeyc/fsnotify)
