@@ -2,6 +2,60 @@ package fsnotify
 
 import "fmt"
 
+const (
+	FSN_CREATE = 1
+	FSN_MODIFY = 2
+	FSN_DELETE = 4
+	FSN_RENAME = 8
+
+	FSN_ALL = FSN_MODIFY | FSN_DELETE | FSN_RENAME | FSN_CREATE
+)
+
+// Purge events from interal chan to external chan if passes filter
+func (w *Watcher) purgeEvents() {
+	for ev := range w.internalEvent {
+		sendEvent := false
+		fsnFlags := w.fsnFlags[ev.Name]
+
+		if (fsnFlags&FSN_CREATE == FSN_CREATE) && ev.IsCreate() {
+			sendEvent = true
+		}
+
+		if (fsnFlags&FSN_MODIFY == FSN_MODIFY) && ev.IsModify() {
+			sendEvent = true
+		}
+
+		if (fsnFlags&FSN_DELETE == FSN_DELETE) && ev.IsDelete() {
+			sendEvent = true
+		}
+
+		if (fsnFlags&FSN_RENAME == FSN_RENAME) && ev.IsRename() {
+			sendEvent = true
+		}
+
+		if sendEvent {
+			w.Event <- ev
+		}
+	}
+
+	close(w.Event)
+}
+
+func (w *Watcher) Watch(path string) error {
+	w.fsnFlags[path] = FSN_ALL
+	return w.watch(path)
+}
+
+func (w *Watcher) WatchFlags(path string, flags uint32) error {
+	w.fsnFlags[path] = flags
+	return w.watch(path)
+}
+
+func (w *Watcher) RemoveWatch(path string) error {
+	delete(w.fsnFlags, path)
+	return w.removeWatch(path)
+}
+
 // String formats the event e in the form
 // "filename: DELETE|MODIFY|..."
 func (e *FileEvent) String() string {

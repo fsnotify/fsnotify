@@ -37,15 +37,17 @@ func (e *FileEvent) IsModify() bool {
 func (e *FileEvent) IsRename() bool { return (e.mask & NOTE_RENAME) == NOTE_RENAME }
 
 type Watcher struct {
-	kq       int                 // File descriptor (as returned by the kqueue() syscall)
-	watches  map[string]int      // Map of watched file diescriptors (key: path)
-	paths    map[int]string      // Map of watched paths (key: watch descriptor)
-	finfo    map[int]os.FileInfo // Map of file information (isDir, isReg; key: watch descriptor)
-	Error    chan error          // Errors are sent on this channel
-	Event    chan *FileEvent     // Events are returned on this channel
-	done     chan bool           // Channel for sending a "quit message" to the reader goroutine
-	isClosed bool                // Set to true when Close() is first called
-	kbuf     [1]syscall.Kevent_t // An event buffer for Add/Remove watch
+	kq            int                 // File descriptor (as returned by the kqueue() syscall)
+	watches       map[string]int      // Map of watched file diescriptors (key: path)
+	fsnFlags      map[string]uint32   // Map of watched files to flags used for filter
+	paths         map[int]string      // Map of watched paths (key: watch descriptor)
+	finfo         map[int]os.FileInfo // Map of file information (isDir, isReg; key: watch descriptor)
+	Error         chan error          // Errors are sent on this channel
+	internalEvent chan *FileEvent     // Events are queued on this channel
+	Event         chan *FileEvent     // Events are returned on this channel
+	done          chan bool           // Channel for sending a "quit message" to the reader goroutine
+	isClosed      bool                // Set to true when Close() is first called
+	kbuf          [1]syscall.Kevent_t // An event buffer for Add/Remove watch
 }
 
 // NewWatcher creates and returns a new kevent instance using kqueue(2)
@@ -55,16 +57,19 @@ func NewWatcher() (*Watcher, error) {
 		return nil, os.NewSyscallError("kqueue", errno)
 	}
 	w := &Watcher{
-		kq:      fd,
-		watches: make(map[string]int),
-		paths:   make(map[int]string),
-		finfo:   make(map[int]os.FileInfo),
-		Event:   make(chan *FileEvent),
-		Error:   make(chan error),
-		done:    make(chan bool, 1),
+		kq:            fd,
+		watches:       make(map[string]int),
+		fsnFlags:      make(map[string]uint32),
+		paths:         make(map[int]string),
+		finfo:         make(map[int]os.FileInfo),
+		internalEvent: make(chan *FileEvent),
+		Event:         make(chan *FileEvent),
+		Error:         make(chan error),
+		done:          make(chan bool, 1),
 	}
 
 	go w.readEvents()
+	go w.purgeEvents()
 	return w, nil
 }
 
@@ -80,7 +85,7 @@ func (w *Watcher) Close() error {
 	// Send "quit" message to the reader goroutine
 	w.done <- true
 	for path := range w.watches {
-		w.RemoveWatch(path)
+		w.removeWatch(path)
 	}
 
 	return nil
@@ -151,12 +156,12 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 }
 
 // Watch adds path to the watched file set, watching all events.
-func (w *Watcher) Watch(path string) error {
+func (w *Watcher) watch(path string) error {
 	return w.addWatch(path, NOTE_ALLEVENTS)
 }
 
 // RemoveWatch removes path from the watched file set.
-func (w *Watcher) RemoveWatch(path string) error {
+func (w *Watcher) removeWatch(path string) error {
 	watchfd, ok := w.watches[path]
 	if !ok {
 		return errors.New(fmt.Sprintf("can't remove non-existent kevent watch for: %s", path))
@@ -202,7 +207,7 @@ func (w *Watcher) readEvents() {
 			if errno != nil {
 				w.Error <- os.NewSyscallError("close", errno)
 			}
-			close(w.Event)
+			close(w.internalEvent)
 			close(w.Error)
 			return
 		}
@@ -236,7 +241,7 @@ func (w *Watcher) readEvents() {
 				w.sendDirectoryChangeEvents(fileEvent.Name)
 			} else {
 				// Send the event on the events channel
-				w.Event <- fileEvent
+				w.internalEvent <- fileEvent
 			}
 
 			// Move to next event
@@ -258,6 +263,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 			filePath := filepath.Join(dirPath, fileInfo.Name())
 			// Watch file to mimic linux fsnotify
 			e := w.addWatch(filePath, NOTE_DELETE|NOTE_WRITE|NOTE_RENAME)
+			w.fsnFlags[filePath] = FSN_ALL
 			if e != nil {
 				return e
 			}
@@ -283,11 +289,12 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 		if fileInfo.IsDir() == false {
 			filePath := filepath.Join(dirPath, fileInfo.Name())
 			if w.watches[filePath] == 0 {
+				w.fsnFlags[filePath] = FSN_ALL
 				// Send create event
 				fileEvent := new(FileEvent)
 				fileEvent.Name = filePath
 				fileEvent.create = true
-				w.Event <- fileEvent
+				w.internalEvent <- fileEvent
 			}
 		}
 	}
