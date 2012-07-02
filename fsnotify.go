@@ -41,16 +41,19 @@ func (w *Watcher) purgeEvents() {
 	close(w.Event)
 }
 
+// Watch a given file path
 func (w *Watcher) Watch(path string) error {
 	w.fsnFlags[path] = FSN_ALL
 	return w.watch(path)
 }
 
+// Watch a given file path for a particular set of notifications (FSN_MODIFY etc.)
 func (w *Watcher) WatchFlags(path string, flags uint32) error {
 	w.fsnFlags[path] = flags
 	return w.watch(path)
 }
 
+// Remove a watch on a file
 func (w *Watcher) RemoveWatch(path string) error {
 	delete(w.fsnFlags, path)
 	return w.removeWatch(path)
