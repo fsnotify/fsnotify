@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -189,6 +190,21 @@ func (w *Watcher) readEvents() {
 			// the "Name" field with a valid filename. We retrieve the path of the watch from
 			// the "paths" map.
 			event.Name = w.paths[int(raw.Wd)]
+			watchedName := event.Name
+			if nameLen > 0 {
+				// Point "bytes" at the first byte of the filename
+				bytes := (*[syscall.PathMax]byte)(unsafe.Pointer(&buf[offset+syscall.SizeofInotifyEvent]))
+				// The filename is padded with NUL bytes. TrimRight() gets rid of those.
+				event.Name += "/" + strings.TrimRight(string(bytes[0:nameLen]), "\000")
+			}
+
+			// Setup FSNotify flags (inherit from directory watch)
+			fsnFlags := w.fsnFlags[watchedName]
+			_, fsnFound := w.fsnFlags[event.Name]
+			if !fsnFound {
+				w.fsnFlags[event.Name] = fsnFlags
+			}
+
 			// Send the events that are not ignored on the events channel
 			if (event.mask & IN_IGNORED) == 0 {
 				w.internalEvent <- event
