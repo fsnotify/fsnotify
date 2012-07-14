@@ -36,7 +36,9 @@ func (e *FileEvent) IsModify() bool {
 }
 
 // IsRename reports whether the FileEvent was triggerd by a change name
-func (e *FileEvent) IsRename() bool { return (e.mask & IN_MOVE_SELF) == IN_MOVE_SELF }
+func (e *FileEvent) IsRename() bool {
+	return ((e.mask&IN_MOVE_SELF) == IN_MOVE_SELF || (e.mask&IN_MOVED_FROM) == IN_MOVED_FROM)
+}
 
 type watch struct {
 	wd    uint32 // Watch descriptor (as returned by the inotify_add_watch() syscall)
@@ -247,7 +249,7 @@ const (
 	IN_MOVE_SELF     uint32 = syscall.IN_MOVE_SELF
 	IN_OPEN          uint32 = syscall.IN_OPEN
 
-	OS_AGNOSTIC_EVENTS = IN_CREATE | IN_ATTRIB | IN_MODIFY | IN_MOVE_SELF | IN_DELETE | IN_DELETE_SELF
+	OS_AGNOSTIC_EVENTS = IN_MOVED_FROM | IN_CREATE | IN_ATTRIB | IN_MODIFY | IN_MOVE_SELF | IN_DELETE | IN_DELETE_SELF
 
 	// Special events
 	IN_ISDIR      uint32 = syscall.IN_ISDIR
