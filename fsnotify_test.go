@@ -91,6 +91,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	time.Sleep(time.Millisecond)
 	f.WriteString("data")
 	f.Sync()
+	f.Close()
 
 	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
 
@@ -101,6 +102,10 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	}
 
 	// Modify the file outside of the watched dir
+	f, err = os.Open(testFileRenamed)
+	if err != nil {
+		t.Fatalf("open test renamed file failed: %s", err)
+	}
 	f.WriteString("data")
 	f.Sync()
 	f.Close()
@@ -123,11 +128,8 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	if modifyReceived != 1 {
 		t.Fatalf("incorrect number of modify events received after 500 ms (%d vs %d)", modifyReceived, 1)
 	}
-	if deleteReceived != 0 {
-		t.Fatalf("incorrect number of delete events received after 500 ms (%d vs %d)", deleteReceived, 0)
-	}
-	if renameReceived != 1 {
-		t.Fatalf("incorrect number of rename events received after 500 ms (%d vs %d)", renameReceived, 1)
+	if deleteReceived+renameReceived != 1 {
+		t.Fatalf("incorrect number of rename+delete events received after 500 ms (%d vs %d)", renameReceived+deleteReceived, 0)
 	}
 
 	// Try closing the fsnotify instance
