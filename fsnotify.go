@@ -30,6 +30,7 @@ func (w *Watcher) purgeEvents() {
 		}
 
 		if (fsnFlags&FSN_RENAME == FSN_RENAME) && ev.IsRename() {
+			w.RemoveWatch(ev.Name)
 			sendEvent = true
 		}
 

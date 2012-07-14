@@ -100,19 +100,19 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 		t.Fatalf("rename failed: %s", err)
 	}
 
-  // Modify the file outside of the watched dir
+	// Modify the file outside of the watched dir
 	f.WriteString("data")
 	f.Sync()
-  f.Close()
+	f.Close()
 
 	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
 
-  // Recreate the file that was moved
+	// Recreate the file that was moved
 	f, err = os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
 		t.Fatalf("creating test file failed: %s", err)
 	}
-  f.Close()
+	f.Close()
 	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
@@ -126,9 +126,9 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	if deleteReceived != 0 {
 		t.Fatalf("incorrect number of delete events received after 500 ms (%d vs %d)", deleteReceived, 0)
 	}
-  if renameReceived != 1 {
+	if renameReceived != 1 {
 		t.Fatalf("incorrect number of rename events received after 500 ms (%d vs %d)", renameReceived, 1)
-  }
+	}
 
 	// Try closing the fsnotify instance
 	t.Log("calling Close()")
@@ -141,7 +141,6 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 		t.Fatal("event stream was not closed after 2 seconds")
 	}
 }
-
 
 func TestFsnotifyDirOnly(t *testing.T) {
 	// Create an fsnotify watcher instance and initialize it

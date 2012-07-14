@@ -166,7 +166,6 @@ func (w *Watcher) removeWatch(path string) error {
 	if !ok {
 		return errors.New(fmt.Sprintf("can't remove non-existent kevent watch for: %s", path))
 	}
-	syscall.Close(watchfd)
 	watchEntry := &w.kbuf[0]
 	syscall.SetKevent(watchEntry, w.watches[path], syscall.EVFILT_VNODE, syscall.EV_DELETE)
 	success, errno := syscall.Kevent(w.kq, w.kbuf[:], nil, nil)
@@ -175,6 +174,7 @@ func (w *Watcher) removeWatch(path string) error {
 	} else if (watchEntry.Flags & syscall.EV_ERROR) == syscall.EV_ERROR {
 		return errors.New("kevent rm error")
 	}
+	syscall.Close(watchfd)
 	delete(w.watches, path)
 	return nil
 }
@@ -288,7 +288,8 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 	for _, fileInfo := range files {
 		if fileInfo.IsDir() == false {
 			filePath := filepath.Join(dirPath, fileInfo.Name())
-			if w.watches[filePath] == 0 {
+			_, watchFound := w.watches[filePath]
+			if watchFound == false {
 				w.fsnFlags[filePath] = FSN_ALL
 				// Send create event
 				fileEvent := new(FileEvent)
