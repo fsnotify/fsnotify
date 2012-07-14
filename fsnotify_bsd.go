@@ -246,6 +246,10 @@ func (w *Watcher) readEvents() {
 
 			// Move to next event
 			events = events[1:]
+
+			if fileEvent.IsRename() {
+				w.removeWatch(fileEvent.Name)
+			}
 		}
 	}
 }
