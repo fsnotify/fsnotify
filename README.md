@@ -1,5 +1,7 @@
 # File system notifications for Go
 
+[GoDoc](http://go.pkgdoc.org/github.com/howeyc/fsnotify)
+
 Cross platform, works on:
 * Windows
 * Linux
@@ -41,4 +43,10 @@ For each event:
 * IsModify()
 * IsRename()
 
-[GoDoc](http://go.pkgdoc.org/github.com/howeyc/fsnotify)
+Notes:
+* When a file is renamed to another directory is it still being watched?
+    * No (it shouldn't be, unless you are watching where it was moved to).
+* When I watch a directory, are all subdirectories watched as well?
+    * No, you must add watches for any directory you want to watch.
+* Do I have to watch the Error and Event channels in a separate goroutine?
+    * As of now, yes. Looking into making this single-thread friendly.
