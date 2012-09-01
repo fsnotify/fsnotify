@@ -290,17 +290,15 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 
 	// Search for new files
 	for _, fileInfo := range files {
-		if fileInfo.IsDir() == false {
-			filePath := filepath.Join(dirPath, fileInfo.Name())
-			_, watchFound := w.watches[filePath]
-			if watchFound == false {
-				w.fsnFlags[filePath] = FSN_ALL
-				// Send create event
-				fileEvent := new(FileEvent)
-				fileEvent.Name = filePath
-				fileEvent.create = true
-				w.internalEvent <- fileEvent
-			}
+		filePath := filepath.Join(dirPath, fileInfo.Name())
+		_, watchFound := w.watches[filePath]
+		if watchFound == false {
+			w.fsnFlags[filePath] = FSN_ALL
+			// Send create event
+			fileEvent := new(FileEvent)
+			fileEvent.Name = filePath
+			fileEvent.create = true
+			w.internalEvent <- fileEvent
 		}
 	}
 	w.watchDirectoryFiles(dirPath)
