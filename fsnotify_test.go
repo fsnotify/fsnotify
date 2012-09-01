@@ -257,6 +257,77 @@ func TestFsnotifyDirOnly(t *testing.T) {
 	}
 }
 
+func TestFsnotifySubDir(t *testing.T) {
+	// Create an fsnotify watcher instance and initialize it
+	watcher, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("NewWatcher() failed: %s", err)
+	}
+
+	const testDir string = "_test"
+	const testSubDir string = "_test/sub"
+
+	// Create directory to watch
+	if os.Mkdir(testDir, 0777) != nil {
+		t.Fatalf("Failed to create test directory: %s", err)
+	}
+	defer os.RemoveAll(testDir)
+
+	// Receive errors on the error channel on a separate goroutine
+	go func() {
+		for err := range watcher.Error {
+			t.Fatalf("error received: %s", err)
+		}
+	}()
+
+	// Receive events on the event channel on a separate goroutine
+	eventstream := watcher.Event
+	var createReceived = 0
+	done := make(chan bool)
+	go func() {
+		for event := range eventstream {
+			// Only count relevant events
+			if event.Name == testDir || event.Name == testSubDir {
+				t.Logf("event received: %s", event)
+				if event.IsCreate() {
+					createReceived++
+				}
+			} else {
+				t.Logf("unexpected event received: %s", event)
+			}
+		}
+		done <- true
+	}()
+
+	// Add a watch for testDir
+	err = watcher.Watch(testDir)
+	if err != nil {
+		t.Fatalf("Watcher.Watch() failed: %s", err)
+	}
+
+	// Create sub-directory
+	if os.Mkdir(testSubDir, 0777) != nil {
+		t.Fatalf("Failed to create test sub-directory: %s", err)
+	}
+
+	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
+	time.Sleep(500 * time.Millisecond)
+	if createReceived != 1 {
+		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", createReceived, 1)
+	}
+
+	// Try closing the fsnotify instance
+	t.Log("calling Close()")
+	watcher.Close()
+	t.Log("waiting for the event channel to become closed...")
+	select {
+	case <-done:
+		t.Log("event channel closed")
+	case <-time.After(2 * time.Second):
+		t.Fatal("event stream was not closed after 2 seconds")
+	}
+}
+
 func TestFsnotifyRename(t *testing.T) {
 	// Create an fsnotify watcher instance and initialize it
 	watcher, err := NewWatcher()
