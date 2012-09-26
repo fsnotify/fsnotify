@@ -265,7 +265,9 @@ func TestFsnotifySubDir(t *testing.T) {
 	}
 
 	const testDir string = "_test"
+	const testFile1 string = "_test/TestFsnotifyFile1.testfile"
 	const testSubDir string = "_test/sub"
+	const testSubDirFile string = "_test/sub/TestFsnotifyFile1.testfile"
 
 	// Create directory to watch
 	if os.Mkdir(testDir, 0777) != nil {
@@ -283,14 +285,18 @@ func TestFsnotifySubDir(t *testing.T) {
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
 	var createReceived = 0
+	var deleteReceived = 0
 	done := make(chan bool)
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
-			if event.Name == testDir || event.Name == testSubDir {
+			if event.Name == testDir || event.Name == testSubDir || event.Name == testFile1 {
 				t.Logf("event received: %s", event)
 				if event.IsCreate() {
 					createReceived++
+				}
+				if event.IsDelete() {
+					deleteReceived++
 				}
 			} else {
 				t.Logf("unexpected event received: %s", event)
@@ -310,10 +316,35 @@ func TestFsnotifySubDir(t *testing.T) {
 		t.Fatalf("Failed to create test sub-directory: %s", err)
 	}
 
+	// Create a file
+	var f *os.File
+	f, err = os.OpenFile(testFile1, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		t.Fatalf("creating test file failed: %s", err)
+	}
+	f.Sync()
+	f.Close()
+
+	// Create a file (Should not see this! we are not watching subdir)
+	var fs *os.File
+	fs, err = os.OpenFile(testSubDirFile, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		t.Fatalf("creating test file failed: %s", err)
+	}
+	fs.Sync()
+	fs.Close()
+
+	// Make sure receive deletes for both file and sub-directory
+	os.RemoveAll(testSubDir)
+	os.Remove(testFile1)
+
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500 * time.Millisecond)
-	if createReceived != 1 {
-		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", createReceived, 1)
+	if createReceived != 2 {
+		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", createReceived, 2)
+	}
+	if deleteReceived != 2 {
+		t.Fatalf("incorrect number of delete events received after 500 ms (%d vs %d)", deleteReceived, 2)
 	}
 
 	// Try closing the fsnotify instance

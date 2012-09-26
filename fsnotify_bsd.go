@@ -42,6 +42,7 @@ type Watcher struct {
 	fsnFlags      map[string]uint32   // Map of watched files to flags used for filter
 	paths         map[int]string      // Map of watched paths (key: watch descriptor)
 	finfo         map[int]os.FileInfo // Map of file information (isDir, isReg; key: watch descriptor)
+	fileExists    map[string]bool     // Keep track of if we know this file exists (to stop duplicate create events)
 	Error         chan error          // Errors are sent on this channel
 	internalEvent chan *FileEvent     // Events are queued on this channel
 	Event         chan *FileEvent     // Events are returned on this channel
@@ -62,6 +63,7 @@ func NewWatcher() (*Watcher, error) {
 		fsnFlags:      make(map[string]uint32),
 		paths:         make(map[int]string),
 		finfo:         make(map[int]os.FileInfo),
+		fileExists:    make(map[string]bool),
 		internalEvent: make(chan *FileEvent),
 		Event:         make(chan *FileEvent),
 		Error:         make(chan error),
@@ -249,6 +251,10 @@ func (w *Watcher) readEvents() {
 
 			if fileEvent.IsRename() {
 				w.removeWatch(fileEvent.Name)
+				delete(w.fileExists, fileEvent.Name)
+			}
+			if fileEvent.IsDelete() {
+				delete(w.fileExists, fileEvent.Name)
 			}
 		}
 	}
@@ -263,15 +269,22 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 
 	// Search for new files
 	for _, fileInfo := range files {
+		filePath := filepath.Join(dirPath, fileInfo.Name())
 		if fileInfo.IsDir() == false {
-			filePath := filepath.Join(dirPath, fileInfo.Name())
 			// Watch file to mimic linux fsnotify
 			e := w.addWatch(filePath, NOTE_DELETE|NOTE_WRITE|NOTE_RENAME)
 			w.fsnFlags[filePath] = FSN_ALL
 			if e != nil {
 				return e
 			}
+		} else {
+			// Linux gives deletes if not explicitly watching
+			e := w.addWatch(filePath, NOTE_DELETE)
+			if e != nil {
+				return e
+			}
 		}
+		w.fileExists[filePath] = true
 	}
 
 	return nil
@@ -291,8 +304,8 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 	// Search for new files
 	for _, fileInfo := range files {
 		filePath := filepath.Join(dirPath, fileInfo.Name())
-		_, watchFound := w.watches[filePath]
-		if watchFound == false {
+		_, doesExist := w.fileExists[filePath]
+		if doesExist == false {
 			w.fsnFlags[filePath] = FSN_ALL
 			// Send create event
 			fileEvent := new(FileEvent)
@@ -300,6 +313,7 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 			fileEvent.create = true
 			w.internalEvent <- fileEvent
 		}
+		w.fileExists[filePath] = true
 	}
 	w.watchDirectoryFiles(dirPath)
 }
