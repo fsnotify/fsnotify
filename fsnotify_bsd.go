@@ -138,7 +138,7 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 		w.paths[watchfd] = path
 
 		w.finfo[watchfd] = fi
-		if fi.IsDir() {
+		if fi.IsDir() && (flags&NOTE_WRITE) == NOTE_WRITE {
 			errdir := w.watchDirectoryFiles(path)
 			if errdir != nil {
 				return errdir
