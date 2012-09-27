@@ -102,6 +102,7 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 
 	watchEntry := &w.kbuf[0]
 	watchEntry.Fflags = flags
+	watchDir := false
 
 	watchfd, found := w.watches[path]
 	if !found {
@@ -139,10 +140,7 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 
 		w.finfo[watchfd] = fi
 		if fi.IsDir() && (flags&NOTE_WRITE) == NOTE_WRITE {
-			errdir := w.watchDirectoryFiles(path)
-			if errdir != nil {
-				return errdir
-			}
+			watchDir = true
 		}
 	}
 	syscall.SetKevent(watchEntry, watchfd, syscall.EVFILT_VNODE, syscall.EV_ADD|syscall.EV_CLEAR)
@@ -154,6 +152,12 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 		return errors.New("kevent add error")
 	}
 
+	if watchDir {
+		errdir := w.watchDirectoryFiles(path)
+		if errdir != nil {
+			return errdir
+		}
+	}
 	return nil
 }
 
@@ -218,7 +222,7 @@ func (w *Watcher) readEvents() {
 		if len(events) == 0 {
 			n, errno = syscall.Kevent(w.kq, nil, eventbuf[:], twait)
 
-			// EINTR is okay, basically the syscall was interrupted before 
+			// EINTR is okay, basically the syscall was interrupted before
 			// timeout expired.
 			if errno != nil && errno != syscall.EINTR {
 				w.Error <- os.NewSyscallError("kevent", errno)
@@ -280,6 +284,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 		} else {
 			// Linux gives deletes if not explicitly watching
 			e := w.addWatch(filePath, NOTE_DELETE)
+			w.fsnFlags[filePath] = FSN_ALL
 			if e != nil {
 				return e
 			}
@@ -292,7 +297,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 
 // sendDirectoryEvents searches the directory for newly created files
 // and sends them over the event channel. This functionality is to have
-// the BSD version of fsnotify mach linux fsnotify which provides a 
+// the BSD version of fsnotify mach linux fsnotify which provides a
 // create event for files created in a watched directory.
 func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 	// Get all files
