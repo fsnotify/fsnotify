@@ -258,6 +258,7 @@ func (w *Watcher) readEvents() {
 				delete(w.fileExists, fileEvent.Name)
 			}
 			if fileEvent.IsDelete() {
+				w.removeWatch(fileEvent.Name)
 				delete(w.fileExists, fileEvent.Name)
 			}
 		}
