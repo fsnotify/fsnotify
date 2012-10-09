@@ -176,6 +176,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
 	var createReceived = 0
+	var modifyReceived = 0
 	var deleteReceived = 0
 	done := make(chan bool)
 	go func() {
@@ -188,6 +189,9 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 				}
 				if event.IsCreate() {
 					createReceived++
+				}
+				if event.IsModify() {
+					modifyReceived++
 				}
 			} else {
 				t.Logf("unexpected event received: %s", event)
@@ -224,10 +228,41 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	f.Close()
 	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
 
+	// Modify
+	f, err = os.OpenFile(testFile, os.O_WRONLY, 0666)
+	if err != nil {
+		t.Fatalf("creating test file failed: %s", err)
+	}
+	f.Sync()
+
+	time.Sleep(time.Millisecond)
+	f.WriteString("data")
+	f.Sync()
+	f.Close()
+
+	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+
+	// Modify
+	f, err = os.OpenFile(testFile, os.O_WRONLY, 0666)
+	if err != nil {
+		t.Fatalf("creating test file failed: %s", err)
+	}
+	f.Sync()
+
+	time.Sleep(time.Millisecond)
+	f.WriteString("data")
+	f.Sync()
+	f.Close()
+
+	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500 * time.Millisecond)
 	if createReceived != 2 {
 		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", createReceived, 2)
+	}
+	if modifyReceived < 2 {
+		t.Fatalf("incorrect number of modify events received after 500 ms (%d vs atleast %d)", modifyReceived, 2)
 	}
 	if deleteReceived != 1 {
 		t.Fatalf("incorrect number of rename+delete events received after 500 ms (%d vs %d)", deleteReceived, 1)
