@@ -129,7 +129,108 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 		t.Fatalf("incorrect number of modify events received after 500 ms (%d vs %d)", modifyReceived, 1)
 	}
 	if deleteReceived+renameReceived != 1 {
-		t.Fatalf("incorrect number of rename+delete events received after 500 ms (%d vs %d)", renameReceived+deleteReceived, 0)
+		t.Fatalf("incorrect number of rename+delete events received after 500 ms (%d vs %d)", renameReceived+deleteReceived, 1)
+	}
+
+	// Try closing the fsnotify instance
+	t.Log("calling Close()")
+	watcher.Close()
+	t.Log("waiting for the event channel to become closed...")
+	select {
+	case <-done:
+		t.Log("event channel closed")
+	case <-time.After(2 * time.Second):
+		t.Fatal("event stream was not closed after 2 seconds")
+	}
+}
+
+func TestFsnotifyMultipleCreates(t *testing.T) {
+	// Create an fsnotify watcher instance and initialize it
+	watcher, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("NewWatcher() failed: %s", err)
+	}
+
+	// Receive errors on the error channel on a separate goroutine
+	go func() {
+		for err := range watcher.Error {
+			t.Fatalf("error received: %s", err)
+		}
+	}()
+
+	const testDir string = "_test"
+
+	// Create directory to watch
+	if os.Mkdir(testDir, 0777) != nil {
+		t.Fatalf("Failed to create test directory: %s", err)
+	}
+	defer os.RemoveAll(testDir)
+
+	const testFile string = "_test/TestFsnotifySeq.testfile"
+
+	// Add a watch for testDir
+	err = watcher.Watch(testDir)
+	if err != nil {
+		t.Fatalf("Watcher.Watch() failed: %s", err)
+	}
+	// Receive events on the event channel on a separate goroutine
+	eventstream := watcher.Event
+	var createReceived = 0
+	var deleteReceived = 0
+	done := make(chan bool)
+	go func() {
+		for event := range eventstream {
+			// Only count relevant events
+			if event.Name == testDir || event.Name == testFile {
+				t.Logf("event received: %s", event)
+				if event.IsDelete() {
+					deleteReceived++
+				}
+				if event.IsCreate() {
+					createReceived++
+				}
+			} else {
+				t.Logf("unexpected event received: %s", event)
+			}
+		}
+		done <- true
+	}()
+
+	// Create a file
+	// This should add at least one event to the fsnotify event queue
+	var f *os.File
+	f, err = os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		t.Fatalf("creating test file failed: %s", err)
+	}
+	f.Sync()
+
+	time.Sleep(time.Millisecond)
+	f.WriteString("data")
+	f.Sync()
+	f.Close()
+
+	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+
+	os.Remove(testFile)
+
+	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+
+	// Recreate the file
+	f, err = os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		t.Fatalf("creating test file failed: %s", err)
+	}
+	f.Close()
+	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+
+	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
+	time.Sleep(500 * time.Millisecond)
+	if createReceived != 2 {
+		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", createReceived, 2)
+	}
+	if deleteReceived != 1 {
+		t.Fatalf("incorrect number of rename+delete events received after 500 ms (%d vs %d)", deleteReceived, 1)
 	}
 
 	// Try closing the fsnotify instance
