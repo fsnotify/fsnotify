@@ -40,6 +40,7 @@ type Watcher struct {
 	kq            int                 // File descriptor (as returned by the kqueue() syscall)
 	watches       map[string]int      // Map of watched file diescriptors (key: path)
 	fsnFlags      map[string]uint32   // Map of watched files to flags used for filter
+	enFlags       map[string]uint32   // Map of watched files to evfilt note flags used in kqueue
 	paths         map[int]string      // Map of watched paths (key: watch descriptor)
 	finfo         map[int]os.FileInfo // Map of file information (isDir, isReg; key: watch descriptor)
 	fileExists    map[string]bool     // Keep track of if we know this file exists (to stop duplicate create events)
@@ -61,6 +62,7 @@ func NewWatcher() (*Watcher, error) {
 		kq:            fd,
 		watches:       make(map[string]int),
 		fsnFlags:      make(map[string]uint32),
+		enFlags:       make(map[string]uint32),
 		paths:         make(map[int]string),
 		finfo:         make(map[int]os.FileInfo),
 		fileExists:    make(map[string]bool),
@@ -140,11 +142,12 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 
 		w.finfo[watchfd] = fi
 	}
-	
+
 	if w.finfo[watchfd].IsDir() && (flags&NOTE_WRITE) == NOTE_WRITE {
 		watchDir = true
 	}
 
+	w.enFlags[path] = watchEntry.Fflags
 	syscall.SetKevent(watchEntry, watchfd, syscall.EVFILT_VNODE, syscall.EV_ADD|syscall.EV_CLEAR)
 
 	wd, errno := syscall.Kevent(w.kq, w.kbuf[:], nil, nil)
@@ -285,8 +288,16 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 				return e
 			}
 		} else {
+			// If the user is currently waching directory
+			// we want to preserve the flags used
+			currFlags, found := w.enFlags[filePath]
+			var newFlags uint32 = NOTE_DELETE
+			if found {
+				newFlags |= currFlags
+			}
+
 			// Linux gives deletes if not explicitly watching
-			e := w.addWatch(filePath, NOTE_DELETE)
+			e := w.addWatch(filePath, newFlags)
 			w.fsnFlags[filePath] = FSN_ALL
 			if e != nil {
 				return e
