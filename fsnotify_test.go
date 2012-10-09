@@ -261,8 +261,8 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	if createReceived != 2 {
 		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", createReceived, 2)
 	}
-	if modifyReceived < 2 {
-		t.Fatalf("incorrect number of modify events received after 500 ms (%d vs atleast %d)", modifyReceived, 2)
+	if modifyReceived != 3 {
+		t.Fatalf("incorrect number of modify events received after 500 ms (%d vs atleast %d)", modifyReceived, 3)
 	}
 	if deleteReceived != 1 {
 		t.Fatalf("incorrect number of rename+delete events received after 500 ms (%d vs %d)", deleteReceived, 1)
