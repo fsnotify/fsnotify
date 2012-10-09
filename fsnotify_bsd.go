@@ -139,10 +139,12 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 		w.paths[watchfd] = path
 
 		w.finfo[watchfd] = fi
-		if fi.IsDir() && (flags&NOTE_WRITE) == NOTE_WRITE {
-			watchDir = true
-		}
 	}
+	
+	if w.finfo[watchfd].IsDir() && (flags&NOTE_WRITE) == NOTE_WRITE {
+		watchDir = true
+	}
+
 	syscall.SetKevent(watchEntry, watchfd, syscall.EVFILT_VNODE, syscall.EV_ADD|syscall.EV_CLEAR)
 
 	wd, errno := syscall.Kevent(w.kq, w.kbuf[:], nil, nil)
