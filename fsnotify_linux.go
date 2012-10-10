@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -46,6 +47,7 @@ type watch struct {
 }
 
 type Watcher struct {
+	mu            sync.Mutex        // Map access
 	fd            int               // File descriptor (as returned by the inotify_init() syscall)
 	watches       map[string]*watch // Map of inotify watches (key: path)
 	fsnFlags      map[string]uint32 // Map of watched files to flags used for filter
@@ -116,10 +118,11 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 		return errno
 	}
 
-	if !found {
-		w.watches[path] = &watch{wd: uint32(wd), flags: flags}
-		w.paths[wd] = path
-	}
+	w.mu.Lock()
+	w.watches[path] = &watch{wd: uint32(wd), flags: flags}
+	w.paths[wd] = path
+	w.mu.Unlock()
+
 	return nil
 }
 
@@ -191,7 +194,9 @@ func (w *Watcher) readEvents() {
 			// doesn't append the filename to the event, but we would like to always fill the
 			// the "Name" field with a valid filename. We retrieve the path of the watch from
 			// the "paths" map.
+			w.mu.Lock()
 			event.Name = w.paths[int(raw.Wd)]
+			w.mu.Unlock()
 			watchedName := event.Name
 			if nameLen > 0 {
 				// Point "bytes" at the first byte of the filename
