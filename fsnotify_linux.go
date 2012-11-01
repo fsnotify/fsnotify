@@ -24,7 +24,9 @@ type FileEvent struct {
 }
 
 // IsCreate reports whether the FileEvent was triggerd by a creation
-func (e *FileEvent) IsCreate() bool { return (e.mask & IN_CREATE) == IN_CREATE }
+func (e *FileEvent) IsCreate() bool {
+	return (e.mask&IN_CREATE) == IN_CREATE || (e.mask&IN_MOVED_TO) == IN_MOVED_TO
+}
 
 // IsDelete reports whether the FileEvent was triggerd by a delete
 func (e *FileEvent) IsDelete() bool {
@@ -254,7 +256,7 @@ const (
 	IN_MOVE_SELF     uint32 = syscall.IN_MOVE_SELF
 	IN_OPEN          uint32 = syscall.IN_OPEN
 
-	OS_AGNOSTIC_EVENTS = IN_MOVED_FROM | IN_CREATE | IN_ATTRIB | IN_MODIFY | IN_MOVE_SELF | IN_DELETE | IN_DELETE_SELF
+	OS_AGNOSTIC_EVENTS = IN_MOVED_TO | IN_MOVED_FROM | IN_CREATE | IN_ATTRIB | IN_MODIFY | IN_MOVE_SELF | IN_DELETE | IN_DELETE_SELF
 
 	// Special events
 	IN_ISDIR      uint32 = syscall.IN_ISDIR
