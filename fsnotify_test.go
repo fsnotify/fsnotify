@@ -393,6 +393,90 @@ func TestFsnotifyDirOnly(t *testing.T) {
 	}
 }
 
+func TestFsnotifyDeleteWatchedDir(t *testing.T) {
+	// Create an fsnotify watcher instance and initialize it
+	watcher, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("NewWatcher() failed: %s", err)
+	}
+
+	const testDir string = "_test"
+
+	// Create directory to watch
+	if os.Mkdir(testDir, 0777) != nil {
+		t.Fatalf("Failed to create test directory: %s", err)
+	}
+
+	// Create a file before watching directory
+	const testFileAlreadyExists string = "_test/TestFsnotifyEventsExisting.testfile"
+	{
+		var f *os.File
+		f, err = os.OpenFile(testFileAlreadyExists, os.O_WRONLY|os.O_CREATE, 0666)
+		if err != nil {
+			t.Fatalf("creating test file failed: %s", err)
+		}
+		f.Sync()
+		f.Close()
+	}
+
+	// Add a watch for testDir
+	err = watcher.Watch(testDir)
+	if err != nil {
+		t.Fatalf("Watcher.Watch() failed: %s", err)
+	}
+
+	// Add a watch for testFile
+	err = watcher.Watch(testFileAlreadyExists)
+	if err != nil {
+		t.Fatalf("Watcher.Watch() failed: %s", err)
+	}
+
+	// Receive errors on the error channel on a separate goroutine
+	go func() {
+		for err := range watcher.Error {
+			t.Fatalf("error received: %s", err)
+		}
+	}()
+
+	// Receive events on the event channel on a separate goroutine
+	eventstream := watcher.Event
+	var deleteReceived = 0
+	done := make(chan bool)
+	go func() {
+		for event := range eventstream {
+			// Only count relevant events
+			if event.Name == testDir || event.Name == testFileAlreadyExists {
+				t.Logf("event received: %s", event)
+				if event.IsDelete() {
+					deleteReceived++
+				}
+			} else {
+				t.Logf("unexpected event received: %s", event)
+			}
+		}
+		done <- true
+	}()
+
+	os.RemoveAll(testDir)
+
+	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
+	time.Sleep(500 * time.Millisecond)
+	if deleteReceived != 2 {
+		t.Fatalf("incorrect number of delete events received after 500 ms (%d vs %d)", deleteReceived, 2)
+	}
+
+	// Try closing the fsnotify instance
+	t.Log("calling Close()")
+	watcher.Close()
+	t.Log("waiting for the event channel to become closed...")
+	select {
+	case <-done:
+		t.Log("event channel closed")
+	case <-time.After(2 * time.Second):
+		t.Fatal("event stream was not closed after 2 seconds")
+	}
+}
+
 func TestFsnotifySubDir(t *testing.T) {
 	// Create an fsnotify watcher instance and initialize it
 	watcher, err := NewWatcher()

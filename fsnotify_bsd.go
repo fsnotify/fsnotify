@@ -317,7 +317,21 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 	// Get all files
 	files, err := ioutil.ReadDir(dirPath)
 	if err != nil {
-		w.Error <- err
+		// If the directory does not exist, we should pass on a delete event.
+		// We will likely not receive the OS delete event as this library is 
+		// holding an open file handle on the directory and it may not be 
+		// considered deleted until we release it. But once we release it, 
+		// we will no longer be watching it.
+		if _, found := w.watches[dirPath]; found && os.IsNotExist(err) {
+			fileEvent := new(FileEvent)
+			fileEvent.Name = dirPath
+			fileEvent.mask = NOTE_DELETE
+			w.internalEvent <- fileEvent
+			w.removeWatch(dirPath)
+			return
+		} else {
+			w.Error <- err
+		}
 	}
 
 	// Search for new files
