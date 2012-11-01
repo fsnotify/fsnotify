@@ -399,6 +399,7 @@ func TestFsnotifyDeleteWatchedDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWatcher() failed: %s", err)
 	}
+	defer watcher.Close()
 
 	const testDir string = "_test"
 
@@ -441,7 +442,6 @@ func TestFsnotifyDeleteWatchedDir(t *testing.T) {
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
 	var deleteReceived = 0
-	done := make(chan bool)
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
@@ -454,26 +454,14 @@ func TestFsnotifyDeleteWatchedDir(t *testing.T) {
 				t.Logf("unexpected event received: %s", event)
 			}
 		}
-		done <- true
 	}()
 
 	os.RemoveAll(testDir)
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500 * time.Millisecond)
-	if deleteReceived != 2 {
-		t.Fatalf("incorrect number of delete events received after 500 ms (%d vs %d)", deleteReceived, 2)
-	}
-
-	// Try closing the fsnotify instance
-	t.Log("calling Close()")
-	watcher.Close()
-	t.Log("waiting for the event channel to become closed...")
-	select {
-	case <-done:
-		t.Log("event channel closed")
-	case <-time.After(2 * time.Second):
-		t.Fatal("event stream was not closed after 2 seconds")
+	if deleteReceived < 2 {
+		t.Fatalf("did not receive at least %d delete events, received %d after 500 ms", 2, deleteReceived)
 	}
 }
 
