@@ -662,6 +662,199 @@ func TestFsnotifyRename(t *testing.T) {
 	os.Remove(testFileRenamed)
 }
 
+func TestFsnotifyRenameToCreate(t *testing.T) {
+	// Create an fsnotify watcher instance and initialize it
+	watcher, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("NewWatcher() failed: %s", err)
+	}
+
+	const testDir string = "_test"
+	const testDirFrom string = "_testfrom"
+
+	// Create directory to watch
+	if os.Mkdir(testDir, 0777) != nil {
+		t.Fatalf("Failed to create test directory: %s", err)
+	}
+	defer os.RemoveAll(testDir)
+
+	// Create directory to get file
+	if os.Mkdir(testDirFrom, 0777) != nil {
+		t.Fatalf("Failed to create test directory: %s", err)
+	}
+	defer os.RemoveAll(testDirFrom)
+
+	// Add a watch for testDir
+	err = watcher.Watch(testDir)
+	if err != nil {
+		t.Fatalf("Watcher.Watch() failed: %s", err)
+	}
+
+	// Receive errors on the error channel on a separate goroutine
+	go func() {
+		for err := range watcher.Error {
+			t.Fatalf("error received: %s", err)
+		}
+	}()
+
+	const testFile string = "_testfrom/TestFsnotifyEvents.testfile"
+	const testFileRenamed string = "_test/TestFsnotifyEvents.testfileRenamed"
+
+	// Receive events on the event channel on a separate goroutine
+	eventstream := watcher.Event
+	var createReceived = 0
+	done := make(chan bool)
+	go func() {
+		for event := range eventstream {
+			// Only count relevant events
+			if event.Name == testDir || event.Name == testFile || event.Name == testFileRenamed {
+				if event.IsCreate() {
+					createReceived++
+				}
+				t.Logf("event received: %s", event)
+			} else {
+				t.Logf("unexpected event received: %s", event)
+			}
+		}
+		done <- true
+	}()
+
+	// Create a file
+	// This should add at least one event to the fsnotify event queue
+	var f *os.File
+	f, err = os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		t.Fatalf("creating test file failed: %s", err)
+	}
+	f.Sync()
+	f.Close()
+
+	cmd := exec.Command("mv", testFile, testFileRenamed)
+	err = cmd.Run()
+	if err != nil {
+		t.Fatalf("rename failed: %s", err)
+	}
+
+	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
+	time.Sleep(500 * time.Millisecond)
+	if createReceived == 0 {
+		t.Fatal("fsnotify create events have not been received after 500 ms")
+	}
+
+	// Try closing the fsnotify instance
+	t.Log("calling Close()")
+	watcher.Close()
+	t.Log("waiting for the event channel to become closed...")
+	select {
+	case <-done:
+		t.Log("event channel closed")
+	case <-time.After(2 * time.Second):
+		t.Fatal("event stream was not closed after 2 seconds")
+	}
+
+	os.Remove(testFileRenamed)
+}
+
+func TestFsnotifyRenameToOverwrite(t *testing.T) {
+	// Create an fsnotify watcher instance and initialize it
+	watcher, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("NewWatcher() failed: %s", err)
+	}
+
+	const testDir string = "_test"
+	const testDirFrom string = "_testfrom"
+
+	const testFile string = "_testfrom/TestFsnotifyEvents.testfile"
+	const testFileRenamed string = "_test/TestFsnotifyEvents.testfileRenamed"
+
+	// Create directory to watch
+	if os.Mkdir(testDir, 0777) != nil {
+		t.Fatalf("Failed to create test directory: %s", err)
+	}
+	defer os.RemoveAll(testDir)
+
+	// Create directory to get file
+	if os.Mkdir(testDirFrom, 0777) != nil {
+		t.Fatalf("Failed to create test directory: %s", err)
+	}
+	defer os.RemoveAll(testDirFrom)
+
+	// Create a file
+	var fr *os.File
+	fr, err = os.OpenFile(testFileRenamed, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		t.Fatalf("creating test file failed: %s", err)
+	}
+	fr.Sync()
+	fr.Close()
+
+	// Add a watch for testDir
+	err = watcher.Watch(testDir)
+	if err != nil {
+		t.Fatalf("Watcher.Watch() failed: %s", err)
+	}
+
+	// Receive errors on the error channel on a separate goroutine
+	go func() {
+		for err := range watcher.Error {
+			t.Fatalf("error received: %s", err)
+		}
+	}()
+
+	// Receive events on the event channel on a separate goroutine
+	eventstream := watcher.Event
+	var eventReceived = 0
+	done := make(chan bool)
+	go func() {
+		for event := range eventstream {
+			// Only count relevant events
+			if event.Name == testFileRenamed {
+				eventReceived++
+				t.Logf("event received: %s", event)
+			} else {
+				t.Logf("unexpected event received: %s", event)
+			}
+		}
+		done <- true
+	}()
+
+	// Create a file
+	// This should add at least one event to the fsnotify event queue
+	var f *os.File
+	f, err = os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		t.Fatalf("creating test file failed: %s", err)
+	}
+	f.Sync()
+	f.Close()
+
+	cmd := exec.Command("mv", testFile, testFileRenamed)
+	err = cmd.Run()
+	if err != nil {
+		t.Fatalf("rename failed: %s", err)
+	}
+
+	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
+	time.Sleep(500 * time.Millisecond)
+	if eventReceived == 0 {
+		t.Fatal("fsnotify events have not been received after 500 ms")
+	}
+
+	// Try closing the fsnotify instance
+	t.Log("calling Close()")
+	watcher.Close()
+	t.Log("waiting for the event channel to become closed...")
+	select {
+	case <-done:
+		t.Log("event channel closed")
+	case <-time.After(2 * time.Second):
+		t.Fatal("event stream was not closed after 2 seconds")
+	}
+
+	os.Remove(testFileRenamed)
+}
+
 func TestFsnotifyAttrib(t *testing.T) {
 	// Create an fsnotify watcher instance and initialize it
 	watcher, err := NewWatcher()

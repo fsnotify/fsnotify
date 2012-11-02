@@ -265,6 +265,14 @@ func (w *Watcher) readEvents() {
 			if fileEvent.IsDelete() {
 				w.removeWatch(fileEvent.Name)
 				delete(w.fileExists, fileEvent.Name)
+
+				// Look for a file that may have overwritten this
+				// (ie mv f1 f2 will delete f2 then create f2)
+				fileDir, _ := filepath.Split(fileEvent.Name)
+				fileDir = filepath.Clean(fileDir)
+				if _, found := w.watches[fileDir]; found {
+					w.sendDirectoryChangeEvents(fileDir)
+				}
 			}
 		}
 	}
