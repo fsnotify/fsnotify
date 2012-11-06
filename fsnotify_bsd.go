@@ -102,8 +102,6 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 		return errors.New("kevent instance already closed")
 	}
 
-	watchEntry := &w.kbuf[0]
-	watchEntry.Fflags = flags
 	watchDir := false
 
 	watchfd, found := w.watches[path]
@@ -111,6 +109,11 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 		fi, errstat := os.Lstat(path)
 		if errstat != nil {
 			return errstat
+		}
+
+		// don't watch socket
+		if fi.Mode()&os.ModeSocket == os.ModeSocket {
+			return nil
 		}
 
 		// Follow Symlinks
@@ -139,15 +142,35 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 
 		w.watches[path] = watchfd
 		w.paths[watchfd] = path
+		w.enFlags[path] = flags
 
 		w.finfo[watchfd] = fi
-	}
 
-	if w.finfo[watchfd].IsDir() && (flags&NOTE_WRITE) == NOTE_WRITE {
-		watchDir = true
+		if w.finfo[watchfd].IsDir() && (flags&NOTE_WRITE) == NOTE_WRITE {
+			watchDir = true
+		}
+	} else {
+		// If we watch the file/directory with a different set of flags, merge them.
+		// This can happen when we are trying to watch a directory recursively. E.g.
+		// when we first watch the parent directory, it watches the the subdirectory
+		// is for NOTE_DELETE event only. However, if we also watch the subdirectory
+		// recursively, we need to watch the subdirectory for NOTE_ALLEVENTS to
+		// watch the subdirectory's content. Because the watch event might happen in
+		// no particular order, merging the flags is probably the best solution
+		oldflags, _ := w.enFlags[path]
+		if oldflags != flags {
+			flags = oldflags | flags
+			// watch the directory if the previous flags did not watch the directory
+			if w.finfo[watchfd].IsDir() &&
+				(oldflags&NOTE_WRITE) != NOTE_WRITE &&
+				(flags&NOTE_WRITE) == NOTE_WRITE {
+				watchDir = true
+			}
+			w.enFlags[path] = flags
+		}
 	}
-
-	w.enFlags[path] = watchEntry.Fflags
+	watchEntry := &w.kbuf[0]
+	watchEntry.Fflags = flags
 	syscall.SetKevent(watchEntry, watchfd, syscall.EVFILT_VNODE, syscall.EV_ADD|syscall.EV_CLEAR)
 
 	wd, errno := syscall.Kevent(w.kq, w.kbuf[:], nil, nil)
@@ -248,7 +271,18 @@ func (w *Watcher) readEvents() {
 			fileEvent.Name = w.paths[int(watchEvent.Ident)]
 
 			fileInfo := w.finfo[int(watchEvent.Ident)]
-			if fileInfo.IsDir() && fileEvent.IsModify() {
+			if fileInfo.IsDir() && !fileEvent.IsDelete() {
+				// Double check to make sure the directory exist. This can happen when
+				// we do a rm -fr on a recursively watched folders and we receive a
+				// modification event first but the folder has been deleted and later
+				// receive the delete event
+				if _, err := os.Lstat(fileEvent.Name); os.IsNotExist(err) {
+					// mark is as delete event
+					fileEvent.mask |= NOTE_DELETE
+				}
+			}
+
+			if fileInfo.IsDir() && fileEvent.IsModify() && !fileEvent.IsDelete() {
 				w.sendDirectoryChangeEvents(fileEvent.Name)
 			} else {
 				// Send the event on the events channel
@@ -326,9 +360,9 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 	files, err := ioutil.ReadDir(dirPath)
 	if err != nil {
 		// If the directory does not exist, we should pass on a delete event.
-		// We will likely not receive the OS delete event as this library is 
-		// holding an open file handle on the directory and it may not be 
-		// considered deleted until we release it. But once we release it, 
+		// We will likely not receive the OS delete event as this library is
+		// holding an open file handle on the directory and it may not be
+		// considered deleted until we release it. But once we release it,
 		// we will no longer be watching it.
 		if _, found := w.watches[dirPath]; found && os.IsNotExist(err) {
 			fileEvent := new(FileEvent)
