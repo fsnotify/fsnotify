@@ -142,33 +142,17 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 
 		w.watches[path] = watchfd
 		w.paths[watchfd] = path
-		w.enFlags[path] = flags
 
 		w.finfo[watchfd] = fi
-
-		if w.finfo[watchfd].IsDir() && (flags&NOTE_WRITE) == NOTE_WRITE {
-			watchDir = true
-		}
-	} else {
-		// If we watch the file/directory with a different set of flags, merge them.
-		// This can happen when we are trying to watch a directory recursively. E.g.
-		// when we first watch the parent directory, it watches the the subdirectory
-		// is for NOTE_DELETE event only. However, if we also watch the subdirectory
-		// recursively, we need to watch the subdirectory for NOTE_ALLEVENTS to
-		// watch the subdirectory's content. Because the watch event might happen in
-		// no particular order, merging the flags is probably the best solution
-		oldflags, _ := w.enFlags[path]
-		if oldflags != flags {
-			flags = oldflags | flags
-			// watch the directory if the previous flags did not watch the directory
-			if w.finfo[watchfd].IsDir() &&
-				(oldflags&NOTE_WRITE) != NOTE_WRITE &&
-				(flags&NOTE_WRITE) == NOTE_WRITE {
-				watchDir = true
-			}
-			w.enFlags[path] = flags
-		}
 	}
+	// Watch the directory if it has not been watched before.
+	if w.finfo[watchfd].IsDir() &&
+		(flags&NOTE_WRITE) == NOTE_WRITE &&
+		(!found || (w.enFlags[path]&NOTE_WRITE) != NOTE_WRITE) {
+		watchDir = true
+	}
+
+	w.enFlags[path] = flags
 	watchEntry := &w.kbuf[0]
 	watchEntry.Fflags = flags
 	syscall.SetKevent(watchEntry, watchfd, syscall.EVFILT_VNODE, syscall.EV_ADD|syscall.EV_CLEAR)
@@ -305,7 +289,13 @@ func (w *Watcher) readEvents() {
 				fileDir, _ := filepath.Split(fileEvent.Name)
 				fileDir = filepath.Clean(fileDir)
 				if _, found := w.watches[fileDir]; found {
-					w.sendDirectoryChangeEvents(fileDir)
+					// make sure the directory exist before we watch for changes. When we
+					// do a recursive watch and perform rm -fr, the parent directory might
+					// have gone missing, ignore the missing directory and let the
+					// upcoming delete event remove the watch form the parent folder
+					if _, err := os.Lstat(fileDir); !os.IsNotExist(err) {
+						w.sendDirectoryChangeEvents(fileDir)
+					}
 				}
 			}
 		}
@@ -359,21 +349,7 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 	// Get all files
 	files, err := ioutil.ReadDir(dirPath)
 	if err != nil {
-		// If the directory does not exist, we should pass on a delete event.
-		// We will likely not receive the OS delete event as this library is
-		// holding an open file handle on the directory and it may not be
-		// considered deleted until we release it. But once we release it,
-		// we will no longer be watching it.
-		if _, found := w.watches[dirPath]; found && os.IsNotExist(err) {
-			fileEvent := new(FileEvent)
-			fileEvent.Name = dirPath
-			fileEvent.mask = NOTE_DELETE
-			w.internalEvent <- fileEvent
-			w.removeWatch(dirPath)
-			return
-		} else {
-			w.Error <- err
-		}
+		w.Error <- err
 	}
 
 	// Search for new files
