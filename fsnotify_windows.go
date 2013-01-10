@@ -296,7 +296,7 @@ func (w *Watcher) remWatch(pathname string) error {
 		watch.mask = 0
 	} else {
 		name := filepath.Base(pathname)
-		w.sendEvent(watch.path+"/"+name, watch.names[name]&FS_IGNORED)
+		w.sendEvent(watch.path+"\\"+name, watch.names[name]&FS_IGNORED)
 		delete(watch.names, name)
 	}
 	return w.startRead(watch)
@@ -306,7 +306,7 @@ func (w *Watcher) remWatch(pathname string) error {
 func (w *Watcher) deleteWatch(watch *watch) {
 	for name, mask := range watch.names {
 		if mask&provisional == 0 {
-			w.sendEvent(watch.path+"/"+name, mask&FS_IGNORED)
+			w.sendEvent(watch.path+"\\"+name, mask&FS_IGNORED)
 		}
 		delete(watch.names, name)
 	}
@@ -426,7 +426,7 @@ func (w *Watcher) readEvents() {
 			raw := (*syscall.FileNotifyInformation)(unsafe.Pointer(&watch.buf[offset]))
 			buf := (*[syscall.MAX_PATH]uint16)(unsafe.Pointer(&raw.FileName))
 			name := syscall.UTF16ToString(buf[:raw.FileNameLength/2])
-			fullname := watch.path + "/" + name
+			fullname := watch.path + "\\" + name
 
 			var mask uint64
 			switch raw.Action {
@@ -464,7 +464,7 @@ func (w *Watcher) readEvents() {
 				}
 			}
 			if raw.Action == syscall.FILE_ACTION_RENAMED_NEW_NAME {
-				fullname = watch.path + "/" + watch.rename
+				fullname = watch.path + "\\" + watch.rename
 				sendNameEvent()
 			}
 
