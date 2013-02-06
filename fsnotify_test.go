@@ -7,9 +7,27 @@ package fsnotify
 import (
 	"os"
 	"os/exec"
+	"sync/atomic"
 	"testing"
 	"time"
 )
+
+// An atomic counter
+type counter struct {
+	val int32
+}
+
+func (c *counter) increment() {
+	cas := atomic.CompareAndSwapInt32
+	old := atomic.LoadInt32(&c.val)
+	for swp := cas(&c.val, old, old+1); !swp; swp = cas(&c.val, old, old+1) {
+		old = atomic.LoadInt32(&c.val)
+	}
+}
+
+func (c *counter) value() int32 {
+	return atomic.LoadInt32(&c.val)
+}
 
 func TestFsnotifyMultipleOperations(t *testing.T) {
 	// Create an fsnotify watcher instance and initialize it
@@ -50,10 +68,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	}
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
-	var createReceived = 0
-	var modifyReceived = 0
-	var deleteReceived = 0
-	var renameReceived = 0
+	var createReceived, modifyReceived, deleteReceived, renameReceived counter
 	done := make(chan bool)
 	go func() {
 		for event := range eventstream {
@@ -61,16 +76,16 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 			if event.Name == testDir || event.Name == testFile {
 				t.Logf("event received: %s", event)
 				if event.IsDelete() {
-					deleteReceived++
+					deleteReceived.increment()
 				}
 				if event.IsModify() {
-					modifyReceived++
+					modifyReceived.increment()
 				}
 				if event.IsCreate() {
-					createReceived++
+					createReceived.increment()
 				}
 				if event.IsRename() {
-					renameReceived++
+					renameReceived.increment()
 				}
 			} else {
 				t.Logf("unexpected event received: %s", event)
@@ -122,14 +137,18 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500 * time.Millisecond)
-	if createReceived != 2 {
-		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", createReceived, 2)
+	cReceived := createReceived.value()
+	if cReceived != 2 {
+		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", cReceived, 2)
 	}
-	if modifyReceived != 1 {
-		t.Fatalf("incorrect number of modify events received after 500 ms (%d vs %d)", modifyReceived, 1)
+	mReceived := modifyReceived.value()
+	if mReceived != 1 {
+		t.Fatalf("incorrect number of modify events received after 500 ms (%d vs %d)", mReceived, 1)
 	}
-	if deleteReceived+renameReceived != 1 {
-		t.Fatalf("incorrect number of rename+delete events received after 500 ms (%d vs %d)", renameReceived+deleteReceived, 1)
+	dReceived := deleteReceived.value()
+	rReceived := renameReceived.value()
+	if dReceived+rReceived != 1 {
+		t.Fatalf("incorrect number of rename+delete events received after 500 ms (%d vs %d)", rReceived+dReceived, 1)
 	}
 
 	// Try closing the fsnotify instance
@@ -175,9 +194,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	}
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
-	var createReceived = 0
-	var modifyReceived = 0
-	var deleteReceived = 0
+	var createReceived, modifyReceived, deleteReceived counter
 	done := make(chan bool)
 	go func() {
 		for event := range eventstream {
@@ -185,13 +202,13 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 			if event.Name == testDir || event.Name == testFile {
 				t.Logf("event received: %s", event)
 				if event.IsDelete() {
-					deleteReceived++
+					deleteReceived.increment()
 				}
 				if event.IsCreate() {
-					createReceived++
+					createReceived.increment()
 				}
 				if event.IsModify() {
-					modifyReceived++
+					modifyReceived.increment()
 				}
 			} else {
 				t.Logf("unexpected event received: %s", event)
@@ -258,14 +275,17 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500 * time.Millisecond)
-	if createReceived != 2 {
-		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", createReceived, 2)
+	cReceived := createReceived.value()
+	if cReceived != 2 {
+		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", cReceived, 2)
 	}
-	if modifyReceived != 3 {
-		t.Fatalf("incorrect number of modify events received after 500 ms (%d vs atleast %d)", modifyReceived, 3)
+	mReceived := modifyReceived.value()
+	if mReceived != 3 {
+		t.Fatalf("incorrect number of modify events received after 500 ms (%d vs atleast %d)", mReceived, 3)
 	}
-	if deleteReceived != 1 {
-		t.Fatalf("incorrect number of rename+delete events received after 500 ms (%d vs %d)", deleteReceived, 1)
+	dReceived := deleteReceived.value()
+	if dReceived != 1 {
+		t.Fatalf("incorrect number of rename+delete events received after 500 ms (%d vs %d)", dReceived, 1)
 	}
 
 	// Try closing the fsnotify instance
@@ -325,9 +345,7 @@ func TestFsnotifyDirOnly(t *testing.T) {
 
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
-	var createReceived = 0
-	var modifyReceived = 0
-	var deleteReceived = 0
+	var createReceived, modifyReceived, deleteReceived counter
 	done := make(chan bool)
 	go func() {
 		for event := range eventstream {
@@ -335,13 +353,13 @@ func TestFsnotifyDirOnly(t *testing.T) {
 			if event.Name == testDir || event.Name == testFile || event.Name == testFileAlreadyExists {
 				t.Logf("event received: %s", event)
 				if event.IsDelete() {
-					deleteReceived++
+					deleteReceived.increment()
 				}
 				if event.IsModify() {
-					modifyReceived++
+					modifyReceived.increment()
 				}
 				if event.IsCreate() {
-					createReceived++
+					createReceived.increment()
 				}
 			} else {
 				t.Logf("unexpected event received: %s", event)
@@ -371,14 +389,17 @@ func TestFsnotifyDirOnly(t *testing.T) {
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500 * time.Millisecond)
-	if createReceived != 1 {
-		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", createReceived, 1)
+	cReceived := createReceived.value()
+	if cReceived != 1 {
+		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", cReceived, 1)
 	}
-	if modifyReceived != 1 {
-		t.Fatalf("incorrect number of modify events received after 500 ms (%d vs %d)", modifyReceived, 1)
+	mReceived := modifyReceived.value()
+	if mReceived != 1 {
+		t.Fatalf("incorrect number of modify events received after 500 ms (%d vs %d)", mReceived, 1)
 	}
-	if deleteReceived != 2 {
-		t.Fatalf("incorrect number of delete events received after 500 ms (%d vs %d)", deleteReceived, 2)
+	dReceived := deleteReceived.value()
+	if dReceived != 2 {
+		t.Fatalf("incorrect number of delete events received after 500 ms (%d vs %d)", dReceived, 2)
 	}
 
 	// Try closing the fsnotify instance
@@ -441,14 +462,14 @@ func TestFsnotifyDeleteWatchedDir(t *testing.T) {
 
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
-	var deleteReceived = 0
+	var deleteReceived counter
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
 			if event.Name == testDir || event.Name == testFileAlreadyExists {
 				t.Logf("event received: %s", event)
 				if event.IsDelete() {
-					deleteReceived++
+					deleteReceived.increment()
 				}
 			} else {
 				t.Logf("unexpected event received: %s", event)
@@ -460,8 +481,9 @@ func TestFsnotifyDeleteWatchedDir(t *testing.T) {
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500 * time.Millisecond)
-	if deleteReceived < 2 {
-		t.Fatalf("did not receive at least %d delete events, received %d after 500 ms", 2, deleteReceived)
+	dReceived := deleteReceived.value()
+	if dReceived < 2 {
+		t.Fatalf("did not receive at least %d delete events, received %d after 500 ms", 2, dReceived)
 	}
 }
 
@@ -492,8 +514,7 @@ func TestFsnotifySubDir(t *testing.T) {
 
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
-	var createReceived = 0
-	var deleteReceived = 0
+	var createReceived, deleteReceived counter
 	done := make(chan bool)
 	go func() {
 		for event := range eventstream {
@@ -501,10 +522,10 @@ func TestFsnotifySubDir(t *testing.T) {
 			if event.Name == testDir || event.Name == testSubDir || event.Name == testFile1 {
 				t.Logf("event received: %s", event)
 				if event.IsCreate() {
-					createReceived++
+					createReceived.increment()
 				}
 				if event.IsDelete() {
-					deleteReceived++
+					deleteReceived.increment()
 				}
 			} else {
 				t.Logf("unexpected event received: %s", event)
@@ -548,11 +569,13 @@ func TestFsnotifySubDir(t *testing.T) {
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500 * time.Millisecond)
-	if createReceived != 2 {
-		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", createReceived, 2)
+	cReceived := createReceived.value()
+	if cReceived != 2 {
+		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", cReceived, 2)
 	}
-	if deleteReceived != 2 {
-		t.Fatalf("incorrect number of delete events received after 500 ms (%d vs %d)", deleteReceived, 2)
+	dReceived := deleteReceived.value()
+	if dReceived != 2 {
+		t.Fatalf("incorrect number of delete events received after 500 ms (%d vs %d)", dReceived, 2)
 	}
 
 	// Try closing the fsnotify instance
@@ -600,14 +623,14 @@ func TestFsnotifyRename(t *testing.T) {
 
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
-	var renameReceived = 0
+	var renameReceived counter
 	done := make(chan bool)
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
 			if event.Name == testDir || event.Name == testFile || event.Name == testFileRenamed {
 				if event.IsRename() {
-					renameReceived++
+					renameReceived.increment()
 				}
 				t.Logf("event received: %s", event)
 			} else {
@@ -644,7 +667,7 @@ func TestFsnotifyRename(t *testing.T) {
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500 * time.Millisecond)
-	if renameReceived == 0 {
+	if renameReceived.value() == 0 {
 		t.Fatal("fsnotify rename events have not been received after 500 ms")
 	}
 
@@ -702,14 +725,14 @@ func TestFsnotifyRenameToCreate(t *testing.T) {
 
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
-	var createReceived = 0
+	var createReceived counter
 	done := make(chan bool)
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
 			if event.Name == testDir || event.Name == testFile || event.Name == testFileRenamed {
 				if event.IsCreate() {
-					createReceived++
+					createReceived.increment()
 				}
 				t.Logf("event received: %s", event)
 			} else {
@@ -737,7 +760,7 @@ func TestFsnotifyRenameToCreate(t *testing.T) {
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500 * time.Millisecond)
-	if createReceived == 0 {
+	if createReceived.value() == 0 {
 		t.Fatal("fsnotify create events have not been received after 500 ms")
 	}
 
@@ -804,13 +827,13 @@ func TestFsnotifyRenameToOverwrite(t *testing.T) {
 
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
-	var eventReceived = 0
+	var eventReceived counter
 	done := make(chan bool)
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
 			if event.Name == testFileRenamed {
-				eventReceived++
+				eventReceived.increment()
 				t.Logf("event received: %s", event)
 			} else {
 				t.Logf("unexpected event received: %s", event)
@@ -837,7 +860,7 @@ func TestFsnotifyRenameToOverwrite(t *testing.T) {
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500 * time.Millisecond)
-	if eventReceived == 0 {
+	if eventReceived.value() == 0 {
 		t.Fatal("fsnotify events have not been received after 500 ms")
 	}
 
@@ -881,14 +904,14 @@ func TestFsnotifyAttrib(t *testing.T) {
 
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
-	var attribReceived = 0
+	var attribReceived counter
 	done := make(chan bool)
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
 			if event.Name == testDir || event.Name == testFile {
 				if event.IsModify() {
-					attribReceived++
+					attribReceived.increment()
 				}
 				t.Logf("event received: %s", event)
 			} else {
@@ -925,7 +948,7 @@ func TestFsnotifyAttrib(t *testing.T) {
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500 * time.Millisecond)
-	if attribReceived == 0 {
+	if attribReceived.value() == 0 {
 		t.Fatal("fsnotify attribute events have not received after 500 ms")
 	}
 
@@ -947,14 +970,14 @@ func TestFsnotifyClose(t *testing.T) {
 	watcher, _ := NewWatcher()
 	watcher.Close()
 
-	done := false
+	var done int32
 	go func() {
 		watcher.Close()
-		done = true
+		atomic.StoreInt32(&done, 1)
 	}()
 
 	time.Sleep(50e6) // 50 ms
-	if !done {
+	if atomic.LoadInt32(&done) == 0 {
 		t.Fatal("double Close() test failed: second Close() call didn't return")
 	}
 
