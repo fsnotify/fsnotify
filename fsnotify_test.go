@@ -775,7 +775,7 @@ func TestFsnotifyRenameToOverwrite(t *testing.T) {
 	defer os.RemoveAll(testDir)
 
 	// Create directory to get file
-	if err := os.Mkdir(testDirFrom, 0777) != nil {
+	if err := os.Mkdir(testDirFrom, 0777); err != nil {
 		t.Fatalf("Failed to create test directory: %s", err)
 	}
 	defer os.RemoveAll(testDirFrom)
