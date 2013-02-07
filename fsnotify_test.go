@@ -7,6 +7,7 @@ package fsnotify
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -73,7 +74,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
-			if event.Name == testDir || event.Name == testFile {
+			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFile) {
 				t.Logf("event received: %s", event)
 				if event.IsDelete() {
 					deleteReceived.increment()
@@ -199,7 +200,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
-			if event.Name == testDir || event.Name == testFile {
+			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFile) {
 				t.Logf("event received: %s", event)
 				if event.IsDelete() {
 					deleteReceived.increment()
@@ -350,7 +351,7 @@ func TestFsnotifyDirOnly(t *testing.T) {
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
-			if event.Name == testDir || event.Name == testFile || event.Name == testFileAlreadyExists {
+			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFile) || event.Name == filepath.Clean(testFileAlreadyExists) {
 				t.Logf("event received: %s", event)
 				if event.IsDelete() {
 					deleteReceived.increment()
@@ -466,7 +467,7 @@ func TestFsnotifyDeleteWatchedDir(t *testing.T) {
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
-			if event.Name == testDir || event.Name == testFileAlreadyExists {
+			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFileAlreadyExists) {
 				t.Logf("event received: %s", event)
 				if event.IsDelete() {
 					deleteReceived.increment()
@@ -519,7 +520,7 @@ func TestFsnotifySubDir(t *testing.T) {
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
-			if event.Name == testDir || event.Name == testSubDir || event.Name == testFile1 {
+			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testSubDir) || event.Name == filepath.Clean(testFile1) {
 				t.Logf("event received: %s", event)
 				if event.IsCreate() {
 					createReceived.increment()
@@ -628,7 +629,7 @@ func TestFsnotifyRename(t *testing.T) {
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
-			if event.Name == testDir || event.Name == testFile || event.Name == testFileRenamed {
+			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFile) || event.Name == filepath.Clean(testFileRenamed) {
 				if event.IsRename() {
 					renameReceived.increment()
 				}
@@ -730,7 +731,7 @@ func TestFsnotifyRenameToCreate(t *testing.T) {
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
-			if event.Name == testDir || event.Name == testFile || event.Name == testFileRenamed {
+			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFile) || event.Name == filepath.Clean(testFileRenamed) {
 				if event.IsCreate() {
 					createReceived.increment()
 				}
@@ -832,7 +833,7 @@ func TestFsnotifyRenameToOverwrite(t *testing.T) {
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
-			if event.Name == testFileRenamed {
+			if event.Name == filepath.Clean(testFileRenamed) {
 				eventReceived.increment()
 				t.Logf("event received: %s", event)
 			} else {
@@ -909,7 +910,7 @@ func TestFsnotifyAttrib(t *testing.T) {
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
-			if event.Name == testDir || event.Name == testFile {
+			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFile) {
 				if event.IsModify() {
 					attribReceived.increment()
 				}
