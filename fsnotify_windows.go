@@ -85,6 +85,7 @@ type Watcher struct {
 	port          syscall.Handle    // Handle to completion port
 	watches       watchMap          // Map of watches (key: i-number)
 	fsnFlags      map[string]uint32 // Map of watched files to flags used for filter
+	fsnmut        sync.Mutex        // Protects access to fsnFlags.
 	input         chan *input       // Inputs to the reader are sent on this channel
 	internalEvent chan *FileEvent   // Events are queued on this channel
 	Event         chan *FileEvent   // Events are returned on this channel
