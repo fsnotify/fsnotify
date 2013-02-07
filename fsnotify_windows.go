@@ -83,6 +83,7 @@ type watchMap map[uint32]indexMap
 // A Watcher waits for and receives event notifications
 // for a specific set of files and directories.
 type Watcher struct {
+	mu            sync.Mutex        // Map access
 	port          syscall.Handle    // Handle to completion port
 	watches       watchMap          // Map of watches (key: i-number)
 	fsnFlags      map[string]uint32 // Map of watched files to flags used for filter
@@ -247,7 +248,9 @@ func (w *Watcher) addWatch(pathname string, flags uint64) error {
 	if err != nil {
 		return err
 	}
+	w.mu.Lock()
 	watchEntry := w.watches.get(ino)
+	w.mu.Unlock()
 	if watchEntry == nil {
 		if _, e := syscall.CreateIoCompletionPort(ino.handle, w.port, 0, 0); e != nil {
 			syscall.CloseHandle(ino.handle)
@@ -258,7 +261,9 @@ func (w *Watcher) addWatch(pathname string, flags uint64) error {
 			path:  dir,
 			names: make(map[string]uint64),
 		}
+		w.mu.Lock()
 		w.watches.set(ino, watchEntry)
+		w.mu.Unlock()
 		flags |= provisional
 	} else {
 		syscall.CloseHandle(ino.handle)
@@ -289,7 +294,9 @@ func (w *Watcher) remWatch(pathname string) error {
 	if err != nil {
 		return err
 	}
+	w.mu.Lock()
 	watch := w.watches.get(ino)
+	w.mu.Unlock()
 	if watch == nil {
 		return fmt.Errorf("can't remove non-existent watch for: %s", pathname)
 	}
@@ -334,7 +341,9 @@ func (w *Watcher) startRead(watch *watch) error {
 		if e := syscall.CloseHandle(watch.ino.handle); e != nil {
 			w.Error <- os.NewSyscallError("CloseHandle", e)
 		}
+		w.mu.Lock()
 		delete(w.watches[watch.ino.volume], watch.ino.index)
+		w.mu.Unlock()
 		return nil
 	}
 	e := syscall.ReadDirectoryChanges(watch.ino.handle, &watch.buf[0],
@@ -374,7 +383,13 @@ func (w *Watcher) readEvents() {
 		if watch == nil {
 			select {
 			case ch := <-w.quit:
+				w.mu.Lock()
+				indexes := make([]indexMap, 0)
 				for _, index := range w.watches {
+					indexes = append(indexes, index)
+				}
+				w.mu.Unlock()
+				for _, index := range indexes {
 					for _, watch := range index {
 						w.deleteWatch(watch)
 						w.startRead(watch)
