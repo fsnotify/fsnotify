@@ -1,1 +1,4 @@
 language: go
+
+install:
+    - go get github.com/howeyc/fsnotify
