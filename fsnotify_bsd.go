@@ -373,7 +373,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 			// we want to preserve the flags used
 			w.enmut.Lock()
 			currFlags, found := w.enFlags[filePath]
-			w.enmut.Lock()
+			w.enmut.Unlock()
 			var newFlags uint32 = NOTE_DELETE
 			if found {
 				newFlags |= currFlags
