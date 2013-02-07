@@ -111,7 +111,9 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 		return errors.New("inotify instance already closed")
 	}
 
+	w.mu.Lock()
 	watchEntry, found := w.watches[path]
+	w.mu.Unlock()
 	if found {
 		watchEntry.flags |= flags
 		flags |= syscall.IN_MASK_ADD
@@ -136,6 +138,8 @@ func (w *Watcher) watch(path string) error {
 
 // RemoveWatch removes path from the watched file set.
 func (w *Watcher) removeWatch(path string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	watch, ok := w.watches[path]
 	if !ok {
 		return errors.New(fmt.Sprintf("can't remove non-existent inotify watch for: %s", path))
@@ -209,11 +213,13 @@ func (w *Watcher) readEvents() {
 			}
 
 			// Setup FSNotify flags (inherit from directory watch)
+			w.fsnmut.Lock()
 			fsnFlags := w.fsnFlags[watchedName]
 			_, fsnFound := w.fsnFlags[event.Name]
 			if !fsnFound {
 				w.fsnFlags[event.Name] = fsnFlags
 			}
+			w.fsnmut.Unlock()
 
 			// Send the events that are not ignored on the events channel
 			if (event.mask & IN_IGNORED) == 0 {
