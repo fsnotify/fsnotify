@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"syscall"
 	"unsafe"
 )
