@@ -19,7 +19,9 @@ const (
 func (w *Watcher) purgeEvents() {
 	for ev := range w.internalEvent {
 		sendEvent := false
+		w.fsnmut.Lock()
 		fsnFlags := w.fsnFlags[ev.Name]
+		w.fsnmut.Unlock()
 
 		if (fsnFlags&FSN_CREATE == FSN_CREATE) && ev.IsCreate() {
 			sendEvent = true
@@ -48,19 +50,25 @@ func (w *Watcher) purgeEvents() {
 
 // Watch a given file path
 func (w *Watcher) Watch(path string) error {
+	w.fsnmut.Lock()
 	w.fsnFlags[path] = FSN_ALL
+	w.fsnmut.Unlock()
 	return w.watch(path)
 }
 
 // Watch a given file path for a particular set of notifications (FSN_MODIFY etc.)
 func (w *Watcher) WatchFlags(path string, flags uint32) error {
+	w.fsnmut.Lock()
 	w.fsnFlags[path] = flags
+	w.fsnmut.Unlock()
 	return w.watch(path)
 }
 
 // Remove a watch on a file
 func (w *Watcher) RemoveWatch(path string) error {
+	w.fsnmut.Lock()
 	delete(w.fsnFlags, path)
+	w.fsnmut.Unlock()
 	return w.removeWatch(path)
 }
 

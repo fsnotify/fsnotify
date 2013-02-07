@@ -53,6 +53,7 @@ type Watcher struct {
 	fd            int               // File descriptor (as returned by the inotify_init() syscall)
 	watches       map[string]*watch // Map of inotify watches (key: path)
 	fsnFlags      map[string]uint32 // Map of watched files to flags used for filter
+	fsnmut        sync.Mutex        // Protects access to fsnFlags.
 	paths         map[int]string    // Map of watched paths (key: watch descriptor)
 	Error         chan error        // Errors are sent on this channel
 	internalEvent chan *FileEvent   // Events are queued on this channel
