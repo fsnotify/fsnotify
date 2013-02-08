@@ -1,0 +1,18 @@
+# Names should be added to this file as
+#	Name or Organization <email address>
+# The email address is not required for organizations.
+
+# You can update this list using the following command:
+#
+#   $ git shortlog -se | awk '{print $2 " " $3 " " $4}'
+
+# Please keep the list sorted.
+
+Case Nelson <case@teammating.com>
+Chris Howey <howeyc@gmail.com> <chris@howey.me>
+Dave Cheney <dave@cheney.net>
+Francisco Souza <f@souza.cc>
+Kelvin Fo <vmirage@gmail.com>
+Pursuit92 <JoshChase@techpursuit.net> 
+Rob Figueiredo <robfig@gmail.com>
+Travis Cline <travis.cline@gmail.com>
