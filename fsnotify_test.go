@@ -489,8 +489,6 @@ func TestFsnotifyDeleteWatchedDir(t *testing.T) {
 }
 
 func TestFsnotifySubDir(t *testing.T) {
-	t.Skip("fails on OS X at least")
-
 	// Create an fsnotify watcher instance and initialize it
 	watcher, err := NewWatcher()
 	if err != nil {
