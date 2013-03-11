@@ -4,8 +4,6 @@
 
 // +build windows
 
-// Package fsnotify allows the user to receive
-// file system event notifications on Windows.
 package fsnotify
 
 import (

@@ -4,7 +4,6 @@
 
 // +build linux
 
-// Package fsnotify implements a wrapper for the Linux inotify system.
 package fsnotify
 
 import (

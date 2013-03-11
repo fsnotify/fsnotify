@@ -4,7 +4,6 @@
 
 // +build freebsd openbsd netbsd darwin
 
-//Package fsnotify implements filesystem notification.
 package fsnotify
 
 import (
