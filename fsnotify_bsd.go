@@ -360,11 +360,18 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 	for _, fileInfo := range files {
 		filePath := filepath.Join(dirPath, fileInfo.Name())
 		if fileInfo.IsDir() == false {
+			// Inherit fsnFlags from parent directory
+			w.fsnmut.Lock()
+			dirFsnFlags, dirFsnFound := w.fsnFlags[dirPath]
+			if dirFsnFound {
+				w.fsnFlags[filePath] = dirFsnFlags
+			} else {
+				w.fsnFlags[filePath] = FSN_ALL
+			}
+			w.fsnmut.Unlock()
+
 			// Watch file to mimic linux fsnotify
 			e := w.addWatch(filePath, NOTE_DELETE|NOTE_WRITE|NOTE_RENAME)
-			w.fsnmut.Lock()
-			w.fsnFlags[filePath] = FSN_ALL
-			w.fsnmut.Unlock()
 			if e != nil {
 				return e
 			}
