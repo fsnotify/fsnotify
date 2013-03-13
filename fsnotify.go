@@ -37,12 +37,20 @@ func (w *Watcher) purgeEvents() {
 		}
 
 		if (fsnFlags&FSN_RENAME == FSN_RENAME) && ev.IsRename() {
-			//w.RemoveWatch(ev.Name)
 			sendEvent = true
 		}
 
 		if sendEvent {
 			w.Event <- ev
+		}
+
+		// If there's no file, then no more events for user
+		// BSD must keep watch for internal use (watches DELETEs to keep track
+		// what files exist for create events)
+		if ev.IsDelete() {
+			w.fsnmut.Lock()
+			delete(w.fsnFlags, ev.Name)
+			w.fsnmut.Unlock()
 		}
 	}
 

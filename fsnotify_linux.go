@@ -211,17 +211,17 @@ func (w *Watcher) readEvents() {
 				event.Name += "/" + strings.TrimRight(string(bytes[0:nameLen]), "\000")
 			}
 
-			// Setup FSNotify flags (inherit from directory watch)
-			w.fsnmut.Lock()
-			fsnFlags := w.fsnFlags[watchedName]
-			_, fsnFound := w.fsnFlags[event.Name]
-			if !fsnFound {
-				w.fsnFlags[event.Name] = fsnFlags
-			}
-			w.fsnmut.Unlock()
-
 			// Send the events that are not ignored on the events channel
-			if (event.mask & IN_IGNORED) == 0 {
+			if !event.ignoreLinux() {
+				// Setup FSNotify flags (inherit from directory watch)
+				w.fsnmut.Lock()
+				fsnFlags := w.fsnFlags[watchedName]
+				_, fsnFound := w.fsnFlags[event.Name]
+				if !fsnFound {
+					w.fsnFlags[event.Name] = fsnFlags
+				}
+				w.fsnmut.Unlock()
+
 				w.internalEvent <- event
 			}
 
@@ -229,6 +229,31 @@ func (w *Watcher) readEvents() {
 			offset += syscall.SizeofInotifyEvent + nameLen
 		}
 	}
+}
+
+// Certain types of events can be "ignored" and not sent over the Event
+// channel. Such as events marked ignore by the kernel, or MODIFY events
+// against files that do not exist.
+func (e *FileEvent) ignoreLinux() bool {
+	// Ignore anything the inotify API says to ignore
+	if e.mask&IN_IGNORED == IN_IGNORED {
+		return true
+	}
+
+	// If the event is not a DELETE or RENAME, the file must exist.
+	// Otherwise the event is ignored.
+	// *Note*: this was put in place because it was seen that a MODIFY
+	// event was sent after the DELETE. This ignores that MODIFY and
+	// assumes a DELETE will come or has come if the file doesn't exist.
+	if !(e.mask&IN_DELETE == IN_DELETE ||
+		e.mask&IN_DELETE_SELF == IN_DELETE_SELF ||
+		e.mask&IN_MOVED_FROM == IN_MOVED_FROM ||
+		e.mask&IN_MOVE_SELF == IN_MOVE_SELF) {
+		if _, statErr := os.Stat(e.Name); os.IsNotExist(statErr) {
+			return true
+		}
+	}
+	return false
 }
 
 const (
