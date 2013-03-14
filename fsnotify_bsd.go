@@ -232,6 +232,13 @@ func (w *Watcher) removeWatch(path string) error {
 	w.wmut.Lock()
 	delete(w.watches, path)
 	w.wmut.Unlock()
+	w.enmut.Lock()
+	delete(w.enFlags, path)
+	w.enmut.Unlock()
+	w.pmut.Lock()
+	delete(w.paths, watchfd)
+	delete(w.finfo, watchfd)
+	w.pmut.Unlock()
 	return nil
 }
 
@@ -358,17 +365,18 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 	// Search for new files
 	for _, fileInfo := range files {
 		filePath := filepath.Join(dirPath, fileInfo.Name())
-		if fileInfo.IsDir() == false {
-			// Inherit fsnFlags from parent directory
-			w.fsnmut.Lock()
-			dirFsnFlags, dirFsnFound := w.fsnFlags[dirPath]
-			if dirFsnFound {
-				w.fsnFlags[filePath] = dirFsnFlags
-			} else {
-				w.fsnFlags[filePath] = FSN_ALL
-			}
-			w.fsnmut.Unlock()
 
+		// Inherit fsnFlags from parent directory
+		w.fsnmut.Lock()
+		dirFsnFlags, dirFsnFound := w.fsnFlags[dirPath]
+		if dirFsnFound {
+			w.fsnFlags[filePath] = dirFsnFlags
+		} else {
+			w.fsnFlags[filePath] = FSN_ALL
+		}
+		w.fsnmut.Unlock()
+
+		if fileInfo.IsDir() == false {
 			// Watch file to mimic linux fsnotify
 			e := w.addWatch(filePath, NOTE_DELETE|NOTE_WRITE|NOTE_RENAME)
 			if e != nil {
@@ -387,9 +395,6 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 
 			// Linux gives deletes if not explicitly watching
 			e := w.addWatch(filePath, newFlags)
-			w.fsnmut.Lock()
-			w.fsnFlags[filePath] = FSN_ALL
-			w.fsnmut.Unlock()
 			if e != nil {
 				return e
 			}
@@ -420,9 +425,16 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 		_, doesExist := w.fileExists[filePath]
 		w.femut.Unlock()
 		if !doesExist {
+			// Inherit fsnFlags from parent directory
 			w.fsnmut.Lock()
-			w.fsnFlags[filePath] = FSN_ALL
+			dirFsnFlags, dirFsnFound := w.fsnFlags[dirPath]
+			if dirFsnFound {
+				w.fsnFlags[filePath] = dirFsnFlags
+			} else {
+				w.fsnFlags[filePath] = FSN_ALL
+			}
 			w.fsnmut.Unlock()
+
 			// Send create event
 			fileEvent := new(FileEvent)
 			fileEvent.Name = filePath
