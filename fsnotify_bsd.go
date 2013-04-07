@@ -378,7 +378,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 
 		if fileInfo.IsDir() == false {
 			// Watch file to mimic linux fsnotify
-			e := w.addWatch(filePath, NOTE_DELETE|NOTE_WRITE|NOTE_RENAME)
+			e := w.addWatch(filePath, NOTE_ALLEVENTS)
 			if e != nil {
 				return e
 			}
