@@ -249,7 +249,7 @@ func (e *FileEvent) ignoreLinux() bool {
 		e.mask&IN_DELETE_SELF == IN_DELETE_SELF ||
 		e.mask&IN_MOVED_FROM == IN_MOVED_FROM ||
 		e.mask&IN_MOVE_SELF == IN_MOVE_SELF) {
-		if _, statErr := os.Stat(e.Name); os.IsNotExist(statErr) {
+		if _, statErr := os.Lstat(e.Name); os.IsNotExist(statErr) {
 			return true
 		}
 	}
