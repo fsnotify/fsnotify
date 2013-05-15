@@ -1,4 +1,0 @@
-language: go
-
-install:
-    - go get code.google.com/p/go.exp/fsnotify

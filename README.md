@@ -65,5 +65,3 @@ Notes:
 * Do I have to watch the Error and Event channels in a separate goroutine?
     * As of now, yes. Looking into making this single-thread friendly.
 
-[![Build Status](https://secure.travis-ci.org/howeyc/fsnotify.png?branch=master)](http://travis-ci.org/howeyc/fsnotify)
-
