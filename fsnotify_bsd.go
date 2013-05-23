@@ -152,7 +152,7 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 			}
 		}
 
-		fd, errno := syscall.Open(path, syscall.O_NONBLOCK|syscall.O_RDONLY, 0700)
+		fd, errno := syscall.Open(path, OPEN_FLAGS, 0700)
 		if fd == -1 {
 			return errno
 		}
