@@ -879,6 +879,10 @@ func TestFsnotifyRenameToOverwrite(t *testing.T) {
 }
 
 func TestFsnotifyAttrib(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Attributes don't work on Windows.")
+	}
+
 	// Create an fsnotify watcher instance and initialize it
 	watcher, err := NewWatcher()
 	if err != nil {
