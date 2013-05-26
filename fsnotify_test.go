@@ -780,6 +780,10 @@ func TestFsnotifyRenameToCreate(t *testing.T) {
 }
 
 func TestFsnotifyRenameToOverwrite(t *testing.T) {
+	switch runtime.GOOS {
+	case "plan9", "windows":
+		t.Skipf("Skipping test on %q (os.Rename over existing file does not create event).", runtime.GOOS)
+	}
 	// Create an fsnotify watcher instance and initialize it
 	watcher, err := NewWatcher()
 	if err != nil {
@@ -882,7 +886,6 @@ func TestFsnotifyAttrib(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Attributes don't work on Windows.")
 	}
-
 	// Create an fsnotify watcher instance and initialize it
 	watcher, err := NewWatcher()
 	if err != nil {
