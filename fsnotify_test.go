@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -111,8 +112,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
 
-	cmd := exec.Command("mv", testFile, testFileRenamed)
-	err = cmd.Run()
+	err = testRename(testFile, testFileRenamed)
 	if err != nil {
 		t.Fatalf("rename failed: %s", err)
 	}
@@ -660,8 +660,7 @@ func TestFsnotifyRename(t *testing.T) {
 		t.Fatalf("Watcher.Watch() failed: %s", err)
 	}
 
-	cmd := exec.Command("mv", testFile, testFileRenamed)
-	err = cmd.Run()
+	err = testRename(testFile, testFileRenamed)
 	if err != nil {
 		t.Fatalf("rename failed: %s", err)
 	}
@@ -753,8 +752,7 @@ func TestFsnotifyRenameToCreate(t *testing.T) {
 	f.Sync()
 	f.Close()
 
-	cmd := exec.Command("mv", testFile, testFileRenamed)
-	err = cmd.Run()
+	err = testRename(testFile, testFileRenamed)
 	if err != nil {
 		t.Fatalf("rename failed: %s", err)
 	}
@@ -853,8 +851,7 @@ func TestFsnotifyRenameToOverwrite(t *testing.T) {
 	f.Sync()
 	f.Close()
 
-	cmd := exec.Command("mv", testFile, testFileRenamed)
-	err = cmd.Run()
+	err = testRename(testFile, testFileRenamed)
 	if err != nil {
 		t.Fatalf("rename failed: %s", err)
 	}
@@ -985,5 +982,15 @@ func TestFsnotifyClose(t *testing.T) {
 	err := watcher.Watch("_test")
 	if err == nil {
 		t.Fatal("expected error on Watch() after Close(), got nil")
+	}
+}
+
+func testRename(file1, file2 string) error {
+	switch runtime.GOOS {
+	case "windows", "plan9":
+		return os.Rename(file1, file2)
+	default:
+		cmd := exec.Command("mv", file1, file2)
+		return cmd.Run()
 	}
 }
