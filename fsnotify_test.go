@@ -940,8 +940,7 @@ func TestFsnotifyAttrib(t *testing.T) {
 		t.Fatalf("Watcher.Watch() failed: %s", err)
 	}
 
-	cmd := exec.Command("chmod", "0700", testFile)
-	err = cmd.Run()
+	err = os.Chmod(testFile, 0700)
 	if err != nil {
 		t.Fatalf("chmod failed: %s", err)
 	}
