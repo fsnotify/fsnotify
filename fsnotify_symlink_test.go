@@ -22,7 +22,7 @@ func TestFsnotifyFakeSymlink(t *testing.T) {
 	const testDir string = "_test"
 
 	// Create directory to watch
-	if os.Mkdir(testDir, 0777) != nil {
+	if err := os.Mkdir(testDir, 0777); err != nil {
 		t.Fatalf("Failed to create test directory: %s", err)
 	}
 	defer os.RemoveAll(testDir)
