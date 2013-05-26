@@ -281,7 +281,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", cReceived, 2)
 	}
 	mReceived := modifyReceived.value()
-	if mReceived != 3 {
+	if mReceived < 3 {
 		t.Fatalf("incorrect number of modify events received after 500 ms (%d vs atleast %d)", mReceived, 3)
 	}
 	dReceived := deleteReceived.value()
@@ -563,6 +563,8 @@ func TestFsnotifySubDir(t *testing.T) {
 	}
 	fs.Sync()
 	fs.Close()
+
+	time.Sleep(200 * time.Millisecond)
 
 	// Make sure receive deletes for both file and sub-directory
 	os.RemoveAll(testSubDir)
