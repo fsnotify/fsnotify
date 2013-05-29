@@ -27,25 +27,25 @@ func TestFsnotifyFakeSymlink(t *testing.T) {
 	}
 	defer os.RemoveAll(testDir)
 
-	var errorsReceived = 0
+	var errorsReceived counter
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for errors := range watcher.Error {
 			t.Logf("Received error: %s", errors)
-			errorsReceived++
+			errorsReceived.increment()
 		}
 	}()
 
 	// Count the CREATE events received
-	var createEventsReceived = 0
-	var otherEventsReceived = 0
+	var createEventsReceived counter
+	var otherEventsReceived counter
 	go func() {
 		for ev := range watcher.Event {
 			t.Logf("event received: %s", ev)
 			if ev.IsCreate() {
-				createEventsReceived++
+				createEventsReceived.increment()
 			} else {
-				otherEventsReceived++
+				otherEventsReceived.increment()
 			}
 		}
 	}()
@@ -65,18 +65,18 @@ func TestFsnotifyFakeSymlink(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Should not be error, just no events for broken links (watching nothing)
-	if errorsReceived > 0 {
+	if errorsReceived.value() > 0 {
 		t.Fatal("fsnotify errors have been received.")
 	}
-	if otherEventsReceived > 0 {
+	if otherEventsReceived.value() > 0 {
 		t.Fatal("fsnotify other events received on the broken link")
 	}
 
 	// Except for 1 create event (for the link itself)
-	if createEventsReceived == 0 {
+	if createEventsReceived.value() == 0 {
 		t.Fatal("fsnotify create events were not received after 500 ms")
 	}
-	if createEventsReceived > 1 {
+	if createEventsReceived.value() > 1 {
 		t.Fatal("fsnotify more create events received than expected")
 	}
 
