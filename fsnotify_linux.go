@@ -24,22 +24,22 @@ type FileEvent struct {
 
 // IsCreate reports whether the FileEvent was triggerd by a creation
 func (e *FileEvent) IsCreate() bool {
-	return (e.mask&IN_CREATE) == IN_CREATE || (e.mask&IN_MOVED_TO) == IN_MOVED_TO
+	return (e.mask&sys_IN_CREATE) == sys_IN_CREATE || (e.mask&sys_IN_MOVED_TO) == sys_IN_MOVED_TO
 }
 
 // IsDelete reports whether the FileEvent was triggerd by a delete
 func (e *FileEvent) IsDelete() bool {
-	return (e.mask&IN_DELETE_SELF) == IN_DELETE_SELF || (e.mask&IN_DELETE) == IN_DELETE
+	return (e.mask&sys_IN_DELETE_SELF) == sys_IN_DELETE_SELF || (e.mask&sys_IN_DELETE) == sys_IN_DELETE
 }
 
 // IsModify reports whether the FileEvent was triggerd by a file modification or attribute change
 func (e *FileEvent) IsModify() bool {
-	return ((e.mask&IN_MODIFY) == IN_MODIFY || (e.mask&IN_ATTRIB) == IN_ATTRIB)
+	return ((e.mask&sys_IN_MODIFY) == sys_IN_MODIFY || (e.mask&sys_IN_ATTRIB) == sys_IN_ATTRIB)
 }
 
 // IsRename reports whether the FileEvent was triggerd by a change name
 func (e *FileEvent) IsRename() bool {
-	return ((e.mask&IN_MOVE_SELF) == IN_MOVE_SELF || (e.mask&IN_MOVED_FROM) == IN_MOVED_FROM)
+	return ((e.mask&sys_IN_MOVE_SELF) == sys_IN_MOVE_SELF || (e.mask&sys_IN_MOVED_FROM) == sys_IN_MOVED_FROM)
 }
 
 type watch struct {
@@ -132,7 +132,7 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 
 // Watch adds path to the watched file set, watching all events.
 func (w *Watcher) watch(path string) error {
-	return w.addWatch(path, OS_AGNOSTIC_EVENTS)
+	return w.addWatch(path, sys_AGNOSTIC_EVENTS)
 }
 
 // RemoveWatch removes path from the watched file set.
@@ -236,7 +236,7 @@ func (w *Watcher) readEvents() {
 // against files that do not exist.
 func (e *FileEvent) ignoreLinux() bool {
 	// Ignore anything the inotify API says to ignore
-	if e.mask&IN_IGNORED == IN_IGNORED {
+	if e.mask&sys_IN_IGNORED == sys_IN_IGNORED {
 		return true
 	}
 
@@ -245,10 +245,10 @@ func (e *FileEvent) ignoreLinux() bool {
 	// *Note*: this was put in place because it was seen that a MODIFY
 	// event was sent after the DELETE. This ignores that MODIFY and
 	// assumes a DELETE will come or has come if the file doesn't exist.
-	if !(e.mask&IN_DELETE == IN_DELETE ||
-		e.mask&IN_DELETE_SELF == IN_DELETE_SELF ||
-		e.mask&IN_MOVED_FROM == IN_MOVED_FROM ||
-		e.mask&IN_MOVE_SELF == IN_MOVE_SELF) {
+	if !(e.mask&sys_IN_DELETE == sys_IN_DELETE ||
+		e.mask&sys_IN_DELETE_SELF == sys_IN_DELETE_SELF ||
+		e.mask&sys_IN_MOVED_FROM == sys_IN_MOVED_FROM ||
+		e.mask&sys_IN_MOVE_SELF == sys_IN_MOVE_SELF) {
 		if _, statErr := os.Lstat(e.Name); os.IsNotExist(statErr) {
 			return true
 		}
@@ -258,40 +258,40 @@ func (e *FileEvent) ignoreLinux() bool {
 
 const (
 	// Options for inotify_init() are not exported
-	// IN_CLOEXEC    uint32 = syscall.IN_CLOEXEC
-	// IN_NONBLOCK   uint32 = syscall.IN_NONBLOCK
+	// sys_IN_CLOEXEC    uint32 = syscall.IN_CLOEXEC
+	// sys_IN_NONBLOCK   uint32 = syscall.IN_NONBLOCK
 
 	// Options for AddWatch
-	IN_DONT_FOLLOW uint32 = syscall.IN_DONT_FOLLOW
-	IN_ONESHOT     uint32 = syscall.IN_ONESHOT
-	IN_ONLYDIR     uint32 = syscall.IN_ONLYDIR
+	sys_IN_DONT_FOLLOW uint32 = syscall.IN_DONT_FOLLOW
+	sys_IN_ONESHOT     uint32 = syscall.IN_ONESHOT
+	sys_IN_ONLYDIR     uint32 = syscall.IN_ONLYDIR
 
-	// The "IN_MASK_ADD" option is not exported, as AddWatch
+	// The "sys_IN_MASK_ADD" option is not exported, as AddWatch
 	// adds it automatically, if there is already a watch for the given path
-	// IN_MASK_ADD      uint32 = syscall.IN_MASK_ADD
+	// sys_IN_MASK_ADD      uint32 = syscall.IN_MASK_ADD
 
 	// Events
-	IN_ACCESS        uint32 = syscall.IN_ACCESS
-	IN_ALL_EVENTS    uint32 = syscall.IN_ALL_EVENTS
-	IN_ATTRIB        uint32 = syscall.IN_ATTRIB
-	IN_CLOSE         uint32 = syscall.IN_CLOSE
-	IN_CLOSE_NOWRITE uint32 = syscall.IN_CLOSE_NOWRITE
-	IN_CLOSE_WRITE   uint32 = syscall.IN_CLOSE_WRITE
-	IN_CREATE        uint32 = syscall.IN_CREATE
-	IN_DELETE        uint32 = syscall.IN_DELETE
-	IN_DELETE_SELF   uint32 = syscall.IN_DELETE_SELF
-	IN_MODIFY        uint32 = syscall.IN_MODIFY
-	IN_MOVE          uint32 = syscall.IN_MOVE
-	IN_MOVED_FROM    uint32 = syscall.IN_MOVED_FROM
-	IN_MOVED_TO      uint32 = syscall.IN_MOVED_TO
-	IN_MOVE_SELF     uint32 = syscall.IN_MOVE_SELF
-	IN_OPEN          uint32 = syscall.IN_OPEN
+	sys_IN_ACCESS        uint32 = syscall.IN_ACCESS
+	sys_IN_ALL_EVENTS    uint32 = syscall.IN_ALL_EVENTS
+	sys_IN_ATTRIB        uint32 = syscall.IN_ATTRIB
+	sys_IN_CLOSE         uint32 = syscall.IN_CLOSE
+	sys_IN_CLOSE_NOWRITE uint32 = syscall.IN_CLOSE_NOWRITE
+	sys_IN_CLOSE_WRITE   uint32 = syscall.IN_CLOSE_WRITE
+	sys_IN_CREATE        uint32 = syscall.IN_CREATE
+	sys_IN_DELETE        uint32 = syscall.IN_DELETE
+	sys_IN_DELETE_SELF   uint32 = syscall.IN_DELETE_SELF
+	sys_IN_MODIFY        uint32 = syscall.IN_MODIFY
+	sys_IN_MOVE          uint32 = syscall.IN_MOVE
+	sys_IN_MOVED_FROM    uint32 = syscall.IN_MOVED_FROM
+	sys_IN_MOVED_TO      uint32 = syscall.IN_MOVED_TO
+	sys_IN_MOVE_SELF     uint32 = syscall.IN_MOVE_SELF
+	sys_IN_OPEN          uint32 = syscall.IN_OPEN
 
-	OS_AGNOSTIC_EVENTS = IN_MOVED_TO | IN_MOVED_FROM | IN_CREATE | IN_ATTRIB | IN_MODIFY | IN_MOVE_SELF | IN_DELETE | IN_DELETE_SELF
+	sys_AGNOSTIC_EVENTS = sys_IN_MOVED_TO | sys_IN_MOVED_FROM | sys_IN_CREATE | sys_IN_ATTRIB | sys_IN_MODIFY | sys_IN_MOVE_SELF | sys_IN_DELETE | sys_IN_DELETE_SELF
 
 	// Special events
-	IN_ISDIR      uint32 = syscall.IN_ISDIR
-	IN_IGNORED    uint32 = syscall.IN_IGNORED
-	IN_Q_OVERFLOW uint32 = syscall.IN_Q_OVERFLOW
-	IN_UNMOUNT    uint32 = syscall.IN_UNMOUNT
+	sys_IN_ISDIR      uint32 = syscall.IN_ISDIR
+	sys_IN_IGNORED    uint32 = syscall.IN_IGNORED
+	sys_IN_Q_OVERFLOW uint32 = syscall.IN_Q_OVERFLOW
+	sys_IN_UNMOUNT    uint32 = syscall.IN_UNMOUNT
 )
