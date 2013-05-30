@@ -26,21 +26,21 @@ type FileEvent struct {
 }
 
 // IsCreate reports whether the FileEvent was triggerd by a creation
-func (e *FileEvent) IsCreate() bool { return (e.mask & FS_CREATE) == FS_CREATE }
+func (e *FileEvent) IsCreate() bool { return (e.mask & sys_FS_CREATE) == sys_FS_CREATE }
 
 // IsDelete reports whether the FileEvent was triggerd by a delete
 func (e *FileEvent) IsDelete() bool {
-	return ((e.mask&FS_DELETE) == FS_DELETE || (e.mask&FS_DELETE_SELF) == FS_DELETE_SELF)
+	return ((e.mask&sys_FS_DELETE) == sys_FS_DELETE || (e.mask&sys_FS_DELETE_SELF) == sys_FS_DELETE_SELF)
 }
 
 // IsModify reports whether the FileEvent was triggerd by a file modification or attribute change
 func (e *FileEvent) IsModify() bool {
-	return ((e.mask&FS_MODIFY) == FS_MODIFY || (e.mask&FS_ATTRIB) == FS_ATTRIB)
+	return ((e.mask&sys_FS_MODIFY) == sys_FS_MODIFY || (e.mask&sys_FS_ATTRIB) == sys_FS_ATTRIB)
 }
 
 // IsRename reports whether the FileEvent was triggerd by a change name
 func (e *FileEvent) IsRename() bool {
-	return ((e.mask&FS_MOVE) == FS_MOVE || (e.mask&FS_MOVE_SELF) == FS_MOVE_SELF || (e.mask&FS_MOVED_FROM) == FS_MOVED_FROM || (e.mask&FS_MOVED_TO) == FS_MOVED_TO)
+	return ((e.mask&sys_FS_MOVE) == sys_FS_MOVE || (e.mask&sys_FS_MOVE_SELF) == sys_FS_MOVE_SELF || (e.mask&sys_FS_MOVED_FROM) == sys_FS_MOVED_FROM || (e.mask&sys_FS_MOVED_TO) == sys_FS_MOVED_TO)
 }
 
 const (
@@ -154,7 +154,7 @@ func (w *Watcher) AddWatch(path string, flags uint32) error {
 
 // Watch adds path to the watched file set, watching all events.
 func (w *Watcher) watch(path string) error {
-	return w.AddWatch(path, FS_ALL_EVENTS)
+	return w.AddWatch(path, sys_FS_ALL_EVENTS)
 }
 
 // RemoveWatch removes path from the watched file set.
@@ -239,7 +239,7 @@ func (w *Watcher) addWatch(pathname string, flags uint64) error {
 	if err != nil {
 		return err
 	}
-	if flags&FS_ONLYDIR != 0 && pathname != dir {
+	if flags&sys_FS_ONLYDIR != 0 && pathname != dir {
 		return nil
 	}
 	ino, err := getIno(dir)
@@ -299,11 +299,11 @@ func (w *Watcher) remWatch(pathname string) error {
 		return fmt.Errorf("can't remove non-existent watch for: %s", pathname)
 	}
 	if pathname == dir {
-		w.sendEvent(watch.path, watch.mask&FS_IGNORED)
+		w.sendEvent(watch.path, watch.mask&sys_FS_IGNORED)
 		watch.mask = 0
 	} else {
 		name := filepath.Base(pathname)
-		w.sendEvent(watch.path+"\\"+name, watch.names[name]&FS_IGNORED)
+		w.sendEvent(watch.path+"\\"+name, watch.names[name]&sys_FS_IGNORED)
 		delete(watch.names, name)
 	}
 	return w.startRead(watch)
@@ -313,13 +313,13 @@ func (w *Watcher) remWatch(pathname string) error {
 func (w *Watcher) deleteWatch(watch *watch) {
 	for name, mask := range watch.names {
 		if mask&provisional == 0 {
-			w.sendEvent(watch.path+"\\"+name, mask&FS_IGNORED)
+			w.sendEvent(watch.path+"\\"+name, mask&sys_FS_IGNORED)
 		}
 		delete(watch.names, name)
 	}
 	if watch.mask != 0 {
 		if watch.mask&provisional == 0 {
-			w.sendEvent(watch.path, watch.mask&FS_IGNORED)
+			w.sendEvent(watch.path, watch.mask&sys_FS_IGNORED)
 		}
 		watch.mask = 0
 	}
@@ -350,8 +350,8 @@ func (w *Watcher) startRead(watch *watch) error {
 		err := os.NewSyscallError("ReadDirectoryChanges", e)
 		if e == syscall.ERROR_ACCESS_DENIED && watch.mask&provisional == 0 {
 			// Watched directory was probably removed
-			if w.sendEvent(watch.path, watch.mask&FS_DELETE_SELF) {
-				if watch.mask&FS_ONESHOT != 0 {
+			if w.sendEvent(watch.path, watch.mask&sys_FS_DELETE_SELF) {
+				if watch.mask&sys_FS_ONESHOT != 0 {
 					watch.mask = 0
 				}
 			}
@@ -416,7 +416,7 @@ func (w *Watcher) readEvents() {
 		switch e {
 		case syscall.ERROR_ACCESS_DENIED:
 			// Watched directory was probably removed
-			w.sendEvent(watch.path, watch.mask&FS_DELETE_SELF)
+			w.sendEvent(watch.path, watch.mask&sys_FS_DELETE_SELF)
 			w.deleteWatch(watch)
 			w.startRead(watch)
 			continue
@@ -432,7 +432,7 @@ func (w *Watcher) readEvents() {
 		var offset uint32
 		for {
 			if n == 0 {
-				w.internalEvent <- &FileEvent{mask: FS_Q_OVERFLOW}
+				w.internalEvent <- &FileEvent{mask: sys_FS_Q_OVERFLOW}
 				w.Error <- errors.New("short read in readEvents()")
 				break
 			}
@@ -446,22 +446,22 @@ func (w *Watcher) readEvents() {
 			var mask uint64
 			switch raw.Action {
 			case syscall.FILE_ACTION_REMOVED:
-				mask = FS_DELETE_SELF
+				mask = sys_FS_DELETE_SELF
 			case syscall.FILE_ACTION_MODIFIED:
-				mask = FS_MODIFY
+				mask = sys_FS_MODIFY
 			case syscall.FILE_ACTION_RENAMED_OLD_NAME:
 				watch.rename = name
 			case syscall.FILE_ACTION_RENAMED_NEW_NAME:
 				if watch.names[watch.rename] != 0 {
 					watch.names[name] |= watch.names[watch.rename]
 					delete(watch.names, watch.rename)
-					mask = FS_MOVE_SELF
+					mask = sys_FS_MOVE_SELF
 				}
 			}
 
 			sendNameEvent := func() {
 				if w.sendEvent(fullname, watch.names[name]&mask) {
-					if watch.names[name]&FS_ONESHOT != 0 {
+					if watch.names[name]&sys_FS_ONESHOT != 0 {
 						delete(watch.names, name)
 					}
 				}
@@ -470,11 +470,11 @@ func (w *Watcher) readEvents() {
 				sendNameEvent()
 			}
 			if raw.Action == syscall.FILE_ACTION_REMOVED {
-				w.sendEvent(fullname, watch.names[name]&FS_IGNORED)
+				w.sendEvent(fullname, watch.names[name]&sys_FS_IGNORED)
 				delete(watch.names, name)
 			}
 			if w.sendEvent(fullname, watch.mask&toFSnotifyFlags(raw.Action)) {
-				if watch.mask&FS_ONESHOT != 0 {
+				if watch.mask&sys_FS_ONESHOT != 0 {
 					watch.mask = 0
 				}
 			}
@@ -501,8 +501,8 @@ func (w *Watcher) sendEvent(name string, mask uint64) bool {
 		return false
 	}
 	event := &FileEvent{mask: uint32(mask), Name: name}
-	if mask&FS_MOVE != 0 {
-		if mask&FS_MOVED_FROM != 0 {
+	if mask&sys_FS_MOVE != 0 {
+		if mask&sys_FS_MOVED_FROM != 0 {
 			w.cookie++
 		}
 		event.cookie = w.cookie
@@ -517,16 +517,16 @@ func (w *Watcher) sendEvent(name string, mask uint64) bool {
 
 func toWindowsFlags(mask uint64) uint32 {
 	var m uint32
-	if mask&FS_ACCESS != 0 {
+	if mask&sys_FS_ACCESS != 0 {
 		m |= syscall.FILE_NOTIFY_CHANGE_LAST_ACCESS
 	}
-	if mask&FS_MODIFY != 0 {
+	if mask&sys_FS_MODIFY != 0 {
 		m |= syscall.FILE_NOTIFY_CHANGE_LAST_WRITE
 	}
-	if mask&FS_ATTRIB != 0 {
+	if mask&sys_FS_ATTRIB != 0 {
 		m |= syscall.FILE_NOTIFY_CHANGE_ATTRIBUTES
 	}
-	if mask&(FS_MOVE|FS_CREATE|FS_DELETE) != 0 {
+	if mask&(sys_FS_MOVE|sys_FS_CREATE|sys_FS_DELETE) != 0 {
 		m |= syscall.FILE_NOTIFY_CHANGE_FILE_NAME | syscall.FILE_NOTIFY_CHANGE_DIR_NAME
 	}
 	return m
@@ -535,56 +535,39 @@ func toWindowsFlags(mask uint64) uint32 {
 func toFSnotifyFlags(action uint32) uint64 {
 	switch action {
 	case syscall.FILE_ACTION_ADDED:
-		return FS_CREATE
+		return sys_FS_CREATE
 	case syscall.FILE_ACTION_REMOVED:
-		return FS_DELETE
+		return sys_FS_DELETE
 	case syscall.FILE_ACTION_MODIFIED:
-		return FS_MODIFY
+		return sys_FS_MODIFY
 	case syscall.FILE_ACTION_RENAMED_OLD_NAME:
-		return FS_MOVED_FROM
+		return sys_FS_MOVED_FROM
 	case syscall.FILE_ACTION_RENAMED_NEW_NAME:
-		return FS_MOVED_TO
+		return sys_FS_MOVED_TO
 	}
 	return 0
 }
 
 const (
 	// Options for AddWatch
-	FS_ONESHOT = 0x80000000
-	FS_ONLYDIR = 0x1000000
+	sys_FS_ONESHOT = 0x80000000
+	sys_FS_ONLYDIR = 0x1000000
 
 	// Events
-	FS_ACCESS      = 0x1
-	FS_ALL_EVENTS  = 0xfff
-	FS_ATTRIB      = 0x4
-	FS_CLOSE       = 0x18
-	FS_CREATE      = 0x100
-	FS_DELETE      = 0x200
-	FS_DELETE_SELF = 0x400
-	FS_MODIFY      = 0x2
-	FS_MOVE        = 0xc0
-	FS_MOVED_FROM  = 0x40
-	FS_MOVED_TO    = 0x80
-	FS_MOVE_SELF   = 0x800
+	sys_FS_ACCESS      = 0x1
+	sys_FS_ALL_EVENTS  = 0xfff
+	sys_FS_ATTRIB      = 0x4
+	sys_FS_CLOSE       = 0x18
+	sys_FS_CREATE      = 0x100
+	sys_FS_DELETE      = 0x200
+	sys_FS_DELETE_SELF = 0x400
+	sys_FS_MODIFY      = 0x2
+	sys_FS_MOVE        = 0xc0
+	sys_FS_MOVED_FROM  = 0x40
+	sys_FS_MOVED_TO    = 0x80
+	sys_FS_MOVE_SELF   = 0x800
 
 	// Special events
-	FS_IGNORED    = 0x8000
-	FS_Q_OVERFLOW = 0x4000
+	sys_FS_IGNORED    = 0x8000
+	sys_FS_Q_OVERFLOW = 0x4000
 )
-
-var eventBits = []struct {
-	Value uint32
-	Name  string
-}{
-	{FS_ACCESS, "FS_ACCESS"},
-	{FS_ATTRIB, "FS_ATTRIB"},
-	{FS_CREATE, "FS_CREATE"},
-	{FS_DELETE, "FS_DELETE"},
-	{FS_DELETE_SELF, "FS_DELETE_SELF"},
-	{FS_MODIFY, "FS_MODIFY"},
-	{FS_MOVED_FROM, "FS_MOVED_FROM"},
-	{FS_MOVED_TO, "FS_MOVED_TO"},
-	{FS_MOVE_SELF, "FS_MOVE_SELF"},
-	{FS_IGNORED, "FS_IGNORED"},
-	{FS_Q_OVERFLOW, "FS_Q_OVERFLOW"},
-}
