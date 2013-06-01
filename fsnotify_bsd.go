@@ -385,9 +385,8 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 
 		// Inherit fsnFlags from parent directory
 		w.fsnmut.Lock()
-		dirFsnFlags, dirFsnFound := w.fsnFlags[dirPath]
-		if dirFsnFound {
-			w.fsnFlags[filePath] = dirFsnFlags
+		if flags, found := w.fsnFlags[dirPath]; found {
+			w.fsnFlags[filePath] = flags
 		} else {
 			w.fsnFlags[filePath] = FSN_ALL
 		}
@@ -444,9 +443,8 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 		if !doesExist {
 			// Inherit fsnFlags from parent directory
 			w.fsnmut.Lock()
-			dirFsnFlags, dirFsnFound := w.fsnFlags[dirPath]
-			if dirFsnFound {
-				w.fsnFlags[filePath] = dirFsnFlags
+			if flags, found := w.fsnFlags[dirPath]; found {
+				w.fsnFlags[filePath] = flags
 			} else {
 				w.fsnFlags[filePath] = FSN_ALL
 			}
