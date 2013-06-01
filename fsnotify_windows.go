@@ -17,6 +17,30 @@ import (
 	"unsafe"
 )
 
+const (
+	// Options for AddWatch
+	sys_FS_ONESHOT = 0x80000000
+	sys_FS_ONLYDIR = 0x1000000
+
+	// Events
+	sys_FS_ACCESS      = 0x1
+	sys_FS_ALL_EVENTS  = 0xfff
+	sys_FS_ATTRIB      = 0x4
+	sys_FS_CLOSE       = 0x18
+	sys_FS_CREATE      = 0x100
+	sys_FS_DELETE      = 0x200
+	sys_FS_DELETE_SELF = 0x400
+	sys_FS_MODIFY      = 0x2
+	sys_FS_MOVE        = 0xc0
+	sys_FS_MOVED_FROM  = 0x40
+	sys_FS_MOVED_TO    = 0x80
+	sys_FS_MOVE_SELF   = 0x800
+
+	// Special events
+	sys_FS_IGNORED    = 0x8000
+	sys_FS_Q_OVERFLOW = 0x4000
+)
+
 // Event is the type of the notification messages
 // received on the watcher's Event channel.
 type FileEvent struct {
@@ -547,27 +571,3 @@ func toFSnotifyFlags(action uint32) uint64 {
 	}
 	return 0
 }
-
-const (
-	// Options for AddWatch
-	sys_FS_ONESHOT = 0x80000000
-	sys_FS_ONLYDIR = 0x1000000
-
-	// Events
-	sys_FS_ACCESS      = 0x1
-	sys_FS_ALL_EVENTS  = 0xfff
-	sys_FS_ATTRIB      = 0x4
-	sys_FS_CLOSE       = 0x18
-	sys_FS_CREATE      = 0x100
-	sys_FS_DELETE      = 0x200
-	sys_FS_DELETE_SELF = 0x400
-	sys_FS_MODIFY      = 0x2
-	sys_FS_MOVE        = 0xc0
-	sys_FS_MOVED_FROM  = 0x40
-	sys_FS_MOVED_TO    = 0x80
-	sys_FS_MOVE_SELF   = 0x800
-
-	// Special events
-	sys_FS_IGNORED    = 0x8000
-	sys_FS_Q_OVERFLOW = 0x4000
-)

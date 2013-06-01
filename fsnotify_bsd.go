@@ -16,6 +16,23 @@ import (
 	"syscall"
 )
 
+const (
+	// Flags (from <sys/event.h>)
+	sys_NOTE_DELETE = 0x0001 /* vnode was removed */
+	sys_NOTE_WRITE  = 0x0002 /* data contents changed */
+	sys_NOTE_EXTEND = 0x0004 /* size increased */
+	sys_NOTE_ATTRIB = 0x0008 /* attributes changed */
+	sys_NOTE_LINK   = 0x0010 /* link count changed */
+	sys_NOTE_RENAME = 0x0020 /* vnode was renamed */
+	sys_NOTE_REVOKE = 0x0040 /* vnode access was revoked */
+
+	// Watch all events
+	sys_NOTE_ALLEVENTS = sys_NOTE_DELETE | sys_NOTE_WRITE | sys_NOTE_ATTRIB | sys_NOTE_RENAME
+
+	// Block for 100 ms on each call to kevent
+	keventWaitTime = 100e6
+)
+
 type FileEvent struct {
 	mask   uint32 // Mask of events
 	Name   string // File name (optional)
@@ -447,20 +464,3 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 	}
 	w.watchDirectoryFiles(dirPath)
 }
-
-const (
-	// Flags (from <sys/event.h>)
-	sys_NOTE_DELETE = 0x0001 /* vnode was removed */
-	sys_NOTE_WRITE  = 0x0002 /* data contents changed */
-	sys_NOTE_EXTEND = 0x0004 /* size increased */
-	sys_NOTE_ATTRIB = 0x0008 /* attributes changed */
-	sys_NOTE_LINK   = 0x0010 /* link count changed */
-	sys_NOTE_RENAME = 0x0020 /* vnode was renamed */
-	sys_NOTE_REVOKE = 0x0040 /* vnode access was revoked */
-
-	// Watch all events
-	sys_NOTE_ALLEVENTS = sys_NOTE_DELETE | sys_NOTE_WRITE | sys_NOTE_ATTRIB | sys_NOTE_RENAME
-
-	// Block for 100 ms on each call to kevent
-	keventWaitTime = 100e6
-)
