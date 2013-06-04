@@ -255,10 +255,12 @@ func (w *Watcher) readEvents() {
 			if !event.ignoreLinux() {
 				// Setup FSNotify flags (inherit from directory watch)
 				w.fsnmut.Lock()
-				fsnFlags := w.fsnFlags[watchedName]
-				_, fsnFound := w.fsnFlags[event.Name]
-				if !fsnFound {
-					w.fsnFlags[event.Name] = fsnFlags
+				if _, fsnFound := w.fsnFlags[event.Name]; !fsnFound {
+					if fsnFlags, watchFound := w.fsnFlags[watchedName]; watchFound {
+						w.fsnFlags[event.Name] = fsnFlags
+					} else {
+						w.fsnFlags[event.Name] = FSN_ALL
+					}
 				}
 				w.fsnmut.Unlock()
 
@@ -286,9 +288,8 @@ func (e *FileEvent) ignoreLinux() bool {
 	// event was sent after the DELETE. This ignores that MODIFY and
 	// assumes a DELETE will come or has come if the file doesn't exist.
 	if !(e.IsDelete() || e.IsRename()) {
-		if _, statErr := os.Lstat(e.Name); os.IsNotExist(statErr) {
-			return true
-		}
+		_, statErr := os.Lstat(e.Name)
+		return os.IsNotExist(statErr)
 	}
 	return false
 }
