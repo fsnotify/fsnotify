@@ -54,6 +54,9 @@ const (
 	sys_IN_IGNORED    uint32 = syscall.IN_IGNORED
 	sys_IN_Q_OVERFLOW uint32 = syscall.IN_Q_OVERFLOW
 	sys_IN_UNMOUNT    uint32 = syscall.IN_UNMOUNT
+
+	// Block for 100ms on each call to Select
+	selectWaitTime = 100e6
 )
 
 type FileEvent struct {
@@ -200,17 +203,37 @@ func (w *Watcher) readEvents() {
 		errno error                                   // Syscall errno
 	)
 
+	rfds := &syscall.FdSet{}
+	timeout := &syscall.Timeval{}
+
 	for {
-		n, errno = syscall.Read(w.fd, buf[0:])
+		// Select to see if data available
+		*timeout = syscall.NsecToTimeval(selectWaitTime)
+		FD_ZERO(rfds)
+		FD_SET(rfds, w.fd)
+		if _, errno = syscall.Select(w.fd+1, rfds, nil, nil, timeout); errno != nil {
+			w.Error <- os.NewSyscallError("select", errno)
+		}
+
 		// See if there is a message on the "done" channel
-		var done bool
 		select {
-		case done = <-w.done:
+		case <-w.done:
+			syscall.Close(w.fd)
+			close(w.internalEvent)
+			close(w.Error)
+			return
 		default:
 		}
 
-		// If EOF or a "done" message is received
-		if n == 0 || done {
+		// Check select result to see if Read will block, only read if no blocking.
+		if FD_ISSET(rfds, w.fd) {
+			n, errno = syscall.Read(w.fd, buf[0:])
+		} else {
+			continue
+		}
+
+		// If EOF is received
+		if n == 0 {
 			syscall.Close(w.fd)
 			close(w.internalEvent)
 			close(w.Error)
@@ -292,4 +315,18 @@ func (e *FileEvent) ignoreLinux() bool {
 		return os.IsNotExist(statErr)
 	}
 	return false
+}
+
+func FD_SET(p *syscall.FdSet, i int) {
+	p.Bits[i/64] |= 1 << uint(i) % 64
+}
+
+func FD_ISSET(p *syscall.FdSet, i int) bool {
+	return (p.Bits[i/64] & (1 << uint(i) % 64)) != 0
+}
+
+func FD_ZERO(p *syscall.FdSet) {
+	for i := range p.Bits {
+		p.Bits[i] = 0
+	}
 }
