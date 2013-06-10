@@ -41,6 +41,10 @@ const (
 	sys_FS_Q_OVERFLOW = 0x4000
 )
 
+const (
+	ERROR_MORE_DATA syscall.Errno = 234
+)
+
 // Event is the type of the notification messages
 // received on the watcher's Event channel.
 type FileEvent struct {
@@ -438,6 +442,16 @@ func (w *Watcher) readEvents() {
 		}
 
 		switch e {
+		case ERROR_MORE_DATA:
+			if watch == nil {
+				w.Error <- errors.New("ERROR_MORE_DATA has unexpectedly null lpOverlapped buffer")
+			} else {
+				//The i/o succeeded but buffer is full
+				//in theory we should be building up a full packet
+				//in practice we can get away with just carrying on
+				//should be len(watch.buf) possibly?
+				n = 4096
+			}
 		case syscall.ERROR_ACCESS_DENIED:
 			// Watched directory was probably removed
 			w.sendEvent(watch.path, watch.mask&sys_FS_DELETE_SELF)
