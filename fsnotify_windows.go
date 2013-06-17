@@ -42,7 +42,7 @@ const (
 )
 
 const (
-	ERROR_MORE_DATA syscall.Errno = 234
+	sys_ERROR_MORE_DATA syscall.Errno = 234
 )
 
 // Event is the type of the notification messages
@@ -442,15 +442,14 @@ func (w *Watcher) readEvents() {
 		}
 
 		switch e {
-		case ERROR_MORE_DATA:
+		case sys_ERROR_MORE_DATA:
 			if watch == nil {
 				w.Error <- errors.New("ERROR_MORE_DATA has unexpectedly null lpOverlapped buffer")
 			} else {
 				//The i/o succeeded but buffer is full
 				//in theory we should be building up a full packet
 				//in practice we can get away with just carrying on
-				//should be len(watch.buf) possibly?
-				n = 4096
+				n = uint32(unsafe.Sizeof(watch.buf))
 			}
 		case syscall.ERROR_ACCESS_DENIED:
 			// Watched directory was probably removed
@@ -526,6 +525,12 @@ func (w *Watcher) readEvents() {
 				break
 			}
 			offset += raw.NextEntryOffset
+
+			// Error!
+			if offset >= n {
+				w.Error <- errors.New("Windows system assumed buffer larger than it is, events have likely been missed.")
+				break
+			}
 		}
 
 		if err := w.startRead(watch); err != nil {
