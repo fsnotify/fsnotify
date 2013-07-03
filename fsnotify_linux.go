@@ -203,18 +203,7 @@ func (w *Watcher) readEvents() {
 		errno error                                   // Syscall errno
 	)
 
-	rfds := &syscall.FdSet{}
-	timeout := &syscall.Timeval{}
-
 	for {
-		// Select to see if data available
-		*timeout = syscall.NsecToTimeval(selectWaitTime)
-		FD_ZERO(rfds)
-		FD_SET(rfds, w.fd)
-		if _, errno = syscall.Select(w.fd+1, rfds, nil, nil, timeout); errno != nil {
-			w.Error <- os.NewSyscallError("select", errno)
-		}
-
 		// See if there is a message on the "done" channel
 		select {
 		case <-w.done:
@@ -225,12 +214,7 @@ func (w *Watcher) readEvents() {
 		default:
 		}
 
-		// Check select result to see if Read will block, only read if no blocking.
-		if FD_ISSET(rfds, w.fd) {
 			n, errno = syscall.Read(w.fd, buf[0:])
-		} else {
-			continue
-		}
 
 		// If EOF is received
 		if n == 0 {
