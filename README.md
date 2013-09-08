@@ -1,5 +1,7 @@
 # File system notifications for Go
 
+[![Build Status](https://goci.herokuapp.com/project/image/github.com/howeyc/fsnotify)](http://goci.me/project/github.com/howeyc/fsnotify)
+
 [GoDoc](http://go.pkgdoc.org/github.com/howeyc/fsnotify)
 
 Cross platform, works on:
