@@ -5,6 +5,8 @@
 package fsnotify
 
 import (
+	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +15,18 @@ import (
 	"testing"
 	"time"
 )
+
+var r *rand.Rand
+
+func init() {
+	r = rand.New(rand.NewSource(time.Now().UnixNano()))
+}
+
+func testTempDir() string {
+	osTempDir := os.TempDir()
+	randDir := fmt.Sprintf("%d", r.Int())
+	return filepath.Join(osTempDir, randDir)
+}
 
 // An atomic counter
 type counter struct {
@@ -45,8 +59,8 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 		}
 	}()
 
-	const testDir string = "_test"
-	const testDirToMoveFiles string = "_test2"
+	var testDir string = testTempDir()
+	var testDirToMoveFiles string = testTempDir()
 
 	// Create directory to watch
 	if err := os.Mkdir(testDir, 0777); err != nil {
@@ -60,8 +74,8 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	}
 	defer os.RemoveAll(testDirToMoveFiles)
 
-	const testFile string = "_test/TestFsnotifySeq.testfile"
-	const testFileRenamed string = "_test2/TestFsnotifySeqRename.testfile"
+	var testFile string = filepath.Join(testDir, "TestFsnotifySeq.testfile")
+	var testFileRenamed string = filepath.Join(testDirToMoveFiles, "TestFsnotifySeqRename.testfile")
 
 	// Add a watch for testDir
 	err = watcher.Watch(testDir)
@@ -178,7 +192,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 		}
 	}()
 
-	const testDir string = "_test"
+	var testDir string = testTempDir()
 
 	// Create directory to watch
 	if err := os.Mkdir(testDir, 0777); err != nil {
@@ -186,7 +200,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	}
 	defer os.RemoveAll(testDir)
 
-	const testFile string = "_test/TestFsnotifySeq.testfile"
+	var testFile string = filepath.Join(testDir, "TestFsnotifySeq.testfile")
 
 	// Add a watch for testDir
 	err = watcher.Watch(testDir)
@@ -308,7 +322,7 @@ func TestFsnotifyDirOnly(t *testing.T) {
 		t.Fatalf("NewWatcher() failed: %s", err)
 	}
 
-	const testDir string = "_test"
+	var testDir string = testTempDir()
 
 	// Create directory to watch
 	if err := os.Mkdir(testDir, 0777); err != nil {
@@ -318,7 +332,7 @@ func TestFsnotifyDirOnly(t *testing.T) {
 
 	// Create a file before watching directory
 	// This should NOT add any events to the fsnotify event queue
-	const testFileAlreadyExists string = "_test/TestFsnotifyEventsExisting.testfile"
+	var testFileAlreadyExists string = filepath.Join(testDir, "TestFsnotifyEventsExisting.testfile")
 	{
 		var f *os.File
 		f, err = os.OpenFile(testFileAlreadyExists, os.O_WRONLY|os.O_CREATE, 0666)
@@ -342,7 +356,7 @@ func TestFsnotifyDirOnly(t *testing.T) {
 		}
 	}()
 
-	const testFile string = "_test/TestFsnotifyDirOnly.testfile"
+	var testFile string = filepath.Join(testDir, "TestFsnotifyDirOnly.testfile")
 
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
@@ -423,7 +437,7 @@ func TestFsnotifyDeleteWatchedDir(t *testing.T) {
 	}
 	defer watcher.Close()
 
-	const testDir string = "_test"
+	var testDir string = testTempDir()
 
 	// Create directory to watch
 	if err := os.Mkdir(testDir, 0777); err != nil {
@@ -431,7 +445,7 @@ func TestFsnotifyDeleteWatchedDir(t *testing.T) {
 	}
 
 	// Create a file before watching directory
-	const testFileAlreadyExists string = "_test/TestFsnotifyEventsExisting.testfile"
+	var testFileAlreadyExists string = filepath.Join(testDir, "TestFsnotifyEventsExisting.testfile")
 	{
 		var f *os.File
 		f, err = os.OpenFile(testFileAlreadyExists, os.O_WRONLY|os.O_CREATE, 0666)
@@ -495,10 +509,10 @@ func TestFsnotifySubDir(t *testing.T) {
 		t.Fatalf("NewWatcher() failed: %s", err)
 	}
 
-	const testDir string = "_test"
-	const testFile1 string = "_test/TestFsnotifyFile1.testfile"
-	const testSubDir string = "_test/sub"
-	const testSubDirFile string = "_test/sub/TestFsnotifyFile1.testfile"
+	var testDir string = testTempDir()
+	var testFile1 string = filepath.Join(testDir, "TestFsnotifyFile1.testfile")
+	var testSubDir string = filepath.Join(testDir, "sub")
+	var testSubDirFile string = filepath.Join(testDir, "sub/TestFsnotifyFile1.testfile")
 
 	// Create directory to watch
 	if err := os.Mkdir(testDir, 0777); err != nil {
@@ -600,7 +614,7 @@ func TestFsnotifyRename(t *testing.T) {
 		t.Fatalf("NewWatcher() failed: %s", err)
 	}
 
-	const testDir string = "_test"
+	var testDir string = testTempDir()
 
 	// Create directory to watch
 	if err := os.Mkdir(testDir, 0777); err != nil {
@@ -621,8 +635,8 @@ func TestFsnotifyRename(t *testing.T) {
 		}
 	}()
 
-	const testFile string = "_test/TestFsnotifyEvents.testfile"
-	const testFileRenamed string = "_test/TestFsnotifyEvents.testfileRenamed"
+	var testFile string = filepath.Join(testDir, "TestFsnotifyEvents.testfile")
+	var testFileRenamed string = filepath.Join(testDir, "TestFsnotifyEvents.testfileRenamed")
 
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
@@ -694,8 +708,8 @@ func TestFsnotifyRenameToCreate(t *testing.T) {
 		t.Fatalf("NewWatcher() failed: %s", err)
 	}
 
-	const testDir string = "_test"
-	const testDirFrom string = "_testfrom"
+	var testDir string = testTempDir()
+	var testDirFrom string = testTempDir()
 
 	// Create directory to watch
 	if err := os.Mkdir(testDir, 0777); err != nil {
@@ -722,8 +736,8 @@ func TestFsnotifyRenameToCreate(t *testing.T) {
 		}
 	}()
 
-	const testFile string = "_testfrom/TestFsnotifyEvents.testfile"
-	const testFileRenamed string = "_test/TestFsnotifyEvents.testfileRenamed"
+	var testFile string = filepath.Join(testDirFrom, "TestFsnotifyEvents.testfile")
+	var testFileRenamed string = filepath.Join(testDir, "TestFsnotifyEvents.testfileRenamed")
 
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
@@ -790,11 +804,11 @@ func TestFsnotifyRenameToOverwrite(t *testing.T) {
 		t.Fatalf("NewWatcher() failed: %s", err)
 	}
 
-	const testDir string = "_test"
-	const testDirFrom string = "_testfrom"
+	var testDir string = testTempDir()
+	var testDirFrom string = testTempDir()
 
-	const testFile string = "_testfrom/TestFsnotifyEvents.testfile"
-	const testFileRenamed string = "_test/TestFsnotifyEvents.testfileRenamed"
+	var testFile string = filepath.Join(testDirFrom, "TestFsnotifyEvents.testfile")
+	var testFileRenamed string = filepath.Join(testDir, "TestFsnotifyEvents.testfileRenamed")
 
 	// Create directory to watch
 	if err := os.Mkdir(testDir, 0777); err != nil {
@@ -892,7 +906,7 @@ func TestFsnotifyAttrib(t *testing.T) {
 		t.Fatalf("NewWatcher() failed: %s", err)
 	}
 
-	const testDir string = "_test"
+	var testDir string = testTempDir()
 
 	// Create directory to watch
 	if err := os.Mkdir(testDir, 0777); err != nil {
@@ -907,7 +921,7 @@ func TestFsnotifyAttrib(t *testing.T) {
 		}
 	}()
 
-	const testFile string = "_test/TestFsnotifyAttrib.testfile"
+	var testFile string = filepath.Join(testDir, "TestFsnotifyAttrib.testfile")
 
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
@@ -987,7 +1001,7 @@ func TestFsnotifyClose(t *testing.T) {
 		t.Fatal("double Close() test failed: second Close() call didn't return")
 	}
 
-	err := watcher.Watch("_test")
+	err := watcher.Watch(testTempDir())
 	if err == nil {
 		t.Fatal("expected error on Watch() after Close(), got nil")
 	}

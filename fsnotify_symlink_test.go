@@ -8,6 +8,7 @@ package fsnotify
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -19,7 +20,7 @@ func TestFsnotifyFakeSymlink(t *testing.T) {
 		t.Fatalf("NewWatcher() failed: %s", err)
 	}
 
-	const testDir string = "_test"
+	var testDir string = testTempDir()
 
 	// Create directory to watch
 	if err := os.Mkdir(testDir, 0777); err != nil {
@@ -56,7 +57,7 @@ func TestFsnotifyFakeSymlink(t *testing.T) {
 		t.Fatalf("Watcher.Watch() failed: %s", err)
 	}
 
-	if os.Symlink("_test/zzz", "_test/zzznew") != nil {
+	if os.Symlink(filepath.Join(testDir, "zzz"), filepath.Join(testDir, "zzznew")) != nil {
 		t.Fatalf("Failed to create bogus symlink: %s", err)
 	}
 	t.Logf("Created bogus symlink")
