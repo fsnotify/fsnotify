@@ -66,4 +66,5 @@ Notes:
     * No, you must add watches for any directory you want to watch.
 * Do I have to watch the Error and Event channels in a separate goroutine?
     * As of now, yes. Looking into making this single-thread friendly.
-
+* How avoid the criptic error "no space left on device" when adding watches?
+    * Probably you're out of inotify's watches; verify your max with "cat /proc/sys/fs/inotify/max\_user\_watches".
