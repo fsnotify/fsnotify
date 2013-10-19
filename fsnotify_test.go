@@ -896,6 +896,64 @@ func TestFsnotifyRenameToOverwrite(t *testing.T) {
 	os.Remove(testFileRenamed)
 }
 
+func TestRemovalOfWatch(t *testing.T) {
+	var testDir string = testTempDir()
+
+	// Create directory to watch
+	if err := os.Mkdir(testDir, 0777); err != nil {
+		t.Fatalf("failed to create test directory: %s", err)
+	}
+	defer os.RemoveAll(testDir)
+
+	// Create a file before watching directory
+	var testFileAlreadyExists string = filepath.Join(testDir, "TestFsnotifyEventsExisting.testfile")
+	{
+		var f *os.File
+		f, err := os.OpenFile(testFileAlreadyExists, os.O_WRONLY|os.O_CREATE, 0666)
+		if err != nil {
+			t.Fatalf("creating test file failed: %s", err)
+		}
+		f.Sync()
+		f.Close()
+	}
+
+	watcher, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("NewWatcher() failed: %s", err)
+	}
+	defer watcher.Close()
+
+	watcher.Watch(testDir)
+	err = watcher.RemoveWatch(testDir)
+	if err != nil {
+		t.Fatalf("Could not remove the watch: %v\n", err)
+	}
+
+	go func() {
+		select {
+		case ev := <-watcher.Event:
+			t.Fatalf("We received event: %v\n", ev)
+		case <-time.After(500 * time.Millisecond):
+			t.Log("No event received, as expected.")
+		}
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	// Modify the file outside of the watched dir
+	f, err := os.Open(testFileAlreadyExists)
+	if err != nil {
+		t.Fatalf("Open test file failed: %s", err)
+	}
+	f.WriteString("data")
+	f.Sync()
+	f.Close()
+	err = os.Chmod(testFileAlreadyExists, 0700)
+	if err != nil {
+		t.Fatalf("chmod failed: %s", err)
+	}
+	time.Sleep(400 * time.Millisecond)
+}
+
 func TestFsnotifyAttrib(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("attributes don't work on Windows.")
