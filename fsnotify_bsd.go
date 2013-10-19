@@ -349,7 +349,7 @@ func (w *Watcher) readEvents() {
 			fileEvent.Name = w.paths[int(watchEvent.Ident)]
 			fileInfo := w.finfo[int(watchEvent.Ident)]
 			w.pmut.Unlock()
-			if fileInfo.IsDir() && !fileEvent.IsDelete() {
+			if fileInfo != nil && fileInfo.IsDir() && !fileEvent.IsDelete() {
 				// Double check to make sure the directory exist. This can happen when
 				// we do a rm -fr on a recursively watched folders and we receive a
 				// modification event first but the folder has been deleted and later
@@ -360,7 +360,7 @@ func (w *Watcher) readEvents() {
 				}
 			}
 
-			if fileInfo.IsDir() && fileEvent.IsModify() && !fileEvent.IsDelete() {
+			if fileInfo != nil && fileInfo.IsDir() && fileEvent.IsModify() && !fileEvent.IsDelete() {
 				w.sendDirectoryChangeEvents(fileEvent.Name)
 			} else {
 				// Send the event on the events channel
