@@ -1,27 +1,32 @@
 # Changelog
 
+## unreleased
+
+* [Doc] Add Changelog [#72][] (thanks @nathany)
+* [Doc] Spotlight and double modify events on OS X [#62][] (reported by @paulhammond)
+
 ## v0.8.10 / 2013-10-19
 
-* [Fix] kqueue: remove file watches when parent directory is removed #71 (reported by @mdwhatcott)
-* [Fix] kqueue: race between Close and readEvents #70 (reported by @bernerdschaefer)
+* [Fix] kqueue: remove file watches when parent directory is removed [#71][] (reported by @mdwhatcott)
+* [Fix] kqueue: race between Close and readEvents [#70][] (reported by @bernerdschaefer)
 * [Doc] specify OS-specific limits in README (thanks @debrando)
 
 ## v0.8.9 / 2013-09-08
 
-* [Doc] Contributing document (thanks @nathany)
-* [Doc] Cross-platform testing with Vagrant  #59 (thanks @nathany)
-* [Doc] update package path in example code #63 (thanks @paulhammond)
-* [Doc] GoCI badge in README (Linux only) #60
+* [Doc] Contributing (thanks @nathany)
+* [Doc] update package path in example code [#63][] (thanks @paulhammond)
+* [Doc] GoCI badge in README (Linux only) [#60][]
+* [Doc] Cross-platform testing with Vagrant  [#59][] (thanks @nathany)
 
 ## v0.8.8 / 2013-06-17
 
-* [Fix] Windows: handle `ERROR_MORE_DATA` on Windows #49 (thanks @jbowtie)
+* [Fix] Windows: handle `ERROR_MORE_DATA` on Windows [#49][] (thanks @jbowtie)
 
 ## v0.8.7 / 2013-06-03
 
 * [API] Make syscall flags internal
 * [Fix] inotify: ignore event changes
-* [Fix] race in symlink test #45 (reported by @srid)
+* [Fix] race in symlink test [#45][] (reported by @srid)
 * [Fix] tests on Windows
 * lower case error messages
 
@@ -36,17 +41,17 @@
 
 ## v0.8.4 / 2013-04-07
 
-* [Fix] kqueue: watch all file events #40 (thanks @ChrisBuchholz)
+* [Fix] kqueue: watch all file events [#40][] (thanks @ChrisBuchholz)
 
 ## v0.8.3 / 2013-03-13
 
-* [Fix] inoitfy/kqueue memory leak #36 (reported by @nbkolchin)
-* [Fix] kqueue: use fsnFlags for watching a directory #33 (reported by @nbkolchin)
+* [Fix] inoitfy/kqueue memory leak [#36][] (reported by @nbkolchin)
+* [Fix] kqueue: use fsnFlags for watching a directory [#33][] (reported by @nbkolchin)
 
 ## v0.8.2 / 2013-02-07
 
 * [Doc] add Authors
-* [Fix] fix data races for map access #29 (thanks @fsouza)
+* [Fix] fix data races for map access [#29][] (thanks @fsouza)
 
 ## v0.8.1 / 2013-01-09
 
@@ -56,13 +61,13 @@
 ## v0.8.0 / 2012-11-09
 
 * kqueue: directory watching improvements (thanks @vmirage)
-* inotify: add `IN_MOVED_TO` #25 (requested by @cpisto)
-* [Fix] kqueue: deleting watched directory #24 (reported by @jakerr)
+* inotify: add `IN_MOVED_TO` [#25][] (requested by @cpisto)
+* [Fix] kqueue: deleting watched directory [#24][] (reported by @jakerr)
 
 ## v0.7.4 / 2012-10-09
 
 * [Fix] inotify: fixes from https://codereview.appspot.com/5418045/ (ugorji)
-* [Fix] kqueue: preserve watch flags when watching for delete #21 (reported by @robfig)
+* [Fix] kqueue: preserve watch flags when watching for delete [#21][] (reported by @robfig)
 * [Fix] kqueue: watch the directory even if it isn't a new watch (thanks @robfig)
 * [Fix] kqueue: modify after recreation of file
 
@@ -98,7 +103,7 @@
 * kqueue: match symlink behavior on Linux
 * inotify: add `DELETE_SELF` (requested by @taralx)
 * [Fix] kqueue: handle EINTR (reported by @robfig)
-* [Doc] Godoc example (thanks @davecheney)
+* [Doc] Godoc example [#1][] (thanks @davecheney)
 
 ## v0.4.0 / 2012-03-30
 
@@ -123,3 +128,21 @@
 * event String()
 * linux: common FileEvent functions
 * initial commit
+
+[#72]: https://github.com/howeyc/fsnotify/issues/72
+[#71]: https://github.com/howeyc/fsnotify/issues/71
+[#70]: https://github.com/howeyc/fsnotify/issues/70
+[#63]: https://github.com/howeyc/fsnotify/issues/63
+[#62]: https://github.com/howeyc/fsnotify/issues/62
+[#60]: https://github.com/howeyc/fsnotify/issues/60
+[#59]: https://github.com/howeyc/fsnotify/issues/59
+[#49]: https://github.com/howeyc/fsnotify/issues/49
+[#45]: https://github.com/howeyc/fsnotify/issues/45
+[#40]: https://github.com/howeyc/fsnotify/issues/40
+[#36]: https://github.com/howeyc/fsnotify/issues/36
+[#33]: https://github.com/howeyc/fsnotify/issues/33
+[#29]: https://github.com/howeyc/fsnotify/issues/29
+[#25]: https://github.com/howeyc/fsnotify/issues/25
+[#24]: https://github.com/howeyc/fsnotify/issues/24
+[#21]: https://github.com/howeyc/fsnotify/issues/21
+[#1]: https://github.com/howeyc/fsnotify/issues/1
