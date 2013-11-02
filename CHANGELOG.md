@@ -1,6 +1,6 @@
 # Changelog
 
-## unreleased
+## v0.8.11 / 2013-11-02
 
 * [Doc] Add Changelog [#72][] (thanks @nathany)
 * [Doc] Spotlight and double modify events on OS X [#62][] (reported by @paulhammond)
