@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.8.12 / 2013-11-13
+
+* [API] Remove FD_SET and friends from Linux adapter
+
 ## v0.8.11 / 2013-11-02
 
 * [Doc] Add Changelog [#72][] (thanks @nathany)
