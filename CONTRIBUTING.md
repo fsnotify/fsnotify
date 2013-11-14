@@ -18,7 +18,7 @@ For other team members:
 
 1. Install as usual (`go get -u github.com/howeyc/fsnotify`)
 2. Add your remote (`git remote add fork git@github.com:mycompany/repo.git`)
-3. Pull your revisions (`git fetch; git checkout -b my-new-feature fork/my-new-feature`)
+3. Pull your revisions (`git fetch fork; git checkout -b my-new-feature fork/my-new-feature`)
 
 Notice: Always use the original import path by installing with `go get`.
 
