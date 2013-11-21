@@ -245,12 +245,12 @@ func (w *Watcher) removeWatch(path string) error {
 	watchEntry := &w.kbuf[0]
 	syscall.SetKevent(watchEntry, watchfd, syscall.EVFILT_VNODE, syscall.EV_DELETE)
 	success, errno := syscall.Kevent(w.kq, w.kbuf[:], nil, nil)
+	w.bufmut.Unlock()
 	if success == -1 {
 		return os.NewSyscallError("kevent_rm_watch", errno)
 	} else if (watchEntry.Flags & syscall.EV_ERROR) == syscall.EV_ERROR {
 		return errors.New("kevent rm error")
 	}
-	w.bufmut.Unlock()
 	syscall.Close(watchfd)
 	w.wmut.Lock()
 	delete(w.watches, path)
