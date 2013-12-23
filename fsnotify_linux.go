@@ -85,6 +85,12 @@ func (e *FileEvent) IsRename() bool {
 	return ((e.mask&sys_IN_MOVE_SELF) == sys_IN_MOVE_SELF || (e.mask&sys_IN_MOVED_FROM) == sys_IN_MOVED_FROM)
 }
 
+// IsAttrib reports whether the FileEvent was triggered by a change in the file metadata (eg.
+// atime, mtime etc.)
+func (e *FileEvent) IsAttrib() bool {
+	return (e.mask & sys_IN_ATTRIB) == sys_IN_ATTRIB
+}
+
 type watch struct {
 	wd    uint32 // Watch descriptor (as returned by the inotify_add_watch() syscall)
 	flags uint32 // inotify flags of this watch (see inotify(7) for the list of valid flags)

@@ -53,6 +53,12 @@ func (e *FileEvent) IsModify() bool {
 // IsRename reports whether the FileEvent was triggerd by a change name
 func (e *FileEvent) IsRename() bool { return (e.mask & sys_NOTE_RENAME) == sys_NOTE_RENAME }
 
+// IsAttrib reports whether the FileEvent was triggered by a change in the file metadata (eg.
+// atime, mtime etc.)
+func (e *FileEvent) IsAttrib() bool {
+	return (e.mask & sys_NOTE_ATTRIB) == sys_NOTE_ATTRIB
+}
+
 type Watcher struct {
 	mu              sync.Mutex          // Mutex for the Watcher itself.
 	kq              int                 // File descriptor (as returned by the kqueue() syscall)

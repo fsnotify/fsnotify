@@ -71,6 +71,12 @@ func (e *FileEvent) IsRename() bool {
 	return ((e.mask&sys_FS_MOVE) == sys_FS_MOVE || (e.mask&sys_FS_MOVE_SELF) == sys_FS_MOVE_SELF || (e.mask&sys_FS_MOVED_FROM) == sys_FS_MOVED_FROM || (e.mask&sys_FS_MOVED_TO) == sys_FS_MOVED_TO)
 }
 
+// IsAttrib reports whether the FileEvent was triggered by a change in the file metadata (eg.
+// atime, mtime etc.)
+func (e *FileEvent) IsAttrib() bool {
+	return (e.mask & sys_FS_ATTRIB) == sys_FS_ATTRIB
+}
+
 const (
 	opAddWatch = iota
 	opRemoveWatch

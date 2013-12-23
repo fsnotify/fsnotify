@@ -102,6 +102,10 @@ func (e *FileEvent) String() string {
 		events += "|" + "RENAME"
 	}
 
+	if e.IsAttrib() {
+		events += "|" + "ATTRIB"
+	}
+
 	if len(events) > 0 {
 		events = events[1:]
 	}
