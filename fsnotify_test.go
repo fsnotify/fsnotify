@@ -45,6 +45,10 @@ func (c *counter) value() int32 {
 	return atomic.LoadInt32(&c.val)
 }
 
+func (c *counter) reset() {
+	atomic.StoreInt32(&c.val, 0)
+}
+
 func TestFsnotifyMultipleOperations(t *testing.T) {
 	// Create an fsnotify watcher instance and initialize it
 	watcher, err := NewWatcher()
