@@ -983,14 +983,14 @@ func TestFsnotifyAttrib(t *testing.T) {
 
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Event
-	var attribReceived counter
+	var modifyReceived counter
 	done := make(chan bool)
 	go func() {
 		for event := range eventstream {
 			// Only count relevant events
 			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFile) {
 				if event.IsModify() {
-					attribReceived.increment()
+					modifyReceived.increment()
 				}
 				t.Logf("event received: %s", event)
 			} else {
@@ -1026,8 +1026,8 @@ func TestFsnotifyAttrib(t *testing.T) {
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500 * time.Millisecond)
-	if attribReceived.value() == 0 {
-		t.Fatal("fsnotify attribute events have not received after 500 ms")
+	if modifyReceived.value() == 0 {
+		t.Fatal("fsnotify modify events have not received after 500 ms")
 	}
 
 	// Try closing the fsnotify instance
