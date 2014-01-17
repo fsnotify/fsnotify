@@ -62,7 +62,7 @@ func (e *FileEvent) IsAttrib() bool {
 type Watcher struct {
 	mu              sync.Mutex          // Mutex for the Watcher itself.
 	kq              int                 // File descriptor (as returned by the kqueue() syscall)
-	watches         map[string]int      // Map of watched file diescriptors (key: path)
+	watches         map[string]int      // Map of watched file descriptors (key: path)
 	wmut            sync.Mutex          // Protects access to watches.
 	fsnFlags        map[string]uint32   // Map of watched files to flags used for filter
 	fsnmut          sync.Mutex          // Protects access to fsnFlags.
@@ -72,9 +72,9 @@ type Watcher struct {
 	finfo           map[int]os.FileInfo // Map of file information (isDir, isReg; key: watch descriptor)
 	pmut            sync.Mutex          // Protects access to paths and finfo.
 	fileExists      map[string]bool     // Keep track of if we know this file exists (to stop duplicate create events)
-	femut           sync.Mutex          // Proctects access to fileExists.
+	femut           sync.Mutex          // Protects access to fileExists.
 	externalWatches map[string]bool     // Map of watches added by user of the library.
-	ewmut           sync.Mutex          // Protects access to internalWatches.
+	ewmut           sync.Mutex          // Protects access to externalWatches.
 	Error           chan error          // Errors are sent on this channel
 	internalEvent   chan *FileEvent     // Events are queued on this channel
 	Event           chan *FileEvent     // Events are returned on this channel
@@ -286,7 +286,7 @@ func (w *Watcher) removeWatch(path string) error {
 		}
 		w.pmut.Unlock()
 		for idx := 0; idx < len(pathsToRemove); idx++ {
-			// Since these are internal, not much sense in propogating error
+			// Since these are internal, not much sense in propagating error
 			// to the user, as that will just confuse them with an error about
 			// a path they did not explicitly watch themselves.
 			w.removeWatch(pathsToRemove[idx])
@@ -346,7 +346,7 @@ func (w *Watcher) readEvents() {
 			}
 		}
 
-		// Flush the events we recieved to the events channel
+		// Flush the events we received to the events channel
 		for len(events) > 0 {
 			fileEvent := new(FileEvent)
 			watchEvent := &events[0]
@@ -436,7 +436,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 				return e
 			}
 		} else {
-			// If the user is currently waching directory
+			// If the user is currently watching directory
 			// we want to preserve the flags used
 			w.enmut.Lock()
 			currFlags, found := w.enFlags[filePath]
@@ -462,7 +462,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 
 // sendDirectoryEvents searches the directory for newly created files
 // and sends them over the event channel. This functionality is to have
-// the BSD version of fsnotify mach linux fsnotify which provides a
+// the BSD version of fsnotify match linux fsnotify which provides a
 // create event for files created in a watched directory.
 func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 	// Get all files
