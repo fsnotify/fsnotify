@@ -115,18 +115,15 @@ type watchMap map[uint32]indexMap
 // A Watcher waits for and receives event notifications
 // for a specific set of files and directories.
 type Watcher struct {
-	mu            sync.Mutex        // Map access
-	port          syscall.Handle    // Handle to completion port
-	watches       watchMap          // Map of watches (key: i-number)
-	fsnFlags      map[string]uint32 // Map of watched files to flags used for filter
-	fsnmut        sync.Mutex        // Protects access to fsnFlags.
-	input         chan *input       // Inputs to the reader are sent on this channel
-	internalEvent chan *FileEvent   // Events are queued on this channel
-	Event         chan *FileEvent   // Events are returned on this channel
-	Error         chan error        // Errors are sent on this channel
-	isClosed      bool              // Set to true when Close() is first called
-	quit          chan chan<- error
-	cookie        uint32
+	mu       sync.Mutex      // Map access
+	port     syscall.Handle  // Handle to completion port
+	watches  watchMap        // Map of watches (key: i-number)
+	input    chan *input     // Inputs to the reader are sent on this channel
+	Event    chan *FileEvent // Events are returned on this channel
+	Error    chan error      // Errors are sent on this channel
+	isClosed bool            // Set to true when Close() is first called
+	quit     chan chan<- error
+	cookie   uint32
 }
 
 // NewWatcher creates and returns a Watcher.
@@ -136,17 +133,14 @@ func NewWatcher() (*Watcher, error) {
 		return nil, os.NewSyscallError("CreateIoCompletionPort", e)
 	}
 	w := &Watcher{
-		port:          port,
-		watches:       make(watchMap),
-		fsnFlags:      make(map[string]uint32),
-		input:         make(chan *input, 1),
-		Event:         make(chan *FileEvent, 50),
-		internalEvent: make(chan *FileEvent),
-		Error:         make(chan error),
-		quit:          make(chan chan<- error, 1),
+		port:    port,
+		watches: make(watchMap),
+		input:   make(chan *input, 1),
+		Event:   make(chan *FileEvent, 50),
+		Error:   make(chan error),
+		quit:    make(chan chan<- error, 1),
 	}
 	go w.readEvents()
-	go w.purgeEvents()
 	return w, nil
 }
 
@@ -431,7 +425,7 @@ func (w *Watcher) readEvents() {
 				if e := syscall.CloseHandle(w.port); e != nil {
 					err = os.NewSyscallError("CloseHandle", e)
 				}
-				close(w.internalEvent)
+				close(w.Event)
 				close(w.Error)
 				ch <- err
 				return
@@ -475,7 +469,7 @@ func (w *Watcher) readEvents() {
 		var offset uint32
 		for {
 			if n == 0 {
-				w.internalEvent <- &FileEvent{mask: sys_FS_Q_OVERFLOW}
+				w.Event <- &FileEvent{mask: sys_FS_Q_OVERFLOW}
 				w.Error <- errors.New("short read in readEvents()")
 				break
 			}

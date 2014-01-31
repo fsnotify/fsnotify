@@ -93,17 +93,14 @@ type watch struct {
 }
 
 type Watcher struct {
-	mu            sync.Mutex        // Map access
-	fd            int               // File descriptor (as returned by the inotify_init() syscall)
-	watches       map[string]*watch // Map of inotify watches (key: path)
-	fsnFlags      map[string]uint32 // Map of watched files to flags used for filter
-	fsnmut        sync.Mutex        // Protects access to fsnFlags.
-	paths         map[int]string    // Map of watched paths (key: watch descriptor)
-	Error         chan error        // Errors are sent on this channel
-	internalEvent chan *FileEvent   // Events are queued on this channel
-	Event         chan *FileEvent   // Events are returned on this channel
-	done          chan bool         // Channel for sending a "quit message" to the reader goroutine
-	isClosed      bool              // Set to true when Close() is first called
+	mu       sync.Mutex        // Map access
+	fd       int               // File descriptor (as returned by the inotify_init() syscall)
+	watches  map[string]*watch // Map of inotify watches (key: path)
+	paths    map[int]string    // Map of watched paths (key: watch descriptor)
+	Error    chan error        // Errors are sent on this channel
+	Event    chan *FileEvent   // Events are returned on this channel
+	done     chan bool         // Channel for sending a "quit message" to the reader goroutine
+	isClosed bool              // Set to true when Close() is first called
 }
 
 // NewWatcher creates and returns a new inotify instance using inotify_init(2)
@@ -113,18 +110,15 @@ func NewWatcher() (*Watcher, error) {
 		return nil, os.NewSyscallError("inotify_init", errno)
 	}
 	w := &Watcher{
-		fd:            fd,
-		watches:       make(map[string]*watch),
-		fsnFlags:      make(map[string]uint32),
-		paths:         make(map[int]string),
-		internalEvent: make(chan *FileEvent),
-		Event:         make(chan *FileEvent),
-		Error:         make(chan error),
-		done:          make(chan bool, 1),
+		fd:      fd,
+		watches: make(map[string]*watch),
+		paths:   make(map[int]string),
+		Event:   make(chan *FileEvent),
+		Error:   make(chan error),
+		done:    make(chan bool, 1),
 	}
 
 	go w.readEvents()
-	go w.purgeEvents()
 	return w, nil
 }
 
@@ -210,7 +204,7 @@ func (w *Watcher) readEvents() {
 		select {
 		case <-w.done:
 			syscall.Close(w.fd)
-			close(w.internalEvent)
+			close(w.Event)
 			close(w.Error)
 			return
 		default:
@@ -221,7 +215,7 @@ func (w *Watcher) readEvents() {
 		// If EOF is received
 		if n == 0 {
 			syscall.Close(w.fd)
-			close(w.internalEvent)
+			close(w.Event)
 			close(w.Error)
 			return
 		}
@@ -252,7 +246,6 @@ func (w *Watcher) readEvents() {
 			w.mu.Lock()
 			event.Name = w.paths[int(raw.Wd)]
 			w.mu.Unlock()
-			watchedName := event.Name
 			if nameLen > 0 {
 				// Point "bytes" at the first byte of the filename
 				bytes := (*[syscall.PathMax]byte)(unsafe.Pointer(&buf[offset+syscall.SizeofInotifyEvent]))
@@ -262,18 +255,7 @@ func (w *Watcher) readEvents() {
 
 			// Send the events that are not ignored on the events channel
 			if !event.ignoreLinux() {
-				// Setup FSNotify flags (inherit from directory watch)
-				w.fsnmut.Lock()
-				if _, fsnFound := w.fsnFlags[event.Name]; !fsnFound {
-					if fsnFlags, watchFound := w.fsnFlags[watchedName]; watchFound {
-						w.fsnFlags[event.Name] = fsnFlags
-					} else {
-						w.fsnFlags[event.Name] = FSN_ALL
-					}
-				}
-				w.fsnmut.Unlock()
-
-				w.internalEvent <- event
+				w.Event <- event
 			}
 
 			// Move to the next event in the buffer
