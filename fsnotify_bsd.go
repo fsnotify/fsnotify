@@ -39,18 +39,18 @@ type FileEvent struct {
 	create bool   // set by fsnotify package if found new file
 }
 
-// IsCreate reports whether the FileEvent was triggerd by a creation
+// IsCreate reports whether the FileEvent was triggered by a creation
 func (e *FileEvent) IsCreate() bool { return e.create }
 
-// IsDelete reports whether the FileEvent was triggerd by a delete
+// IsDelete reports whether the FileEvent was triggered by a delete
 func (e *FileEvent) IsDelete() bool { return (e.mask & sys_NOTE_DELETE) == sys_NOTE_DELETE }
 
-// IsModify reports whether the FileEvent was triggerd by a file modification
+// IsModify reports whether the FileEvent was triggered by a file modification
 func (e *FileEvent) IsModify() bool {
 	return ((e.mask&sys_NOTE_WRITE) == sys_NOTE_WRITE || (e.mask&sys_NOTE_ATTRIB) == sys_NOTE_ATTRIB)
 }
 
-// IsRename reports whether the FileEvent was triggerd by a change name
+// IsRename reports whether the FileEvent was triggered by a change name
 func (e *FileEvent) IsRename() bool { return (e.mask & sys_NOTE_RENAME) == sys_NOTE_RENAME }
 
 // IsAttrib reports whether the FileEvent was triggered by a change in the file metadata (eg.
