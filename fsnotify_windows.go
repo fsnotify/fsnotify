@@ -42,6 +42,7 @@ const (
 )
 
 const (
+	// TODO(nj): Use syscall.ERROR_MORE_DATA from ztypes_windows in Go 1.3+
 	sys_ERROR_MORE_DATA syscall.Errno = 234
 )
 

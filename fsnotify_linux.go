@@ -54,9 +54,6 @@ const (
 	sys_IN_IGNORED    uint32 = syscall.IN_IGNORED
 	sys_IN_Q_OVERFLOW uint32 = syscall.IN_Q_OVERFLOW
 	sys_IN_UNMOUNT    uint32 = syscall.IN_UNMOUNT
-
-	// Block for 100ms on each call to Select
-	selectWaitTime = 100e6
 )
 
 type FileEvent struct {
