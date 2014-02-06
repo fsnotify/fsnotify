@@ -82,8 +82,7 @@ func (e *FileEvent) IsRename() bool {
 	return ((e.mask&sys_IN_MOVE_SELF) == sys_IN_MOVE_SELF || (e.mask&sys_IN_MOVED_FROM) == sys_IN_MOVED_FROM)
 }
 
-// IsAttrib reports whether the FileEvent was triggered by a change in the file metadata (eg.
-// atime, mtime etc.)
+// IsAttrib reports whether the FileEvent was triggered by a change in the file metadata.
 func (e *FileEvent) IsAttrib() bool {
 	return (e.mask & sys_IN_ATTRIB) == sys_IN_ATTRIB
 }
@@ -217,7 +216,7 @@ func (w *Watcher) readEvents() {
 		default:
 		}
 
-		n, errno = syscall.Read(w.fd, buf[0:])
+		n, errno = syscall.Read(w.fd, buf[:])
 
 		// If EOF is received
 		if n == 0 {

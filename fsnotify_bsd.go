@@ -53,8 +53,7 @@ func (e *FileEvent) IsModify() bool {
 // IsRename reports whether the FileEvent was triggered by a change name
 func (e *FileEvent) IsRename() bool { return (e.mask & sys_NOTE_RENAME) == sys_NOTE_RENAME }
 
-// IsAttrib reports whether the FileEvent was triggered by a change in the file metadata (eg.
-// atime, mtime etc.)
+// IsAttrib reports whether the FileEvent was triggered by a change in the file metadata.
 func (e *FileEvent) IsAttrib() bool {
 	return (e.mask & sys_NOTE_ATTRIB) == sys_NOTE_ATTRIB
 }
@@ -272,24 +271,24 @@ func (w *Watcher) removeWatch(path string) error {
 
 	// Find all watched paths that are in this directory that are not external.
 	if fInfo.IsDir() {
-		pathsToRemove := make([]string, 0)
+		var pathsToRemove []string
 		w.pmut.Lock()
 		for _, wpath := range w.paths {
 			wdir, _ := filepath.Split(wpath)
 			if filepath.Clean(wdir) == filepath.Clean(path) {
 				w.ewmut.Lock()
-				if _, extern := w.externalWatches[wpath]; !extern {
+				if !w.externalWatches[wpath] {
 					pathsToRemove = append(pathsToRemove, wpath)
 				}
 				w.ewmut.Unlock()
 			}
 		}
 		w.pmut.Unlock()
-		for idx := 0; idx < len(pathsToRemove); idx++ {
+		for _, p := range pathsToRemove {
 			// Since these are internal, not much sense in propagating error
 			// to the user, as that will just confuse them with an error about
 			// a path they did not explicitly watch themselves.
-			w.removeWatch(pathsToRemove[idx])
+			w.removeWatch(p)
 		}
 	}
 
