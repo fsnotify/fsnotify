@@ -42,6 +42,7 @@ const (
 )
 
 const (
+	// TODO(nj): Use syscall.ERROR_MORE_DATA from ztypes_windows in Go 1.3+
 	sys_ERROR_MORE_DATA syscall.Errno = 234
 )
 
@@ -53,26 +54,25 @@ type FileEvent struct {
 	Name   string // File name (optional)
 }
 
-// IsCreate reports whether the FileEvent was triggerd by a creation
+// IsCreate reports whether the FileEvent was triggered by a creation
 func (e *FileEvent) IsCreate() bool { return (e.mask & sys_FS_CREATE) == sys_FS_CREATE }
 
-// IsDelete reports whether the FileEvent was triggerd by a delete
+// IsDelete reports whether the FileEvent was triggered by a delete
 func (e *FileEvent) IsDelete() bool {
 	return ((e.mask&sys_FS_DELETE) == sys_FS_DELETE || (e.mask&sys_FS_DELETE_SELF) == sys_FS_DELETE_SELF)
 }
 
-// IsModify reports whether the FileEvent was triggerd by a file modification or attribute change
+// IsModify reports whether the FileEvent was triggered by a file modification or attribute change
 func (e *FileEvent) IsModify() bool {
 	return ((e.mask&sys_FS_MODIFY) == sys_FS_MODIFY || (e.mask&sys_FS_ATTRIB) == sys_FS_ATTRIB)
 }
 
-// IsRename reports whether the FileEvent was triggerd by a change name
+// IsRename reports whether the FileEvent was triggered by a change name
 func (e *FileEvent) IsRename() bool {
 	return ((e.mask&sys_FS_MOVE) == sys_FS_MOVE || (e.mask&sys_FS_MOVE_SELF) == sys_FS_MOVE_SELF || (e.mask&sys_FS_MOVED_FROM) == sys_FS_MOVED_FROM || (e.mask&sys_FS_MOVED_TO) == sys_FS_MOVED_TO)
 }
 
-// IsAttrib reports whether the FileEvent was triggered by a change in the file metadata (eg.
-// atime, mtime etc.)
+// IsAttrib reports whether the FileEvent was triggered by a change in the file metadata.
 func (e *FileEvent) IsAttrib() bool {
 	return (e.mask & sys_FS_ATTRIB) == sys_FS_ATTRIB
 }
@@ -416,7 +416,7 @@ func (w *Watcher) readEvents() {
 			select {
 			case ch := <-w.quit:
 				w.mu.Lock()
-				indexes := make([]indexMap, 0)
+				var indexes []indexMap
 				for _, index := range w.watches {
 					indexes = append(indexes, index)
 				}
@@ -452,9 +452,9 @@ func (w *Watcher) readEvents() {
 			if watch == nil {
 				w.Error <- errors.New("ERROR_MORE_DATA has unexpectedly null lpOverlapped buffer")
 			} else {
-				//The i/o succeeded but buffer is full
-				//in theory we should be building up a full packet
-				//in practice we can get away with just carrying on
+				// The i/o succeeded but the buffer is full.
+				// In theory we should be building up a full packet.
+				// In practice we can get away with just carrying on.
 				n = uint32(unsafe.Sizeof(watch.buf))
 			}
 		case syscall.ERROR_ACCESS_DENIED:
