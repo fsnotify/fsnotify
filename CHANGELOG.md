@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.9.0 / 2014-01-17
+
+* IsAttrib() for events that only concern a file's metadata [#79][] (thanks @abustany)
+* [Fix] kqueue: fix deadlock [#77][] (thanks @cespare)
+* [NOTICE] Development has moved to `code.google.com/p/go.exp/fsnotify` in preparation for inclusion in the Go standard library.
+
 ## v0.8.12 / 2013-11-13
 
 * [API] Remove FD_SET and friends from Linux adapter
@@ -133,6 +139,8 @@
 * linux: common FileEvent functions
 * initial commit
 
+[#79]: https://github.com/howeyc/fsnotify/pull/79
+[#77]: https://github.com/howeyc/fsnotify/pull/77
 [#72]: https://github.com/howeyc/fsnotify/issues/72
 [#71]: https://github.com/howeyc/fsnotify/issues/71
 [#70]: https://github.com/howeyc/fsnotify/issues/70
