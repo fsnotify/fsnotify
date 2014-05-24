@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.10.0 / 2014-05-23
+
+* [API] Remove current implementation of WatchFlags [#1](https://github.com/gophertown/fsnotify/pull/1)
+
 ## v0.9.0 / 2014-01-17
 
 * IsAttrib() for events that only concern a file's metadata [#79][] (thanks @abustany)
