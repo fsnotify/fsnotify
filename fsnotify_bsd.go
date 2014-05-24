@@ -63,8 +63,6 @@ type Watcher struct {
 	kq              int                 // File descriptor (as returned by the kqueue() syscall)
 	watches         map[string]int      // Map of watched file descriptors (key: path)
 	wmut            sync.Mutex          // Protects access to watches.
-	fsnFlags        map[string]uint32   // Map of watched files to flags used for filter
-	fsnmut          sync.Mutex          // Protects access to fsnFlags.
 	enFlags         map[string]uint32   // Map of watched files to evfilt note flags used in kqueue
 	enmut           sync.Mutex          // Protects access to enFlags.
 	paths           map[int]string      // Map of watched paths (key: watch descriptor)
@@ -75,7 +73,6 @@ type Watcher struct {
 	externalWatches map[string]bool     // Map of watches added by user of the library.
 	ewmut           sync.Mutex          // Protects access to externalWatches.
 	Error           chan error          // Errors are sent on this channel
-	internalEvent   chan *FileEvent     // Events are queued on this channel
 	Event           chan *FileEvent     // Events are returned on this channel
 	done            chan bool           // Channel for sending a "quit message" to the reader goroutine
 	isClosed        bool                // Set to true when Close() is first called
@@ -92,20 +89,17 @@ func NewWatcher() (*Watcher, error) {
 	w := &Watcher{
 		kq:              fd,
 		watches:         make(map[string]int),
-		fsnFlags:        make(map[string]uint32),
 		enFlags:         make(map[string]uint32),
 		paths:           make(map[int]string),
 		finfo:           make(map[int]os.FileInfo),
 		fileExists:      make(map[string]bool),
 		externalWatches: make(map[string]bool),
-		internalEvent:   make(chan *FileEvent),
 		Event:           make(chan *FileEvent),
 		Error:           make(chan error),
 		done:            make(chan bool, 1),
 	}
 
 	go w.readEvents()
-	go w.purgeEvents()
 	return w, nil
 }
 
@@ -323,7 +317,7 @@ func (w *Watcher) readEvents() {
 			if errno != nil {
 				w.Error <- os.NewSyscallError("close", errno)
 			}
-			close(w.internalEvent)
+			close(w.Event)
 			close(w.Error)
 			return
 		}
@@ -369,7 +363,7 @@ func (w *Watcher) readEvents() {
 				w.sendDirectoryChangeEvents(fileEvent.Name)
 			} else {
 				// Send the event on the events channel
-				w.internalEvent <- fileEvent
+				w.Event <- fileEvent
 			}
 
 			// Move to next event
@@ -418,15 +412,6 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 	// Search for new files
 	for _, fileInfo := range files {
 		filePath := filepath.Join(dirPath, fileInfo.Name())
-
-		// Inherit fsnFlags from parent directory
-		w.fsnmut.Lock()
-		if flags, found := w.fsnFlags[dirPath]; found {
-			w.fsnFlags[filePath] = flags
-		} else {
-			w.fsnFlags[filePath] = FSN_ALL
-		}
-		w.fsnmut.Unlock()
 
 		if fileInfo.IsDir() == false {
 			// Watch file to mimic linux fsnotify
@@ -477,20 +462,11 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 		_, doesExist := w.fileExists[filePath]
 		w.femut.Unlock()
 		if !doesExist {
-			// Inherit fsnFlags from parent directory
-			w.fsnmut.Lock()
-			if flags, found := w.fsnFlags[dirPath]; found {
-				w.fsnFlags[filePath] = flags
-			} else {
-				w.fsnFlags[filePath] = FSN_ALL
-			}
-			w.fsnmut.Unlock()
-
 			// Send create event
 			fileEvent := new(FileEvent)
 			fileEvent.Name = filePath
 			fileEvent.create = true
-			w.internalEvent <- fileEvent
+			w.Event <- fileEvent
 		}
 		w.femut.Lock()
 		w.fileExists[filePath] = true
