@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.10.1 / 2014-06-12
+
+* Fix data race on kevent buffer (thanks @tilaks) [#98](https://github.com/howeyc/fsnotify/pull/98)
+
 ## v0.10.0 / 2014-05-23
 
 * [API] Remove current implementation of WatchFlags [#1](https://github.com/gophertown/fsnotify/pull/1)
