@@ -47,34 +47,31 @@ const (
 )
 
 // Event is the type of the notification messages
-// received on the watcher's Event channel.
-type FileEvent struct {
-	mask   uint32 // Mask of events
+// received on the watcher's Events channel.
+type Event struct {
+	Name   string // Relative path to the file/directory.
+	Op     Op     // Platform-independent bitmask.
 	cookie uint32 // Unique cookie associating related events (for rename)
-	Name   string // File name (optional)
 }
 
-// IsCreate reports whether the FileEvent was triggered by a creation
-func (e *FileEvent) IsCreate() bool { return (e.mask & sys_FS_CREATE) == sys_FS_CREATE }
-
-// IsDelete reports whether the FileEvent was triggered by a delete
-func (e *FileEvent) IsDelete() bool {
-	return ((e.mask&sys_FS_DELETE) == sys_FS_DELETE || (e.mask&sys_FS_DELETE_SELF) == sys_FS_DELETE_SELF)
-}
-
-// IsModify reports whether the FileEvent was triggered by a file modification or attribute change
-func (e *FileEvent) IsModify() bool {
-	return ((e.mask&sys_FS_MODIFY) == sys_FS_MODIFY || (e.mask&sys_FS_ATTRIB) == sys_FS_ATTRIB)
-}
-
-// IsRename reports whether the FileEvent was triggered by a change name
-func (e *FileEvent) IsRename() bool {
-	return ((e.mask&sys_FS_MOVE) == sys_FS_MOVE || (e.mask&sys_FS_MOVE_SELF) == sys_FS_MOVE_SELF || (e.mask&sys_FS_MOVED_FROM) == sys_FS_MOVED_FROM || (e.mask&sys_FS_MOVED_TO) == sys_FS_MOVED_TO)
-}
-
-// IsAttrib reports whether the FileEvent was triggered by a change in the file metadata.
-func (e *FileEvent) IsAttrib() bool {
-	return (e.mask & sys_FS_ATTRIB) == sys_FS_ATTRIB
+func newEvent(name string, mask uint32) *Event {
+	e := &Event{Name: name}
+	if mask&sys_FS_CREATE == sys_FS_CREATE {
+		e.Op |= Create
+	}
+	if mask&sys_FS_DELETE == sys_FS_DELETE || mask&sys_FS_DELETE_SELF == sys_FS_DELETE_SELF {
+		e.Op |= Remove
+	}
+	if mask&sys_FS_MODIFY == sys_FS_MODIFY || mask&sys_FS_ATTRIB == sys_FS_ATTRIB {
+		e.Op |= Write
+	}
+	if mask&sys_FS_MOVE == sys_FS_MOVE || mask&sys_FS_MOVE_SELF == sys_FS_MOVE_SELF || mask&sys_FS_MOVED_FROM == sys_FS_MOVED_FROM || mask&sys_FS_MOVED_TO == sys_FS_MOVED_TO {
+		e.Op |= Rename
+	}
+	if mask&sys_FS_ATTRIB == sys_FS_ATTRIB {
+		e.Op |= Chmod
+	}
+	return e
 }
 
 const (
@@ -115,13 +112,13 @@ type watchMap map[uint32]indexMap
 // A Watcher waits for and receives event notifications
 // for a specific set of files and directories.
 type Watcher struct {
-	mu       sync.Mutex      // Map access
-	port     syscall.Handle  // Handle to completion port
-	watches  watchMap        // Map of watches (key: i-number)
-	input    chan *input     // Inputs to the reader are sent on this channel
-	Event    chan *FileEvent // Events are returned on this channel
-	Error    chan error      // Errors are sent on this channel
-	isClosed bool            // Set to true when Close() is first called
+	mu       sync.Mutex     // Map access
+	port     syscall.Handle // Handle to completion port
+	watches  watchMap       // Map of watches (key: i-number)
+	input    chan *input    // Inputs to the reader are sent on this channel
+	Events   chan *Event    // Events are returned on this channel
+	Errors   chan error     // Errors are sent on this channel
+	isClosed bool           // Set to true when Close() is first called
 	quit     chan chan<- error
 	cookie   uint32
 }
@@ -136,8 +133,8 @@ func NewWatcher() (*Watcher, error) {
 		port:    port,
 		watches: make(watchMap),
 		input:   make(chan *input, 1),
-		Event:   make(chan *FileEvent, 50),
-		Error:   make(chan error),
+		Events:  make(chan *Event, 50),
+		Errors:  make(chan error),
 		quit:    make(chan chan<- error, 1),
 	}
 	go w.readEvents()
@@ -356,7 +353,7 @@ func (w *Watcher) deleteWatch(watch *watch) {
 // Must run within the I/O thread.
 func (w *Watcher) startRead(watch *watch) error {
 	if e := syscall.CancelIo(watch.ino.handle); e != nil {
-		w.Error <- os.NewSyscallError("CancelIo", e)
+		w.Errors <- os.NewSyscallError("CancelIo", e)
 		w.deleteWatch(watch)
 	}
 	mask := toWindowsFlags(watch.mask)
@@ -365,7 +362,7 @@ func (w *Watcher) startRead(watch *watch) error {
 	}
 	if mask == 0 {
 		if e := syscall.CloseHandle(watch.ino.handle); e != nil {
-			w.Error <- os.NewSyscallError("CloseHandle", e)
+			w.Errors <- os.NewSyscallError("CloseHandle", e)
 		}
 		w.mu.Lock()
 		delete(w.watches[watch.ino.volume], watch.ino.index)
@@ -393,7 +390,7 @@ func (w *Watcher) startRead(watch *watch) error {
 }
 
 // readEvents reads from the I/O completion port, converts the
-// received events into Event objects and sends them via the Event channel.
+// received events into Event objects and sends them via the Events channel.
 // Entry point to the I/O thread.
 func (w *Watcher) readEvents() {
 	var (
@@ -425,8 +422,8 @@ func (w *Watcher) readEvents() {
 				if e := syscall.CloseHandle(w.port); e != nil {
 					err = os.NewSyscallError("CloseHandle", e)
 				}
-				close(w.Event)
-				close(w.Error)
+				close(w.Events)
+				close(w.Errors)
 				ch <- err
 				return
 			case in := <-w.input:
@@ -444,7 +441,7 @@ func (w *Watcher) readEvents() {
 		switch e {
 		case sys_ERROR_MORE_DATA:
 			if watch == nil {
-				w.Error <- errors.New("ERROR_MORE_DATA has unexpectedly null lpOverlapped buffer")
+				w.Errors <- errors.New("ERROR_MORE_DATA has unexpectedly null lpOverlapped buffer")
 			} else {
 				// The i/o succeeded but the buffer is full.
 				// In theory we should be building up a full packet.
@@ -461,7 +458,7 @@ func (w *Watcher) readEvents() {
 			// CancelIo was called on this handle
 			continue
 		default:
-			w.Error <- os.NewSyscallError("GetQueuedCompletionPort", e)
+			w.Errors <- os.NewSyscallError("GetQueuedCompletionPort", e)
 			continue
 		case nil:
 		}
@@ -469,8 +466,8 @@ func (w *Watcher) readEvents() {
 		var offset uint32
 		for {
 			if n == 0 {
-				w.Event <- &FileEvent{mask: sys_FS_Q_OVERFLOW}
-				w.Error <- errors.New("short read in readEvents()")
+				w.Events <- newEvent("", sys_FS_Q_OVERFLOW)
+				w.Errors <- errors.New("short read in readEvents()")
 				break
 			}
 
@@ -528,13 +525,13 @@ func (w *Watcher) readEvents() {
 
 			// Error!
 			if offset >= n {
-				w.Error <- errors.New("Windows system assumed buffer larger than it is, events have likely been missed.")
+				w.Errors <- errors.New("Windows system assumed buffer larger than it is, events have likely been missed.")
 				break
 			}
 		}
 
 		if err := w.startRead(watch); err != nil {
-			w.Error <- err
+			w.Errors <- err
 		}
 	}
 }
@@ -543,7 +540,7 @@ func (w *Watcher) sendEvent(name string, mask uint64) bool {
 	if mask == 0 {
 		return false
 	}
-	event := &FileEvent{mask: uint32(mask), Name: name}
+	event := newEvent(name, uint32(mask))
 	if mask&sys_FS_MOVE != 0 {
 		if mask&sys_FS_MOVED_FROM != 0 {
 			w.cookie++
@@ -553,7 +550,7 @@ func (w *Watcher) sendEvent(name string, mask uint64) bool {
 	select {
 	case ch := <-w.quit:
 		w.quit <- ch
-	case w.Event <- event:
+	case w.Events <- event:
 	}
 	return true
 }

@@ -23,7 +23,7 @@ func TestFsnotifyFakeSymlink(t *testing.T) {
 	var errorsReceived counter
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
-		for errors := range watcher.Error {
+		for errors := range watcher.Errors {
 			t.Logf("Received error: %s", errors)
 			errorsReceived.increment()
 		}
@@ -32,9 +32,9 @@ func TestFsnotifyFakeSymlink(t *testing.T) {
 	// Count the CREATE events received
 	var createEventsReceived, otherEventsReceived counter
 	go func() {
-		for ev := range watcher.Event {
+		for ev := range watcher.Events {
 			t.Logf("event received: %s", ev)
-			if ev.IsCreate() {
+			if ev.Op&Create == Create {
 				createEventsReceived.increment()
 			} else {
 				otherEventsReceived.increment()

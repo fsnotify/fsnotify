@@ -33,29 +33,30 @@ const (
 	keventWaitTime = 100e6
 )
 
-type FileEvent struct {
-	mask   uint32 // Mask of events
-	Name   string // File name (optional)
-	create bool   // set by fsnotify package if found new file
+type Event struct {
+	Name string // Relative path to the file/directory.
+	Op   Op     // Platform-independent mask.
 }
 
-// IsCreate reports whether the FileEvent was triggered by a creation
-func (e *FileEvent) IsCreate() bool { return e.create }
-
-// IsDelete reports whether the FileEvent was triggered by a delete
-func (e *FileEvent) IsDelete() bool { return (e.mask & sys_NOTE_DELETE) == sys_NOTE_DELETE }
-
-// IsModify reports whether the FileEvent was triggered by a file modification
-func (e *FileEvent) IsModify() bool {
-	return ((e.mask&sys_NOTE_WRITE) == sys_NOTE_WRITE || (e.mask&sys_NOTE_ATTRIB) == sys_NOTE_ATTRIB)
-}
-
-// IsRename reports whether the FileEvent was triggered by a change name
-func (e *FileEvent) IsRename() bool { return (e.mask & sys_NOTE_RENAME) == sys_NOTE_RENAME }
-
-// IsAttrib reports whether the FileEvent was triggered by a change in the file metadata.
-func (e *FileEvent) IsAttrib() bool {
-	return (e.mask & sys_NOTE_ATTRIB) == sys_NOTE_ATTRIB
+func newEvent(name string, mask uint32, create bool) *Event {
+	e := new(Event)
+	e.Name = name
+	if create {
+		e.Op |= Create
+	}
+	if mask&sys_NOTE_DELETE == sys_NOTE_DELETE {
+		e.Op |= Remove
+	}
+	if mask&sys_NOTE_WRITE == sys_NOTE_WRITE || mask&sys_NOTE_ATTRIB == sys_NOTE_ATTRIB {
+		e.Op |= Write
+	}
+	if mask&sys_NOTE_RENAME == sys_NOTE_RENAME {
+		e.Op |= Rename
+	}
+	if mask&sys_NOTE_ATTRIB == sys_NOTE_ATTRIB {
+		e.Op |= Chmod
+	}
+	return e
 }
 
 type Watcher struct {
@@ -72,8 +73,8 @@ type Watcher struct {
 	femut           sync.Mutex          // Protects access to fileExists.
 	externalWatches map[string]bool     // Map of watches added by user of the library.
 	ewmut           sync.Mutex          // Protects access to externalWatches.
-	Error           chan error          // Errors are sent on this channel
-	Event           chan *FileEvent     // Events are returned on this channel
+	Errors          chan error          // Errors are sent on this channel
+	Events          chan *Event         // Events are returned on this channel
 	done            chan bool           // Channel for sending a "quit message" to the reader goroutine
 	isClosed        bool                // Set to true when Close() is first called
 }
@@ -92,8 +93,8 @@ func NewWatcher() (*Watcher, error) {
 		finfo:           make(map[int]os.FileInfo),
 		fileExists:      make(map[string]bool),
 		externalWatches: make(map[string]bool),
-		Event:           make(chan *FileEvent),
-		Error:           make(chan error),
+		Events:          make(chan *Event),
+		Errors:          make(chan error),
 		done:            make(chan bool, 1),
 	}
 
@@ -286,7 +287,7 @@ func (w *Watcher) removeWatch(path string) error {
 }
 
 // readEvents reads from the kqueue file descriptor, converts the
-// received events into Event objects and sends them via the Event channel
+// received events into Event objects and sends them via the Events channel
 func (w *Watcher) readEvents() {
 	var (
 		eventbuf [10]syscall.Kevent_t // Event buffer
@@ -311,10 +312,10 @@ func (w *Watcher) readEvents() {
 		if done {
 			errno := syscall.Close(w.kq)
 			if errno != nil {
-				w.Error <- os.NewSyscallError("close", errno)
+				w.Errors <- os.NewSyscallError("close", errno)
 			}
-			close(w.Event)
-			close(w.Error)
+			close(w.Events)
+			close(w.Errors)
 			return
 		}
 
@@ -325,7 +326,7 @@ func (w *Watcher) readEvents() {
 			// EINTR is okay, basically the syscall was interrupted before
 			// timeout expired.
 			if errno != nil && errno != syscall.EINTR {
-				w.Error <- os.NewSyscallError("kevent", errno)
+				w.Errors <- os.NewSyscallError("kevent", errno)
 				continue
 			}
 
@@ -337,41 +338,43 @@ func (w *Watcher) readEvents() {
 
 		// Flush the events we received to the events channel
 		for len(events) > 0 {
-			fileEvent := new(FileEvent)
 			watchEvent := &events[0]
-			fileEvent.mask = uint32(watchEvent.Fflags)
+			mask := uint32(watchEvent.Fflags)
 			w.pmut.Lock()
-			fileEvent.Name = w.paths[int(watchEvent.Ident)]
+			name := w.paths[int(watchEvent.Ident)]
 			fileInfo := w.finfo[int(watchEvent.Ident)]
 			w.pmut.Unlock()
-			if fileInfo != nil && fileInfo.IsDir() && !fileEvent.IsDelete() {
+
+			fileEvent := newEvent(name, mask, false)
+
+			if fileInfo != nil && fileInfo.IsDir() && !(fileEvent.Op&Remove == Remove) {
 				// Double check to make sure the directory exist. This can happen when
 				// we do a rm -fr on a recursively watched folders and we receive a
 				// modification event first but the folder has been deleted and later
 				// receive the delete event
 				if _, err := os.Lstat(fileEvent.Name); os.IsNotExist(err) {
 					// mark is as delete event
-					fileEvent.mask |= sys_NOTE_DELETE
+					fileEvent.Op |= Remove
 				}
 			}
 
-			if fileInfo != nil && fileInfo.IsDir() && fileEvent.IsModify() && !fileEvent.IsDelete() {
+			if fileInfo != nil && fileInfo.IsDir() && fileEvent.Op&Write == Write && !(fileEvent.Op&Remove == Remove) {
 				w.sendDirectoryChangeEvents(fileEvent.Name)
 			} else {
 				// Send the event on the events channel
-				w.Event <- fileEvent
+				w.Events <- fileEvent
 			}
 
 			// Move to next event
 			events = events[1:]
 
-			if fileEvent.IsRename() {
+			if fileEvent.Op&Rename == Rename {
 				w.removeWatch(fileEvent.Name)
 				w.femut.Lock()
 				delete(w.fileExists, fileEvent.Name)
 				w.femut.Unlock()
 			}
-			if fileEvent.IsDelete() {
+			if fileEvent.Op&Remove == Remove {
 				w.removeWatch(fileEvent.Name)
 				w.femut.Lock()
 				delete(w.fileExists, fileEvent.Name)
@@ -448,7 +451,7 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 	// Get all files
 	files, err := ioutil.ReadDir(dirPath)
 	if err != nil {
-		w.Error <- err
+		w.Errors <- err
 	}
 
 	// Search for new files
@@ -458,11 +461,9 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 		_, doesExist := w.fileExists[filePath]
 		w.femut.Unlock()
 		if !doesExist {
-			// Send create event
-			fileEvent := new(FileEvent)
-			fileEvent.Name = filePath
-			fileEvent.create = true
-			w.Event <- fileEvent
+			// Send create event (mask=0)
+			fileEvent := newEvent(filePath, 0, true)
+			w.Events <- fileEvent
 		}
 		w.femut.Lock()
 		w.fileExists[filePath] = true

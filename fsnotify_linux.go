@@ -56,35 +56,30 @@ const (
 	sys_IN_UNMOUNT    uint32 = syscall.IN_UNMOUNT
 )
 
-type FileEvent struct {
-	mask   uint32 // Mask of events
+type Event struct {
+	Name   string // Relative path to the file/directory.
+	Op     Op     // Platform-independent mask.
 	cookie uint32 // Unique cookie associating related events (for rename(2))
-	Name   string // File name (optional)
 }
 
-// IsCreate reports whether the FileEvent was triggered by a creation
-func (e *FileEvent) IsCreate() bool {
-	return (e.mask&sys_IN_CREATE) == sys_IN_CREATE || (e.mask&sys_IN_MOVED_TO) == sys_IN_MOVED_TO
-}
-
-// IsDelete reports whether the FileEvent was triggered by a delete
-func (e *FileEvent) IsDelete() bool {
-	return (e.mask&sys_IN_DELETE_SELF) == sys_IN_DELETE_SELF || (e.mask&sys_IN_DELETE) == sys_IN_DELETE
-}
-
-// IsModify reports whether the FileEvent was triggered by a file modification or attribute change
-func (e *FileEvent) IsModify() bool {
-	return ((e.mask&sys_IN_MODIFY) == sys_IN_MODIFY || (e.mask&sys_IN_ATTRIB) == sys_IN_ATTRIB)
-}
-
-// IsRename reports whether the FileEvent was triggered by a change name
-func (e *FileEvent) IsRename() bool {
-	return ((e.mask&sys_IN_MOVE_SELF) == sys_IN_MOVE_SELF || (e.mask&sys_IN_MOVED_FROM) == sys_IN_MOVED_FROM)
-}
-
-// IsAttrib reports whether the FileEvent was triggered by a change in the file metadata.
-func (e *FileEvent) IsAttrib() bool {
-	return (e.mask & sys_IN_ATTRIB) == sys_IN_ATTRIB
+func newEvent(name string, mask uint32, cookie uint32) *Event {
+	e := &Event{Name: name, cookie: cookie}
+	if mask&sys_IN_CREATE == sys_IN_CREATE || mask&sys_IN_MOVED_TO == sys_IN_MOVED_TO {
+		e.Op |= Create
+	}
+	if mask&sys_IN_DELETE_SELF == sys_IN_DELETE_SELF || mask&sys_IN_DELETE == sys_IN_DELETE {
+		e.Op |= Remove
+	}
+	if mask&sys_IN_MODIFY == sys_IN_MODIFY || mask&sys_IN_ATTRIB == sys_IN_ATTRIB {
+		e.Op |= Write
+	}
+	if mask&sys_IN_MOVE_SELF == sys_IN_MOVE_SELF || mask&sys_IN_MOVED_FROM == sys_IN_MOVED_FROM {
+		e.Op |= Rename
+	}
+	if mask&sys_IN_ATTRIB == sys_IN_ATTRIB {
+		e.Op |= Chmod
+	}
+	return e
 }
 
 type watch struct {
@@ -97,8 +92,8 @@ type Watcher struct {
 	fd       int               // File descriptor (as returned by the inotify_init() syscall)
 	watches  map[string]*watch // Map of inotify watches (key: path)
 	paths    map[int]string    // Map of watched paths (key: watch descriptor)
-	Error    chan error        // Errors are sent on this channel
-	Event    chan *FileEvent   // Events are returned on this channel
+	Errors   chan error        // Errors are sent on this channel
+	Events   chan *Event       // Events are returned on this channel
 	done     chan bool         // Channel for sending a "quit message" to the reader goroutine
 	isClosed bool              // Set to true when Close() is first called
 }
@@ -113,8 +108,8 @@ func NewWatcher() (*Watcher, error) {
 		fd:      fd,
 		watches: make(map[string]*watch),
 		paths:   make(map[int]string),
-		Event:   make(chan *FileEvent),
-		Error:   make(chan error),
+		Events:  make(chan *Event),
+		Errors:  make(chan error),
 		done:    make(chan bool, 1),
 	}
 
@@ -133,7 +128,7 @@ func (w *Watcher) Close() error {
 
 	// Remove all watches
 	for path := range w.watches {
-		w.RemoveWatch(path)
+		w.Remove(path)
 	}
 
 	// Send "quit" message to the reader goroutine
@@ -191,7 +186,7 @@ func (w *Watcher) removeWatch(path string) error {
 }
 
 // readEvents reads from the inotify file descriptor, converts the
-// received events into Event objects and sends them via the Event channel
+// received events into Event objects and sends them via the Events channel
 func (w *Watcher) readEvents() {
 	var (
 		buf   [syscall.SizeofInotifyEvent * 4096]byte // Buffer for a maximum of 4096 raw events
@@ -204,8 +199,8 @@ func (w *Watcher) readEvents() {
 		select {
 		case <-w.done:
 			syscall.Close(w.fd)
-			close(w.Event)
-			close(w.Error)
+			close(w.Events)
+			close(w.Errors)
 			return
 		default:
 		}
@@ -215,17 +210,17 @@ func (w *Watcher) readEvents() {
 		// If EOF is received
 		if n == 0 {
 			syscall.Close(w.fd)
-			close(w.Event)
-			close(w.Error)
+			close(w.Events)
+			close(w.Errors)
 			return
 		}
 
 		if n < 0 {
-			w.Error <- os.NewSyscallError("read", errno)
+			w.Errors <- os.NewSyscallError("read", errno)
 			continue
 		}
 		if n < syscall.SizeofInotifyEvent {
-			w.Error <- errors.New("inotify: short read in readEvents()")
+			w.Errors <- errors.New("inotify: short read in readEvents()")
 			continue
 		}
 
@@ -235,27 +230,29 @@ func (w *Watcher) readEvents() {
 		for offset <= uint32(n-syscall.SizeofInotifyEvent) {
 			// Point "raw" to the event in the buffer
 			raw := (*syscall.InotifyEvent)(unsafe.Pointer(&buf[offset]))
-			event := new(FileEvent)
-			event.mask = uint32(raw.Mask)
-			event.cookie = uint32(raw.Cookie)
+
+			mask := uint32(raw.Mask)
+			cookie := uint32(raw.Cookie)
 			nameLen := uint32(raw.Len)
 			// If the event happened to the watched directory or the watched file, the kernel
 			// doesn't append the filename to the event, but we would like to always fill the
 			// the "Name" field with a valid filename. We retrieve the path of the watch from
 			// the "paths" map.
 			w.mu.Lock()
-			event.Name = w.paths[int(raw.Wd)]
+			name := w.paths[int(raw.Wd)]
 			w.mu.Unlock()
 			if nameLen > 0 {
 				// Point "bytes" at the first byte of the filename
 				bytes := (*[syscall.PathMax]byte)(unsafe.Pointer(&buf[offset+syscall.SizeofInotifyEvent]))
-				// The filename is padded with NUL bytes. TrimRight() gets rid of those.
-				event.Name += "/" + strings.TrimRight(string(bytes[0:nameLen]), "\000")
+				// The filename is padded with NULL bytes. TrimRight() gets rid of those.
+				name += "/" + strings.TrimRight(string(bytes[0:nameLen]), "\000")
 			}
 
+			event := newEvent(name, mask, cookie)
+
 			// Send the events that are not ignored on the events channel
-			if !event.ignoreLinux() {
-				w.Event <- event
+			if !event.ignoreLinux(mask) {
+				w.Events <- event
 			}
 
 			// Move to the next event in the buffer
@@ -264,12 +261,12 @@ func (w *Watcher) readEvents() {
 	}
 }
 
-// Certain types of events can be "ignored" and not sent over the Event
+// Certain types of events can be "ignored" and not sent over the Events
 // channel. Such as events marked ignore by the kernel, or MODIFY events
 // against files that do not exist.
-func (e *FileEvent) ignoreLinux() bool {
+func (e *Event) ignoreLinux(mask uint32) bool {
 	// Ignore anything the inotify API says to ignore
-	if e.mask&sys_IN_IGNORED == sys_IN_IGNORED {
+	if mask&sys_IN_IGNORED == sys_IN_IGNORED {
 		return true
 	}
 
@@ -278,7 +275,7 @@ func (e *FileEvent) ignoreLinux() bool {
 	// *Note*: this was put in place because it was seen that a MODIFY
 	// event was sent after the DELETE. This ignores that MODIFY and
 	// assumes a DELETE will come or has come if the file doesn't exist.
-	if !(e.IsDelete() || e.IsRename()) {
+	if !(e.Op&Remove == Remove || e.Op&Rename == Rename) {
 		_, statErr := os.Lstat(e.Name)
 		return os.IsNotExist(statErr)
 	}
