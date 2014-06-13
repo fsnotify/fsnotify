@@ -19,7 +19,7 @@ func (w *Watcher) Remove(path string) error {
 
 // String formats the event e in the form
 // "filename: DELETE|MODIFY|..."
-func (e *FileEvent) String() string {
+func (e *Event) String() string {
 	var events string = ""
 
 	if e.IsCreate() {

@@ -33,28 +33,28 @@ const (
 	keventWaitTime = 100e6
 )
 
-type FileEvent struct {
+type Event struct {
 	mask   uint32 // Mask of events
 	Name   string // File name (optional)
 	create bool   // set by fsnotify package if found new file
 }
 
-// IsCreate reports whether the FileEvent was triggered by a creation
-func (e *FileEvent) IsCreate() bool { return e.create }
+// IsCreate reports whether the Event was triggered by a creation
+func (e *Event) IsCreate() bool { return e.create }
 
-// IsDelete reports whether the FileEvent was triggered by a delete
-func (e *FileEvent) IsDelete() bool { return (e.mask & sys_NOTE_DELETE) == sys_NOTE_DELETE }
+// IsDelete reports whether the Event was triggered by a delete
+func (e *Event) IsDelete() bool { return (e.mask & sys_NOTE_DELETE) == sys_NOTE_DELETE }
 
-// IsModify reports whether the FileEvent was triggered by a file modification
-func (e *FileEvent) IsModify() bool {
+// IsModify reports whether the Event was triggered by a file modification
+func (e *Event) IsModify() bool {
 	return ((e.mask&sys_NOTE_WRITE) == sys_NOTE_WRITE || (e.mask&sys_NOTE_ATTRIB) == sys_NOTE_ATTRIB)
 }
 
-// IsRename reports whether the FileEvent was triggered by a change name
-func (e *FileEvent) IsRename() bool { return (e.mask & sys_NOTE_RENAME) == sys_NOTE_RENAME }
+// IsRename reports whether the Event was triggered by a change name
+func (e *Event) IsRename() bool { return (e.mask & sys_NOTE_RENAME) == sys_NOTE_RENAME }
 
-// IsAttrib reports whether the FileEvent was triggered by a change in the file metadata.
-func (e *FileEvent) IsAttrib() bool {
+// IsAttrib reports whether the Event was triggered by a change in the file metadata.
+func (e *Event) IsAttrib() bool {
 	return (e.mask & sys_NOTE_ATTRIB) == sys_NOTE_ATTRIB
 }
 
@@ -73,7 +73,7 @@ type Watcher struct {
 	externalWatches map[string]bool     // Map of watches added by user of the library.
 	ewmut           sync.Mutex          // Protects access to externalWatches.
 	Errors          chan error          // Errors are sent on this channel
-	Events          chan *FileEvent     // Events are returned on this channel
+	Events          chan *Event         // Events are returned on this channel
 	done            chan bool           // Channel for sending a "quit message" to the reader goroutine
 	isClosed        bool                // Set to true when Close() is first called
 }
@@ -92,7 +92,7 @@ func NewWatcher() (*Watcher, error) {
 		finfo:           make(map[int]os.FileInfo),
 		fileExists:      make(map[string]bool),
 		externalWatches: make(map[string]bool),
-		Events:          make(chan *FileEvent),
+		Events:          make(chan *Event),
 		Errors:          make(chan error),
 		done:            make(chan bool, 1),
 	}
@@ -337,7 +337,7 @@ func (w *Watcher) readEvents() {
 
 		// Flush the events we received to the events channel
 		for len(events) > 0 {
-			fileEvent := new(FileEvent)
+			fileEvent := new(Event)
 			watchEvent := &events[0]
 			fileEvent.mask = uint32(watchEvent.Fflags)
 			w.pmut.Lock()
@@ -459,7 +459,7 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 		w.femut.Unlock()
 		if !doesExist {
 			// Send create event
-			fileEvent := new(FileEvent)
+			fileEvent := new(Event)
 			fileEvent.Name = filePath
 			fileEvent.create = true
 			w.Events <- fileEvent

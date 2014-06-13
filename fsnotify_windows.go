@@ -48,32 +48,32 @@ const (
 
 // Event is the type of the notification messages
 // received on the watcher's Events channel.
-type FileEvent struct {
+type Event struct {
 	mask   uint32 // Mask of events
 	cookie uint32 // Unique cookie associating related events (for rename)
 	Name   string // File name (optional)
 }
 
-// IsCreate reports whether the FileEvent was triggered by a creation
-func (e *FileEvent) IsCreate() bool { return (e.mask & sys_FS_CREATE) == sys_FS_CREATE }
+// IsCreate reports whether the Event was triggered by a creation
+func (e *Event) IsCreate() bool { return (e.mask & sys_FS_CREATE) == sys_FS_CREATE }
 
-// IsDelete reports whether the FileEvent was triggered by a delete
-func (e *FileEvent) IsDelete() bool {
+// IsDelete reports whether the Event was triggered by a delete
+func (e *Event) IsDelete() bool {
 	return ((e.mask&sys_FS_DELETE) == sys_FS_DELETE || (e.mask&sys_FS_DELETE_SELF) == sys_FS_DELETE_SELF)
 }
 
-// IsModify reports whether the FileEvent was triggered by a file modification or attribute change
-func (e *FileEvent) IsModify() bool {
+// IsModify reports whether the Event was triggered by a file modification or attribute change
+func (e *Event) IsModify() bool {
 	return ((e.mask&sys_FS_MODIFY) == sys_FS_MODIFY || (e.mask&sys_FS_ATTRIB) == sys_FS_ATTRIB)
 }
 
-// IsRename reports whether the FileEvent was triggered by a change name
-func (e *FileEvent) IsRename() bool {
+// IsRename reports whether the Event was triggered by a change name
+func (e *Event) IsRename() bool {
 	return ((e.mask&sys_FS_MOVE) == sys_FS_MOVE || (e.mask&sys_FS_MOVE_SELF) == sys_FS_MOVE_SELF || (e.mask&sys_FS_MOVED_FROM) == sys_FS_MOVED_FROM || (e.mask&sys_FS_MOVED_TO) == sys_FS_MOVED_TO)
 }
 
-// IsAttrib reports whether the FileEvent was triggered by a change in the file metadata.
-func (e *FileEvent) IsAttrib() bool {
+// IsAttrib reports whether the Event was triggered by a change in the file metadata.
+func (e *Event) IsAttrib() bool {
 	return (e.mask & sys_FS_ATTRIB) == sys_FS_ATTRIB
 }
 
@@ -115,13 +115,13 @@ type watchMap map[uint32]indexMap
 // A Watcher waits for and receives event notifications
 // for a specific set of files and directories.
 type Watcher struct {
-	mu       sync.Mutex      // Map access
-	port     syscall.Handle  // Handle to completion port
-	watches  watchMap        // Map of watches (key: i-number)
-	input    chan *input     // Inputs to the reader are sent on this channel
-	Events   chan *FileEvent // Events are returned on this channel
-	Errors   chan error      // Errors are sent on this channel
-	isClosed bool            // Set to true when Close() is first called
+	mu       sync.Mutex     // Map access
+	port     syscall.Handle // Handle to completion port
+	watches  watchMap       // Map of watches (key: i-number)
+	input    chan *input    // Inputs to the reader are sent on this channel
+	Events   chan *Event    // Events are returned on this channel
+	Errors   chan error     // Errors are sent on this channel
+	isClosed bool           // Set to true when Close() is first called
 	quit     chan chan<- error
 	cookie   uint32
 }
@@ -136,7 +136,7 @@ func NewWatcher() (*Watcher, error) {
 		port:    port,
 		watches: make(watchMap),
 		input:   make(chan *input, 1),
-		Events:  make(chan *FileEvent, 50),
+		Events:  make(chan *Event, 50),
 		Errors:  make(chan error),
 		quit:    make(chan chan<- error, 1),
 	}
@@ -469,7 +469,7 @@ func (w *Watcher) readEvents() {
 		var offset uint32
 		for {
 			if n == 0 {
-				w.Events <- &FileEvent{mask: sys_FS_Q_OVERFLOW}
+				w.Events <- &Event{mask: sys_FS_Q_OVERFLOW}
 				w.Errors <- errors.New("short read in readEvents()")
 				break
 			}
@@ -543,7 +543,7 @@ func (w *Watcher) sendEvent(name string, mask uint64) bool {
 	if mask == 0 {
 		return false
 	}
-	event := &FileEvent{mask: uint32(mask), Name: name}
+	event := &Event{mask: uint32(mask), Name: name}
 	if mask&sys_FS_MOVE != 0 {
 		if mask&sys_FS_MOVED_FROM != 0 {
 			w.cookie++

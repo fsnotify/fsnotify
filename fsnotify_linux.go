@@ -56,34 +56,34 @@ const (
 	sys_IN_UNMOUNT    uint32 = syscall.IN_UNMOUNT
 )
 
-type FileEvent struct {
+type Event struct {
 	mask   uint32 // Mask of events
 	cookie uint32 // Unique cookie associating related events (for rename(2))
 	Name   string // File name (optional)
 }
 
-// IsCreate reports whether the FileEvent was triggered by a creation
-func (e *FileEvent) IsCreate() bool {
+// IsCreate reports whether the Event was triggered by a creation
+func (e *Event) IsCreate() bool {
 	return (e.mask&sys_IN_CREATE) == sys_IN_CREATE || (e.mask&sys_IN_MOVED_TO) == sys_IN_MOVED_TO
 }
 
-// IsDelete reports whether the FileEvent was triggered by a delete
-func (e *FileEvent) IsDelete() bool {
+// IsDelete reports whether the Event was triggered by a delete
+func (e *Event) IsDelete() bool {
 	return (e.mask&sys_IN_DELETE_SELF) == sys_IN_DELETE_SELF || (e.mask&sys_IN_DELETE) == sys_IN_DELETE
 }
 
-// IsModify reports whether the FileEvent was triggered by a file modification or attribute change
-func (e *FileEvent) IsModify() bool {
+// IsModify reports whether the Event was triggered by a file modification or attribute change
+func (e *Event) IsModify() bool {
 	return ((e.mask&sys_IN_MODIFY) == sys_IN_MODIFY || (e.mask&sys_IN_ATTRIB) == sys_IN_ATTRIB)
 }
 
-// IsRename reports whether the FileEvent was triggered by a change name
-func (e *FileEvent) IsRename() bool {
+// IsRename reports whether the Event was triggered by a change name
+func (e *Event) IsRename() bool {
 	return ((e.mask&sys_IN_MOVE_SELF) == sys_IN_MOVE_SELF || (e.mask&sys_IN_MOVED_FROM) == sys_IN_MOVED_FROM)
 }
 
-// IsAttrib reports whether the FileEvent was triggered by a change in the file metadata.
-func (e *FileEvent) IsAttrib() bool {
+// IsAttrib reports whether the Event was triggered by a change in the file metadata.
+func (e *Event) IsAttrib() bool {
 	return (e.mask & sys_IN_ATTRIB) == sys_IN_ATTRIB
 }
 
@@ -98,7 +98,7 @@ type Watcher struct {
 	watches  map[string]*watch // Map of inotify watches (key: path)
 	paths    map[int]string    // Map of watched paths (key: watch descriptor)
 	Errors   chan error        // Errors are sent on this channel
-	Events   chan *FileEvent   // Events are returned on this channel
+	Events   chan *Event       // Events are returned on this channel
 	done     chan bool         // Channel for sending a "quit message" to the reader goroutine
 	isClosed bool              // Set to true when Close() is first called
 }
@@ -113,7 +113,7 @@ func NewWatcher() (*Watcher, error) {
 		fd:      fd,
 		watches: make(map[string]*watch),
 		paths:   make(map[int]string),
-		Events:  make(chan *FileEvent),
+		Events:  make(chan *Event),
 		Errors:  make(chan error),
 		done:    make(chan bool, 1),
 	}
@@ -235,7 +235,7 @@ func (w *Watcher) readEvents() {
 		for offset <= uint32(n-syscall.SizeofInotifyEvent) {
 			// Point "raw" to the event in the buffer
 			raw := (*syscall.InotifyEvent)(unsafe.Pointer(&buf[offset]))
-			event := new(FileEvent)
+			event := new(Event)
 			event.mask = uint32(raw.Mask)
 			event.cookie = uint32(raw.Cookie)
 			nameLen := uint32(raw.Len)
@@ -267,7 +267,7 @@ func (w *Watcher) readEvents() {
 // Certain types of events can be "ignored" and not sent over the Events
 // channel. Such as events marked ignore by the kernel, or MODIFY events
 // against files that do not exist.
-func (e *FileEvent) ignoreLinux() bool {
+func (e *Event) ignoreLinux() bool {
 	// Ignore anything the inotify API says to ignore
 	if e.mask&sys_IN_IGNORED == sys_IN_IGNORED {
 		return true
