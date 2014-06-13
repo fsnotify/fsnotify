@@ -370,7 +370,7 @@ func (w *Watcher) readEvents() {
 
 			fileEvent := newEvent(name, mask, false)
 
-			if fileInfo != nil && fileInfo.IsDir() && !fileEvent.IsDelete() {
+			if fileInfo != nil && fileInfo.IsDir() && !(fileEvent.Op&Remove == Remove) {
 				// Double check to make sure the directory exist. This can happen when
 				// we do a rm -fr on a recursively watched folders and we receive a
 				// modification event first but the folder has been deleted and later
@@ -381,7 +381,7 @@ func (w *Watcher) readEvents() {
 				}
 			}
 
-			if fileInfo != nil && fileInfo.IsDir() && fileEvent.IsModify() && !fileEvent.IsDelete() {
+			if fileInfo != nil && fileInfo.IsDir() && fileEvent.Op&Write == Write && !(fileEvent.Op&Remove == Remove) {
 				w.sendDirectoryChangeEvents(fileEvent.Name)
 			} else {
 				// Send the event on the events channel
@@ -391,13 +391,13 @@ func (w *Watcher) readEvents() {
 			// Move to next event
 			events = events[1:]
 
-			if fileEvent.IsRename() {
+			if fileEvent.Op&Rename == Rename {
 				w.removeWatch(fileEvent.Name)
 				w.femut.Lock()
 				delete(w.fileExists, fileEvent.Name)
 				w.femut.Unlock()
 			}
-			if fileEvent.IsDelete() {
+			if fileEvent.Op&Remove == Remove {
 				w.removeWatch(fileEvent.Name)
 				w.femut.Lock()
 				delete(w.fileExists, fileEvent.Name)

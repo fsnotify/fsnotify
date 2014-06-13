@@ -304,7 +304,7 @@ func (e *Event) ignoreLinux() bool {
 	// *Note*: this was put in place because it was seen that a MODIFY
 	// event was sent after the DELETE. This ignores that MODIFY and
 	// assumes a DELETE will come or has come if the file doesn't exist.
-	if !(e.IsDelete() || e.IsRename()) {
+	if !(e.Op&Remove == Remove || e.Op&Rename == Rename) {
 		_, statErr := os.Lstat(e.Name)
 		return os.IsNotExist(statErr)
 	}
