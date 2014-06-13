@@ -97,8 +97,8 @@ type Watcher struct {
 	fd       int               // File descriptor (as returned by the inotify_init() syscall)
 	watches  map[string]*watch // Map of inotify watches (key: path)
 	paths    map[int]string    // Map of watched paths (key: watch descriptor)
-	Error    chan error        // Errors are sent on this channel
-	Event    chan *FileEvent   // Events are returned on this channel
+	Errors   chan error        // Errors are sent on this channel
+	Events   chan *FileEvent   // Events are returned on this channel
 	done     chan bool         // Channel for sending a "quit message" to the reader goroutine
 	isClosed bool              // Set to true when Close() is first called
 }
@@ -113,8 +113,8 @@ func NewWatcher() (*Watcher, error) {
 		fd:      fd,
 		watches: make(map[string]*watch),
 		paths:   make(map[int]string),
-		Event:   make(chan *FileEvent),
-		Error:   make(chan error),
+		Events:  make(chan *FileEvent),
+		Errors:  make(chan error),
 		done:    make(chan bool, 1),
 	}
 
@@ -191,7 +191,7 @@ func (w *Watcher) removeWatch(path string) error {
 }
 
 // readEvents reads from the inotify file descriptor, converts the
-// received events into Event objects and sends them via the Event channel
+// received events into Event objects and sends them via the Events channel
 func (w *Watcher) readEvents() {
 	var (
 		buf   [syscall.SizeofInotifyEvent * 4096]byte // Buffer for a maximum of 4096 raw events
@@ -204,8 +204,8 @@ func (w *Watcher) readEvents() {
 		select {
 		case <-w.done:
 			syscall.Close(w.fd)
-			close(w.Event)
-			close(w.Error)
+			close(w.Events)
+			close(w.Errors)
 			return
 		default:
 		}
@@ -215,17 +215,17 @@ func (w *Watcher) readEvents() {
 		// If EOF is received
 		if n == 0 {
 			syscall.Close(w.fd)
-			close(w.Event)
-			close(w.Error)
+			close(w.Events)
+			close(w.Errors)
 			return
 		}
 
 		if n < 0 {
-			w.Error <- os.NewSyscallError("read", errno)
+			w.Errors <- os.NewSyscallError("read", errno)
 			continue
 		}
 		if n < syscall.SizeofInotifyEvent {
-			w.Error <- errors.New("inotify: short read in readEvents()")
+			w.Errors <- errors.New("inotify: short read in readEvents()")
 			continue
 		}
 
@@ -255,7 +255,7 @@ func (w *Watcher) readEvents() {
 
 			// Send the events that are not ignored on the events channel
 			if !event.ignoreLinux() {
-				w.Event <- event
+				w.Events <- event
 			}
 
 			// Move to the next event in the buffer
@@ -264,7 +264,7 @@ func (w *Watcher) readEvents() {
 	}
 }
 
-// Certain types of events can be "ignored" and not sent over the Event
+// Certain types of events can be "ignored" and not sent over the Events
 // channel. Such as events marked ignore by the kernel, or MODIFY events
 // against files that do not exist.
 func (e *FileEvent) ignoreLinux() bool {

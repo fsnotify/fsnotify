@@ -72,8 +72,8 @@ type Watcher struct {
 	femut           sync.Mutex          // Protects access to fileExists.
 	externalWatches map[string]bool     // Map of watches added by user of the library.
 	ewmut           sync.Mutex          // Protects access to externalWatches.
-	Error           chan error          // Errors are sent on this channel
-	Event           chan *FileEvent     // Events are returned on this channel
+	Errors          chan error          // Errors are sent on this channel
+	Events          chan *FileEvent     // Events are returned on this channel
 	done            chan bool           // Channel for sending a "quit message" to the reader goroutine
 	isClosed        bool                // Set to true when Close() is first called
 }
@@ -92,8 +92,8 @@ func NewWatcher() (*Watcher, error) {
 		finfo:           make(map[int]os.FileInfo),
 		fileExists:      make(map[string]bool),
 		externalWatches: make(map[string]bool),
-		Event:           make(chan *FileEvent),
-		Error:           make(chan error),
+		Events:          make(chan *FileEvent),
+		Errors:          make(chan error),
 		done:            make(chan bool, 1),
 	}
 
@@ -286,7 +286,7 @@ func (w *Watcher) removeWatch(path string) error {
 }
 
 // readEvents reads from the kqueue file descriptor, converts the
-// received events into Event objects and sends them via the Event channel
+// received events into Event objects and sends them via the Events channel
 func (w *Watcher) readEvents() {
 	var (
 		eventbuf [10]syscall.Kevent_t // Event buffer
@@ -311,10 +311,10 @@ func (w *Watcher) readEvents() {
 		if done {
 			errno := syscall.Close(w.kq)
 			if errno != nil {
-				w.Error <- os.NewSyscallError("close", errno)
+				w.Errors <- os.NewSyscallError("close", errno)
 			}
-			close(w.Event)
-			close(w.Error)
+			close(w.Events)
+			close(w.Errors)
 			return
 		}
 
@@ -325,7 +325,7 @@ func (w *Watcher) readEvents() {
 			// EINTR is okay, basically the syscall was interrupted before
 			// timeout expired.
 			if errno != nil && errno != syscall.EINTR {
-				w.Error <- os.NewSyscallError("kevent", errno)
+				w.Errors <- os.NewSyscallError("kevent", errno)
 				continue
 			}
 
@@ -359,7 +359,7 @@ func (w *Watcher) readEvents() {
 				w.sendDirectoryChangeEvents(fileEvent.Name)
 			} else {
 				// Send the event on the events channel
-				w.Event <- fileEvent
+				w.Events <- fileEvent
 			}
 
 			// Move to next event
@@ -448,7 +448,7 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 	// Get all files
 	files, err := ioutil.ReadDir(dirPath)
 	if err != nil {
-		w.Error <- err
+		w.Errors <- err
 	}
 
 	// Search for new files
@@ -462,7 +462,7 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 			fileEvent := new(FileEvent)
 			fileEvent.Name = filePath
 			fileEvent.create = true
-			w.Event <- fileEvent
+			w.Events <- fileEvent
 		}
 		w.femut.Lock()
 		w.fileExists[filePath] = true

@@ -62,7 +62,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
-		for err := range watcher.Error {
+		for err := range watcher.Errors {
 			t.Fatalf("error received: %s", err)
 		}
 	}()
@@ -81,7 +81,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	addWatch(t, watcher, testDir)
 
 	// Receive events on the event channel on a separate goroutine
-	eventstream := watcher.Event
+	eventstream := watcher.Events
 	var createReceived, modifyReceived, deleteReceived, renameReceived counter
 	done := make(chan bool)
 	go func() {
@@ -180,7 +180,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
-		for err := range watcher.Error {
+		for err := range watcher.Errors {
 			t.Fatalf("error received: %s", err)
 		}
 	}()
@@ -194,7 +194,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	addWatch(t, watcher, testDir)
 
 	// Receive events on the event channel on a separate goroutine
-	eventstream := watcher.Event
+	eventstream := watcher.Events
 	var createReceived, modifyReceived, deleteReceived counter
 	done := make(chan bool)
 	go func() {
@@ -325,7 +325,7 @@ func TestFsnotifyDirOnly(t *testing.T) {
 
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
-		for err := range watcher.Error {
+		for err := range watcher.Errors {
 			t.Fatalf("error received: %s", err)
 		}
 	}()
@@ -333,7 +333,7 @@ func TestFsnotifyDirOnly(t *testing.T) {
 	testFile := filepath.Join(testDir, "TestFsnotifyDirOnly.testfile")
 
 	// Receive events on the event channel on a separate goroutine
-	eventstream := watcher.Event
+	eventstream := watcher.Events
 	var createReceived, modifyReceived, deleteReceived counter
 	done := make(chan bool)
 	go func() {
@@ -430,13 +430,13 @@ func TestFsnotifyDeleteWatchedDir(t *testing.T) {
 
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
-		for err := range watcher.Error {
+		for err := range watcher.Errors {
 			t.Fatalf("error received: %s", err)
 		}
 	}()
 
 	// Receive events on the event channel on a separate goroutine
-	eventstream := watcher.Event
+	eventstream := watcher.Events
 	var deleteReceived counter
 	go func() {
 		for event := range eventstream {
@@ -475,13 +475,13 @@ func TestFsnotifySubDir(t *testing.T) {
 
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
-		for err := range watcher.Error {
+		for err := range watcher.Errors {
 			t.Fatalf("error received: %s", err)
 		}
 	}()
 
 	// Receive events on the event channel on a separate goroutine
-	eventstream := watcher.Event
+	eventstream := watcher.Events
 	var createReceived, deleteReceived counter
 	done := make(chan bool)
 	go func() {
@@ -567,7 +567,7 @@ func TestFsnotifyRename(t *testing.T) {
 
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
-		for err := range watcher.Error {
+		for err := range watcher.Errors {
 			t.Fatalf("error received: %s", err)
 		}
 	}()
@@ -576,7 +576,7 @@ func TestFsnotifyRename(t *testing.T) {
 	testFileRenamed := filepath.Join(testDir, "TestFsnotifyEvents.testfileRenamed")
 
 	// Receive events on the event channel on a separate goroutine
-	eventstream := watcher.Event
+	eventstream := watcher.Events
 	var renameReceived counter
 	done := make(chan bool)
 	go func() {
@@ -649,7 +649,7 @@ func TestFsnotifyRenameToCreate(t *testing.T) {
 
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
-		for err := range watcher.Error {
+		for err := range watcher.Errors {
 			t.Fatalf("error received: %s", err)
 		}
 	}()
@@ -658,7 +658,7 @@ func TestFsnotifyRenameToCreate(t *testing.T) {
 	testFileRenamed := filepath.Join(testDir, "TestFsnotifyEvents.testfileRenamed")
 
 	// Receive events on the event channel on a separate goroutine
-	eventstream := watcher.Event
+	eventstream := watcher.Events
 	var createReceived counter
 	done := make(chan bool)
 	go func() {
@@ -742,13 +742,13 @@ func TestFsnotifyRenameToOverwrite(t *testing.T) {
 
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
-		for err := range watcher.Error {
+		for err := range watcher.Errors {
 			t.Fatalf("error received: %s", err)
 		}
 	}()
 
 	// Receive events on the event channel on a separate goroutine
-	eventstream := watcher.Event
+	eventstream := watcher.Events
 	var eventReceived counter
 	done := make(chan bool)
 	go func() {
@@ -825,7 +825,7 @@ func TestRemovalOfWatch(t *testing.T) {
 
 	go func() {
 		select {
-		case ev := <-watcher.Event:
+		case ev := <-watcher.Events:
 			t.Fatalf("We received event: %v\n", ev)
 		case <-time.After(500 * time.Millisecond):
 			t.Log("No event received, as expected.")
@@ -860,7 +860,7 @@ func TestFsnotifyAttrib(t *testing.T) {
 
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
-		for err := range watcher.Error {
+		for err := range watcher.Errors {
 			t.Fatalf("error received: %s", err)
 		}
 	}()
@@ -868,7 +868,7 @@ func TestFsnotifyAttrib(t *testing.T) {
 	testFile := filepath.Join(testDir, "TestFsnotifyAttrib.testfile")
 
 	// Receive events on the event channel on a separate goroutine
-	eventstream := watcher.Event
+	eventstream := watcher.Events
 	// The modifyReceived counter counts IsModify events that are not IsAttrib,
 	// and the attribReceived counts IsAttrib events (which are also IsModify as
 	// a consequence).
