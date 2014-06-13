@@ -51,51 +51,27 @@ const (
 type Event struct {
 	Name   string // Relative path to the file/directory.
 	Op     Op     // Platform-independent bitmask.
-	mask   uint32 // Mask of events
 	cookie uint32 // Unique cookie associating related events (for rename)
 }
 
 func newEvent(name string, mask uint32) *Event {
-	e := &Event{mask: mask, Name: name}
-	if e.IsCreate() {
+	e := &Event{Name: name}
+	if mask&sys_FS_CREATE == sys_FS_CREATE {
 		e.Op |= Create
 	}
-	if e.IsDelete() {
+	if mask&sys_FS_DELETE == sys_FS_DELETE || mask&sys_FS_DELETE_SELF == sys_FS_DELETE_SELF {
 		e.Op |= Remove
 	}
-	if e.IsModify() {
+	if mask&sys_FS_MODIFY == sys_FS_MODIFY || mask&sys_FS_ATTRIB == sys_FS_ATTRIB {
 		e.Op |= Write
 	}
-	if e.IsRename() {
+	if mask&sys_FS_MOVE == sys_FS_MOVE || mask&sys_FS_MOVE_SELF == sys_FS_MOVE_SELF || mask&sys_FS_MOVED_FROM == sys_FS_MOVED_FROM || mask&sys_FS_MOVED_TO == sys_FS_MOVED_TO {
 		e.Op |= Rename
 	}
-	if e.IsAttrib() {
+	if mask&sys_FS_ATTRIB == sys_FS_ATTRIB {
 		e.Op |= Chmod
 	}
 	return e
-}
-
-// IsCreate reports whether the Event was triggered by a creation
-func (e *Event) IsCreate() bool { return (e.mask & sys_FS_CREATE) == sys_FS_CREATE }
-
-// IsDelete reports whether the Event was triggered by a delete
-func (e *Event) IsDelete() bool {
-	return ((e.mask&sys_FS_DELETE) == sys_FS_DELETE || (e.mask&sys_FS_DELETE_SELF) == sys_FS_DELETE_SELF)
-}
-
-// IsModify reports whether the Event was triggered by a file modification or attribute change
-func (e *Event) IsModify() bool {
-	return ((e.mask&sys_FS_MODIFY) == sys_FS_MODIFY || (e.mask&sys_FS_ATTRIB) == sys_FS_ATTRIB)
-}
-
-// IsRename reports whether the Event was triggered by a change name
-func (e *Event) IsRename() bool {
-	return ((e.mask&sys_FS_MOVE) == sys_FS_MOVE || (e.mask&sys_FS_MOVE_SELF) == sys_FS_MOVE_SELF || (e.mask&sys_FS_MOVED_FROM) == sys_FS_MOVED_FROM || (e.mask&sys_FS_MOVED_TO) == sys_FS_MOVED_TO)
-}
-
-// IsAttrib reports whether the Event was triggered by a change in the file metadata.
-func (e *Event) IsAttrib() bool {
-	return (e.mask & sys_FS_ATTRIB) == sys_FS_ATTRIB
 }
 
 const (

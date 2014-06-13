@@ -34,52 +34,29 @@ const (
 )
 
 type Event struct {
-	Name   string // Relative path to the file/directory.
-	Op     Op     // Platform-independent bitmask.
-	mask   uint32 // Mask of events
-	create bool   // set by fsnotify package if found new file
+	Name string // Relative path to the file/directory.
+	Op   Op     // Platform-independent mask.
 }
 
 func newEvent(name string, mask uint32, create bool) *Event {
 	e := new(Event)
 	e.Name = name
-	e.mask = mask
-	e.create = create
-	if e.IsCreate() {
+	if create {
 		e.Op |= Create
 	}
-	if e.IsDelete() {
+	if mask&sys_NOTE_DELETE == sys_NOTE_DELETE {
 		e.Op |= Remove
 	}
-	if e.IsModify() {
+	if mask&sys_NOTE_WRITE == sys_NOTE_WRITE || mask&sys_NOTE_ATTRIB == sys_NOTE_ATTRIB {
 		e.Op |= Write
 	}
-	if e.IsRename() {
+	if mask&sys_NOTE_RENAME == sys_NOTE_RENAME {
 		e.Op |= Rename
 	}
-	if e.IsAttrib() {
+	if mask&sys_NOTE_ATTRIB == sys_NOTE_ATTRIB {
 		e.Op |= Chmod
 	}
 	return e
-}
-
-// IsCreate reports whether the Event was triggered by a creation
-func (e *Event) IsCreate() bool { return e.create }
-
-// IsDelete reports whether the Event was triggered by a delete
-func (e *Event) IsDelete() bool { return (e.mask & sys_NOTE_DELETE) == sys_NOTE_DELETE }
-
-// IsModify reports whether the Event was triggered by a file modification
-func (e *Event) IsModify() bool {
-	return ((e.mask&sys_NOTE_WRITE) == sys_NOTE_WRITE || (e.mask&sys_NOTE_ATTRIB) == sys_NOTE_ATTRIB)
-}
-
-// IsRename reports whether the Event was triggered by a change name
-func (e *Event) IsRename() bool { return (e.mask & sys_NOTE_RENAME) == sys_NOTE_RENAME }
-
-// IsAttrib reports whether the Event was triggered by a change in the file metadata.
-func (e *Event) IsAttrib() bool {
-	return (e.mask & sys_NOTE_ATTRIB) == sys_NOTE_ATTRIB
 }
 
 type Watcher struct {
@@ -377,7 +354,7 @@ func (w *Watcher) readEvents() {
 				// receive the delete event
 				if _, err := os.Lstat(fileEvent.Name); os.IsNotExist(err) {
 					// mark is as delete event
-					fileEvent.mask |= sys_NOTE_DELETE
+					fileEvent.Op |= Remove
 				}
 			}
 
