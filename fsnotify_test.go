@@ -52,8 +52,8 @@ func newWatcher(t *testing.T) *Watcher {
 
 // addWatch adds a watch for a directory
 func addWatch(t *testing.T, watcher *Watcher, dir string) {
-	if err := watcher.Watch(dir); err != nil {
-		t.Fatalf("watcher.Watch(%q) failed: %s", dir, err)
+	if err := watcher.Add(dir); err != nil {
+		t.Fatalf("watcher.Add(%q) failed: %s", dir, err)
 	}
 }
 
@@ -819,7 +819,7 @@ func TestRemovalOfWatch(t *testing.T) {
 	defer watcher.Close()
 
 	addWatch(t, watcher, testDir)
-	if err := watcher.RemoveWatch(testDir); err != nil {
+	if err := watcher.Remove(testDir); err != nil {
 		t.Fatalf("Could not remove the watch: %v\n", err)
 	}
 
@@ -994,7 +994,7 @@ func TestFsnotifyClose(t *testing.T) {
 	testDir := tempMkdir(t)
 	defer os.RemoveAll(testDir)
 
-	if err := watcher.Watch(testDir); err == nil {
+	if err := watcher.Add(testDir); err == nil {
 		t.Fatal("expected error on Watch() after Close(), got nil")
 	}
 }

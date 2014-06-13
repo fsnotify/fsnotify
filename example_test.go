@@ -27,7 +27,7 @@ func ExampleNewWatcher() {
 		}
 	}()
 
-	err = watcher.Watch("/tmp/foo")
+	err = watcher.Add("/tmp/foo")
 	if err != nil {
 		log.Fatal(err)
 	}

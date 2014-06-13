@@ -133,7 +133,7 @@ func (w *Watcher) Close() error {
 
 	// Remove all watches
 	for path := range w.watches {
-		w.RemoveWatch(path)
+		w.Remove(path)
 	}
 
 	// Send "quit" message to the reader goroutine

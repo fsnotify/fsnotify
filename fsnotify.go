@@ -7,13 +7,13 @@ package fsnotify
 
 import "fmt"
 
-// Watch a given file path
-func (w *Watcher) Watch(path string) error {
+// Add starts watching for operations on the named file.
+func (w *Watcher) Add(path string) error {
 	return w.watch(path)
 }
 
-// Remove a watch on a file
-func (w *Watcher) RemoveWatch(path string) error {
+// Remove stops watching for operations on the named file.
+func (w *Watcher) Remove(path string) error {
 	return w.removeWatch(path)
 }
 
