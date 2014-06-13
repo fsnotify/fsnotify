@@ -34,7 +34,8 @@ const (
 )
 
 type Event struct {
-	Name   string // File name (optional)
+	Name   string // Relative path to the file/directory.
+	Op     Op     // Platform-independent bitmask.
 	mask   uint32 // Mask of events
 	create bool   // set by fsnotify package if found new file
 }
@@ -44,6 +45,21 @@ func newEvent(name string, mask uint32, create bool) *Event {
 	e.Name = name
 	e.mask = mask
 	e.create = create
+	if e.IsCreate() {
+		e.Op |= Create
+	}
+	if e.IsDelete() {
+		e.Op |= Remove
+	}
+	if e.IsModify() {
+		e.Op |= Write
+	}
+	if e.IsRename() {
+		e.Op |= Rename
+	}
+	if e.IsAttrib() {
+		e.Op |= Chmod
+	}
 	return e
 }
 

@@ -34,7 +34,7 @@ func TestFsnotifyFakeSymlink(t *testing.T) {
 	go func() {
 		for ev := range watcher.Events {
 			t.Logf("event received: %s", ev)
-			if ev.IsCreate() {
+			if ev.Op&Create == Create {
 				createEventsReceived.increment()
 			} else {
 				otherEventsReceived.increment()

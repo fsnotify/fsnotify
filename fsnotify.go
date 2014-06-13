@@ -7,6 +7,18 @@ package fsnotify
 
 import "fmt"
 
+// Op describes a set of file operations.
+type Op uint32
+
+// These are the file operations that can trigger a notification.
+const (
+	Create Op = 1 << iota
+	Write
+	Remove
+	Rename
+	Chmod
+)
+
 // Add starts watching for operations on the named file.
 func (w *Watcher) Add(path string) error {
 	return w.watch(path)
@@ -18,28 +30,28 @@ func (w *Watcher) Remove(path string) error {
 }
 
 // String formats the event e in the form
-// "filename: DELETE|MODIFY|..."
+// "filename: REMOVE|WRITE|..."
 func (e *Event) String() string {
 	var events string = ""
 
-	if e.IsCreate() {
+	if e.Op&Create == Create {
 		events += "|" + "CREATE"
 	}
 
-	if e.IsDelete() {
-		events += "|" + "DELETE"
+	if e.Op&Remove == Remove {
+		events += "|" + "REMOVE"
 	}
 
-	if e.IsModify() {
-		events += "|" + "MODIFY"
+	if e.Op&Write == Write {
+		events += "|" + "WRITE"
 	}
 
-	if e.IsRename() {
+	if e.Op&Rename == Rename {
 		events += "|" + "RENAME"
 	}
 
-	if e.IsAttrib() {
-		events += "|" + "ATTRIB"
+	if e.Op&Chmod == Chmod {
+		events += "|" + "CHMOD"
 	}
 
 	if len(events) > 0 {

@@ -49,13 +49,30 @@ const (
 // Event is the type of the notification messages
 // received on the watcher's Events channel.
 type Event struct {
-	Name   string // File name (optional)
+	Name   string // Relative path to the file/directory.
+	Op     Op     // Platform-independent bitmask.
 	mask   uint32 // Mask of events
 	cookie uint32 // Unique cookie associating related events (for rename)
 }
 
 func newEvent(name string, mask uint32) *Event {
-	return &Event{mask: mask, Name: name}
+	e := &Event{mask: mask, Name: name}
+	if e.IsCreate() {
+		e.Op |= Create
+	}
+	if e.IsDelete() {
+		e.Op |= Remove
+	}
+	if e.IsModify() {
+		e.Op |= Write
+	}
+	if e.IsRename() {
+		e.Op |= Rename
+	}
+	if e.IsAttrib() {
+		e.Op |= Chmod
+	}
+	return e
 }
 
 // IsCreate reports whether the Event was triggered by a creation

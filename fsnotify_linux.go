@@ -57,7 +57,8 @@ const (
 )
 
 type Event struct {
-	Name   string // File name (optional)
+	Name   string // Relative path to the file/directory.
+	Op     Op     // Platform-independent bitmask.
 	mask   uint32 // Mask of events
 	cookie uint32 // Unique cookie associating related events (for rename(2))
 }
@@ -67,6 +68,21 @@ func newEvent(name string, mask uint32, cookie uint32) *Event {
 	e.Name = name
 	e.mask = mask
 	e.cookie = cookie
+	if e.IsCreate() {
+		e.Op |= Create
+	}
+	if e.IsDelete() {
+		e.Op |= Remove
+	}
+	if e.IsModify() {
+		e.Op |= Write
+	}
+	if e.IsRename() {
+		e.Op |= Rename
+	}
+	if e.IsAttrib() {
+		e.Op |= Chmod
+	}
 	return e
 }
 
