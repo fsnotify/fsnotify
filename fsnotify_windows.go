@@ -49,9 +49,13 @@ const (
 // Event is the type of the notification messages
 // received on the watcher's Events channel.
 type Event struct {
+	Name   string // File name (optional)
 	mask   uint32 // Mask of events
 	cookie uint32 // Unique cookie associating related events (for rename)
-	Name   string // File name (optional)
+}
+
+func newEvent(name string, mask uint32) *Event {
+	return &Event{mask: mask, Name: name}
 }
 
 // IsCreate reports whether the Event was triggered by a creation
@@ -469,7 +473,7 @@ func (w *Watcher) readEvents() {
 		var offset uint32
 		for {
 			if n == 0 {
-				w.Events <- &Event{mask: sys_FS_Q_OVERFLOW}
+				w.Events <- newEvent("", sys_FS_Q_OVERFLOW)
 				w.Errors <- errors.New("short read in readEvents()")
 				break
 			}
@@ -543,7 +547,7 @@ func (w *Watcher) sendEvent(name string, mask uint64) bool {
 	if mask == 0 {
 		return false
 	}
-	event := &Event{mask: uint32(mask), Name: name}
+	event := newEvent(name, uint32(mask))
 	if mask&sys_FS_MOVE != 0 {
 		if mask&sys_FS_MOVED_FROM != 0 {
 			w.cookie++

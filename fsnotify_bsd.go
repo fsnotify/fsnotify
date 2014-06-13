@@ -34,9 +34,17 @@ const (
 )
 
 type Event struct {
-	mask   uint32 // Mask of events
 	Name   string // File name (optional)
+	mask   uint32 // Mask of events
 	create bool   // set by fsnotify package if found new file
+}
+
+func newEvent(name string, mask uint32, create bool) *Event {
+	e := new(Event)
+	e.Name = name
+	e.mask = mask
+	e.create = create
+	return e
 }
 
 // IsCreate reports whether the Event was triggered by a creation
@@ -337,13 +345,15 @@ func (w *Watcher) readEvents() {
 
 		// Flush the events we received to the events channel
 		for len(events) > 0 {
-			fileEvent := new(Event)
 			watchEvent := &events[0]
-			fileEvent.mask = uint32(watchEvent.Fflags)
+			mask := uint32(watchEvent.Fflags)
 			w.pmut.Lock()
-			fileEvent.Name = w.paths[int(watchEvent.Ident)]
+			name := w.paths[int(watchEvent.Ident)]
 			fileInfo := w.finfo[int(watchEvent.Ident)]
 			w.pmut.Unlock()
+
+			fileEvent := newEvent(name, mask, false)
+
 			if fileInfo != nil && fileInfo.IsDir() && !fileEvent.IsDelete() {
 				// Double check to make sure the directory exist. This can happen when
 				// we do a rm -fr on a recursively watched folders and we receive a
@@ -458,10 +468,8 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 		_, doesExist := w.fileExists[filePath]
 		w.femut.Unlock()
 		if !doesExist {
-			// Send create event
-			fileEvent := new(Event)
-			fileEvent.Name = filePath
-			fileEvent.create = true
+			// Send create event (mask=0)
+			fileEvent := newEvent(filePath, 0, true)
 			w.Events <- fileEvent
 		}
 		w.femut.Lock()

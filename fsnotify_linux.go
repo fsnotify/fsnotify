@@ -57,9 +57,17 @@ const (
 )
 
 type Event struct {
+	Name   string // File name (optional)
 	mask   uint32 // Mask of events
 	cookie uint32 // Unique cookie associating related events (for rename(2))
-	Name   string // File name (optional)
+}
+
+func newEvent(name string, mask uint32, cookie uint32) *Event {
+	e := new(Event)
+	e.Name = name
+	e.mask = mask
+	e.cookie = cookie
+	return e
 }
 
 // IsCreate reports whether the Event was triggered by a creation
@@ -235,23 +243,25 @@ func (w *Watcher) readEvents() {
 		for offset <= uint32(n-syscall.SizeofInotifyEvent) {
 			// Point "raw" to the event in the buffer
 			raw := (*syscall.InotifyEvent)(unsafe.Pointer(&buf[offset]))
-			event := new(Event)
-			event.mask = uint32(raw.Mask)
-			event.cookie = uint32(raw.Cookie)
+
+			mask := uint32(raw.Mask)
+			cookie := uint32(raw.Cookie)
 			nameLen := uint32(raw.Len)
 			// If the event happened to the watched directory or the watched file, the kernel
 			// doesn't append the filename to the event, but we would like to always fill the
 			// the "Name" field with a valid filename. We retrieve the path of the watch from
 			// the "paths" map.
 			w.mu.Lock()
-			event.Name = w.paths[int(raw.Wd)]
+			name := w.paths[int(raw.Wd)]
 			w.mu.Unlock()
 			if nameLen > 0 {
 				// Point "bytes" at the first byte of the filename
 				bytes := (*[syscall.PathMax]byte)(unsafe.Pointer(&buf[offset+syscall.SizeofInotifyEvent]))
-				// The filename is padded with NUL bytes. TrimRight() gets rid of those.
-				event.Name += "/" + strings.TrimRight(string(bytes[0:nameLen]), "\000")
+				// The filename is padded with NULL bytes. TrimRight() gets rid of those.
+				name += "/" + strings.TrimRight(string(bytes[0:nameLen]), "\000")
 			}
+
+			event := newEvent(name, mask, cookie)
 
 			// Send the events that are not ignored on the events channel
 			if !event.ignoreLinux() {
