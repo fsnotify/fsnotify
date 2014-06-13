@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.11.0 / 2014-06-12
+
+* [API] Renamed Watch() to Add() and RemoveWatch() to Remove().
+* [API] Pluralized channel names: Events and Errors.
+* [API] Renamed FileEvent struct to Event.
+* [API] Op constants replace methods like IsCreate().
+
 ## v0.10.1 / 2014-06-12
 
 * Fix data race on kevent buffer (thanks @tilaks) [#98](https://github.com/howeyc/fsnotify/pull/98)
