@@ -14,7 +14,7 @@ We plan to include os/fsnotify in the Go standard library with a new [API](http:
 
 To hack on fsnotify:
 
-1. Install as usual (`go get -u github.com/howeyc/fsnotify`)
+1. Install as usual (`go get -u github.com/nathany/fsnotify`)
 2. Create your feature branch (`git checkout -b my-new-feature`)
 3. Ensure everything works and the tests pass (see below)
 4. Commit your changes (`git commit -am 'Add some feature'`)
@@ -28,7 +28,7 @@ Contribute upstream:
 
 For other team members:
 
-1. Install as usual (`go get -u github.com/howeyc/fsnotify`)
+1. Install as usual (`go get -u github.com/nathany/fsnotify`)
 2. Add your remote (`git remote add fork git@github.com:mycompany/repo.git`)
 3. Pull your revisions (`git fetch fork; git checkout -b my-new-feature fork/my-new-feature`)
 
@@ -43,9 +43,9 @@ Before doing a pull request, please do your best to test your changes on multipl
 To make cross-platform testing easier, we've created a Vagrantfile for Linux and BSD.
 
 * Install [Vagrant](http://www.vagrantup.com/) and [VirtualBox](https://www.virtualbox.org/)
-* Setup [Vagrant Gopher](https://github.com/gophertown/vagrant-gopher) in your `src` folder.
+* Setup [Vagrant Gopher](https://github.com/nathany/vagrant-gopher) in your `src` folder.
 * Run `vagrant up` from the project folder. You can also setup just one box with `vagrant up linux` or `vagrant up bsd` (note: the BSD box doesn't support Windows hosts at this time, and NFS may prompt for your host OS password)
-* Once setup, you can run the test suite on a given OS with a single command `vagrant ssh linux -c 'cd howeyc/fsnotify; go test ./...'`.
+* Once setup, you can run the test suite on a given OS with a single command `vagrant ssh linux -c 'cd nathany/fsnotify; go test ./...'`.
 * When you're done, you will want to halt or destroy the vagrant boxes.
 
 Notice: fsnotify file system events won't work on shared folders. The tests get around this limitation by using a tmp directory, but it is something to be aware of when logging in with `vagrant ssh linux` to do some manual testing.

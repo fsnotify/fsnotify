@@ -20,7 +20,7 @@
 
 ## v0.10.0 / 2014-05-23
 
-* [API] Remove current implementation of WatchFlags [#1](https://github.com/gophertown/fsnotify/pull/1)
+* [API] Remove current implementation of WatchFlags [#1](https://github.com/nathany/fsnotify/pull/1)
 
 ## v0.9.0 / 2014-01-17
 

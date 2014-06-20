@@ -1,6 +1,6 @@
 # File system notifications for Go
 
-[![Build Status](https://drone.io/github.com/gophertown/fsnotify/status.png)](https://drone.io/github.com/gophertown/fsnotify/latest) [![Coverage](http://gocover.io/_badge/github.com/gophertown/fsnotify)](http://gocover.io/github.com/gophertown/fsnotify) [![GoDoc](https://godoc.org/github.com/gophertown/fsnotify?status.png)](http://godoc.org/github.com/gophertown/fsnotify)
+[![Coverage](http://gocover.io/_badge/github.com/nathany/fsnotify)](http://gocover.io/github.com/nathany/fsnotify) [![GoDoc](https://godoc.org/github.com/nathany/fsnotify?status.png)](http://godoc.org/github.com/nathany/fsnotify)
 
 Cross platform, works on:
 * Windows
