@@ -41,11 +41,6 @@ const (
 	sys_FS_Q_OVERFLOW = 0x4000
 )
 
-const (
-	// TODO(nj): Use syscall.ERROR_MORE_DATA from ztypes_windows in Go 1.3+
-	sys_ERROR_MORE_DATA syscall.Errno = 234
-)
-
 // Event is the type of the notification messages
 // received on the watcher's Events channel.
 type Event struct {
@@ -439,7 +434,7 @@ func (w *Watcher) readEvents() {
 		}
 
 		switch e {
-		case sys_ERROR_MORE_DATA:
+		case syscall.ERROR_MORE_DATA:
 			if watch == nil {
 				w.Errors <- errors.New("ERROR_MORE_DATA has unexpectedly null lpOverlapped buffer")
 			} else {

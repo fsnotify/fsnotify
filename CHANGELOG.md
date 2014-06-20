@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.12.0 / 2014-06-19
+
+* use syscall.ERROR_MORE_DATA from ztypes_windows (Go 1.3+)
+
 ## v0.11.0 / 2014-06-12
 
 * [API] Renamed Watch() to Add() and RemoveWatch() to Remove().
