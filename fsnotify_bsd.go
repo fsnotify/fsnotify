@@ -33,11 +33,6 @@ const (
 	keventWaitTime = 100e6
 )
 
-type Event struct {
-	Name string // Relative path to the file/directory.
-	Op   Op     // Platform-independent mask.
-}
-
 func newEvent(name string, mask uint32, create bool) *Event {
 	e := new(Event)
 	e.Name = name

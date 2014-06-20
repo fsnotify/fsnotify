@@ -2,8 +2,9 @@
 
 ## v0.12.0 / 2014-06-19
 
-* use syscall.ERROR_MORE_DATA from ztypes_windows (Go 1.3+)
-* [internal] remove cookie from Event struct (unused)
+* Go 1.3+ required on Windows (uses syscall.ERROR_MORE_DATA internally).
+* [internal] remove cookie from Event struct (unused).
+* [internal] Event struct has the same definition across every OS.
 
 ## v0.11.0 / 2014-06-12
 

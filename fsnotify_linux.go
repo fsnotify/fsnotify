@@ -56,11 +56,6 @@ const (
 	sys_IN_UNMOUNT    uint32 = syscall.IN_UNMOUNT
 )
 
-type Event struct {
-	Name string // Relative path to the file/directory.
-	Op   Op     // Platform-independent mask.
-}
-
 func newEvent(name string, mask uint32) *Event {
 	e := &Event{Name: name}
 	if mask&sys_IN_CREATE == sys_IN_CREATE || mask&sys_IN_MOVED_TO == sys_IN_MOVED_TO {

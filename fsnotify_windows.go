@@ -41,13 +41,6 @@ const (
 	sys_FS_Q_OVERFLOW = 0x4000
 )
 
-// Event is the type of the notification messages
-// received on the watcher's Events channel.
-type Event struct {
-	Name string // Relative path to the file/directory.
-	Op   Op     // Platform-independent bitmask.
-}
-
 func newEvent(name string, mask uint32) *Event {
 	e := &Event{Name: name}
 	if mask&sys_FS_CREATE == sys_FS_CREATE {

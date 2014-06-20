@@ -7,6 +7,12 @@ package fsnotify
 
 import "fmt"
 
+// Event represents a single file system event.
+type Event struct {
+	Name string // Relative path to the file/directory.
+	Op   Op     // Platform-independent bitmask.
+}
+
 // Op describes a set of file operations.
 type Op uint32
 
