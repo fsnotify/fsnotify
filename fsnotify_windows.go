@@ -41,19 +41,6 @@ const (
 	sys_FS_Q_OVERFLOW = 0x4000
 )
 
-const (
-	// TODO(nj): Use syscall.ERROR_MORE_DATA from ztypes_windows in Go 1.3+
-	sys_ERROR_MORE_DATA syscall.Errno = 234
-)
-
-// Event is the type of the notification messages
-// received on the watcher's Events channel.
-type Event struct {
-	Name   string // Relative path to the file/directory.
-	Op     Op     // Platform-independent bitmask.
-	cookie uint32 // Unique cookie associating related events (for rename)
-}
-
 func newEvent(name string, mask uint32) *Event {
 	e := &Event{Name: name}
 	if mask&sys_FS_CREATE == sys_FS_CREATE {
@@ -120,7 +107,6 @@ type Watcher struct {
 	Errors   chan error     // Errors are sent on this channel
 	isClosed bool           // Set to true when Close() is first called
 	quit     chan chan<- error
-	cookie   uint32
 }
 
 // NewWatcher creates and returns a Watcher.
@@ -177,13 +163,13 @@ func (w *Watcher) AddWatch(path string, flags uint32) error {
 	return <-in.reply
 }
 
-// Watch adds path to the watched file set, watching all events.
-func (w *Watcher) watch(path string) error {
+// Add starts watching on the named file.
+func (w *Watcher) Add(path string) error {
 	return w.AddWatch(path, sys_FS_ALL_EVENTS)
 }
 
-// RemoveWatch removes path from the watched file set.
-func (w *Watcher) removeWatch(path string) error {
+// Remove stops watching on the named file.
+func (w *Watcher) Remove(path string) error {
 	in := &input{
 		op:    opRemoveWatch,
 		path:  filepath.Clean(path),
@@ -439,7 +425,7 @@ func (w *Watcher) readEvents() {
 		}
 
 		switch e {
-		case sys_ERROR_MORE_DATA:
+		case syscall.ERROR_MORE_DATA:
 			if watch == nil {
 				w.Errors <- errors.New("ERROR_MORE_DATA has unexpectedly null lpOverlapped buffer")
 			} else {
@@ -541,12 +527,6 @@ func (w *Watcher) sendEvent(name string, mask uint64) bool {
 		return false
 	}
 	event := newEvent(name, uint32(mask))
-	if mask&sys_FS_MOVE != 0 {
-		if mask&sys_FS_MOVED_FROM != 0 {
-			w.cookie++
-		}
-		event.cookie = w.cookie
-	}
 	select {
 	case ch := <-w.quit:
 		w.quit <- ch

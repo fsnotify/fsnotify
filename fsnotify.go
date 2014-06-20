@@ -7,6 +7,12 @@ package fsnotify
 
 import "fmt"
 
+// Event represents a single file system event.
+type Event struct {
+	Name string // Relative path to the file/directory.
+	Op   Op     // Platform-independent bitmask.
+}
+
 // Op describes a set of file operations.
 type Op uint32
 
@@ -18,16 +24,6 @@ const (
 	Rename
 	Chmod
 )
-
-// Add starts watching for operations on the named file.
-func (w *Watcher) Add(path string) error {
-	return w.watch(path)
-}
-
-// Remove stops watching for operations on the named file.
-func (w *Watcher) Remove(path string) error {
-	return w.removeWatch(path)
-}
 
 // String formats the event e in the form
 // "filename: REMOVE|WRITE|..."

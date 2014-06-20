@@ -56,14 +56,8 @@ const (
 	sys_IN_UNMOUNT    uint32 = syscall.IN_UNMOUNT
 )
 
-type Event struct {
-	Name   string // Relative path to the file/directory.
-	Op     Op     // Platform-independent mask.
-	cookie uint32 // Unique cookie associating related events (for rename(2))
-}
-
-func newEvent(name string, mask uint32, cookie uint32) *Event {
-	e := &Event{Name: name, cookie: cookie}
+func newEvent(name string, mask uint32) *Event {
+	e := &Event{Name: name}
 	if mask&sys_IN_CREATE == sys_IN_CREATE || mask&sys_IN_MOVED_TO == sys_IN_MOVED_TO {
 		e.Op |= Create
 	}
@@ -164,13 +158,13 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 	return nil
 }
 
-// Watch adds path to the watched file set, watching all events.
-func (w *Watcher) watch(path string) error {
+// Add starts watching on the named file.
+func (w *Watcher) Add(path string) error {
 	return w.addWatch(path, sys_AGNOSTIC_EVENTS)
 }
 
-// RemoveWatch removes path from the watched file set.
-func (w *Watcher) removeWatch(path string) error {
+// Remove stops watching on the named file.
+func (w *Watcher) Remove(path string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	watch, ok := w.watches[path]
@@ -232,7 +226,6 @@ func (w *Watcher) readEvents() {
 			raw := (*syscall.InotifyEvent)(unsafe.Pointer(&buf[offset]))
 
 			mask := uint32(raw.Mask)
-			cookie := uint32(raw.Cookie)
 			nameLen := uint32(raw.Len)
 			// If the event happened to the watched directory or the watched file, the kernel
 			// doesn't append the filename to the event, but we would like to always fill the
@@ -248,7 +241,7 @@ func (w *Watcher) readEvents() {
 				name += "/" + strings.TrimRight(string(bytes[0:nameLen]), "\000")
 			}
 
-			event := newEvent(name, mask, cookie)
+			event := newEvent(name, mask)
 
 			// Send the events that are not ignored on the events channel
 			if !event.ignoreLinux(mask) {

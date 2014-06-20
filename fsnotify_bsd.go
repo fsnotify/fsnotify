@@ -33,11 +33,6 @@ const (
 	keventWaitTime = 100e6
 )
 
-type Event struct {
-	Name string // Relative path to the file/directory.
-	Op   Op     // Platform-independent mask.
-}
-
 func newEvent(name string, mask uint32, create bool) *Event {
 	e := new(Event)
 	e.Name = name
@@ -120,7 +115,7 @@ func (w *Watcher) Close() error {
 	ws := w.watches
 	w.pmut.Unlock()
 	for path := range ws {
-		w.removeWatch(path)
+		w.Remove(path)
 	}
 
 	return nil
@@ -221,16 +216,16 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 	return nil
 }
 
-// Watch adds path to the watched file set, watching all events.
-func (w *Watcher) watch(path string) error {
+// Add starts watching on the named file.
+func (w *Watcher) Add(path string) error {
 	w.ewmut.Lock()
 	w.externalWatches[path] = true
 	w.ewmut.Unlock()
 	return w.addWatch(path, sys_NOTE_ALLEVENTS)
 }
 
-// RemoveWatch removes path from the watched file set.
-func (w *Watcher) removeWatch(path string) error {
+// Remove stops watching on the named file.
+func (w *Watcher) Remove(path string) error {
 	w.wmut.Lock()
 	watchfd, ok := w.watches[path]
 	w.wmut.Unlock()
@@ -279,7 +274,7 @@ func (w *Watcher) removeWatch(path string) error {
 			// Since these are internal, not much sense in propagating error
 			// to the user, as that will just confuse them with an error about
 			// a path they did not explicitly watch themselves.
-			w.removeWatch(p)
+			w.Remove(p)
 		}
 	}
 
@@ -369,13 +364,13 @@ func (w *Watcher) readEvents() {
 			events = events[1:]
 
 			if fileEvent.Op&Rename == Rename {
-				w.removeWatch(fileEvent.Name)
+				w.Remove(fileEvent.Name)
 				w.femut.Lock()
 				delete(w.fileExists, fileEvent.Name)
 				w.femut.Unlock()
 			}
 			if fileEvent.Op&Remove == Remove {
-				w.removeWatch(fileEvent.Name)
+				w.Remove(fileEvent.Name)
 				w.femut.Lock()
 				delete(w.fileExists, fileEvent.Name)
 				w.femut.Unlock()
