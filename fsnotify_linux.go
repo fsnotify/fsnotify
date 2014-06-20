@@ -57,13 +57,12 @@ const (
 )
 
 type Event struct {
-	Name   string // Relative path to the file/directory.
-	Op     Op     // Platform-independent mask.
-	cookie uint32 // Unique cookie associating related events (for rename(2))
+	Name string // Relative path to the file/directory.
+	Op   Op     // Platform-independent mask.
 }
 
-func newEvent(name string, mask uint32, cookie uint32) *Event {
-	e := &Event{Name: name, cookie: cookie}
+func newEvent(name string, mask uint32) *Event {
+	e := &Event{Name: name}
 	if mask&sys_IN_CREATE == sys_IN_CREATE || mask&sys_IN_MOVED_TO == sys_IN_MOVED_TO {
 		e.Op |= Create
 	}
@@ -232,7 +231,6 @@ func (w *Watcher) readEvents() {
 			raw := (*syscall.InotifyEvent)(unsafe.Pointer(&buf[offset]))
 
 			mask := uint32(raw.Mask)
-			cookie := uint32(raw.Cookie)
 			nameLen := uint32(raw.Len)
 			// If the event happened to the watched directory or the watched file, the kernel
 			// doesn't append the filename to the event, but we would like to always fill the
@@ -248,7 +246,7 @@ func (w *Watcher) readEvents() {
 				name += "/" + strings.TrimRight(string(bytes[0:nameLen]), "\000")
 			}
 
-			event := newEvent(name, mask, cookie)
+			event := newEvent(name, mask)
 
 			// Send the events that are not ignored on the events channel
 			if !event.ignoreLinux(mask) {

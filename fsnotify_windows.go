@@ -44,9 +44,8 @@ const (
 // Event is the type of the notification messages
 // received on the watcher's Events channel.
 type Event struct {
-	Name   string // Relative path to the file/directory.
-	Op     Op     // Platform-independent bitmask.
-	cookie uint32 // Unique cookie associating related events (for rename)
+	Name string // Relative path to the file/directory.
+	Op   Op     // Platform-independent bitmask.
 }
 
 func newEvent(name string, mask uint32) *Event {
@@ -115,7 +114,6 @@ type Watcher struct {
 	Errors   chan error     // Errors are sent on this channel
 	isClosed bool           // Set to true when Close() is first called
 	quit     chan chan<- error
-	cookie   uint32
 }
 
 // NewWatcher creates and returns a Watcher.
@@ -536,12 +534,6 @@ func (w *Watcher) sendEvent(name string, mask uint64) bool {
 		return false
 	}
 	event := newEvent(name, uint32(mask))
-	if mask&sys_FS_MOVE != 0 {
-		if mask&sys_FS_MOVED_FROM != 0 {
-			w.cookie++
-		}
-		event.cookie = w.cookie
-	}
 	select {
 	case ch := <-w.quit:
 		w.quit <- ch
