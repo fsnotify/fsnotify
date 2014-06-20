@@ -25,16 +25,6 @@ const (
 	Chmod
 )
 
-// Add starts watching for operations on the named file.
-func (w *Watcher) Add(path string) error {
-	return w.watch(path)
-}
-
-// Remove stops watching for operations on the named file.
-func (w *Watcher) Remove(path string) error {
-	return w.removeWatch(path)
-}
-
 // String formats the event e in the form
 // "filename: REMOVE|WRITE|..."
 func (e *Event) String() string {

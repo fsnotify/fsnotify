@@ -158,13 +158,13 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 	return nil
 }
 
-// Watch adds path to the watched file set, watching all events.
-func (w *Watcher) watch(path string) error {
+// Add starts watching on the named file.
+func (w *Watcher) Add(path string) error {
 	return w.addWatch(path, sys_AGNOSTIC_EVENTS)
 }
 
-// RemoveWatch removes path from the watched file set.
-func (w *Watcher) removeWatch(path string) error {
+// Remove stops watching on the named file.
+func (w *Watcher) Remove(path string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	watch, ok := w.watches[path]

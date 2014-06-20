@@ -163,13 +163,13 @@ func (w *Watcher) AddWatch(path string, flags uint32) error {
 	return <-in.reply
 }
 
-// Watch adds path to the watched file set, watching all events.
-func (w *Watcher) watch(path string) error {
+// Add starts watching on the named file.
+func (w *Watcher) Add(path string) error {
 	return w.AddWatch(path, sys_FS_ALL_EVENTS)
 }
 
-// RemoveWatch removes path from the watched file set.
-func (w *Watcher) removeWatch(path string) error {
+// Remove stops watching on the named file.
+func (w *Watcher) Remove(path string) error {
 	in := &input{
 		op:    opRemoveWatch,
 		path:  filepath.Clean(path),
