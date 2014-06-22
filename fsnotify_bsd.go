@@ -17,17 +17,8 @@ import (
 )
 
 const (
-	// Flags (from <sys/event.h>)
-	sys_NOTE_DELETE = 0x0001 /* vnode was removed */
-	sys_NOTE_WRITE  = 0x0002 /* data contents changed */
-	sys_NOTE_EXTEND = 0x0004 /* size increased */
-	sys_NOTE_ATTRIB = 0x0008 /* attributes changed */
-	sys_NOTE_LINK   = 0x0010 /* link count changed */
-	sys_NOTE_RENAME = 0x0020 /* vnode was renamed */
-	sys_NOTE_REVOKE = 0x0040 /* vnode access was revoked */
-
 	// Watch all events
-	sys_NOTE_ALLEVENTS = sys_NOTE_DELETE | sys_NOTE_WRITE | sys_NOTE_ATTRIB | sys_NOTE_RENAME
+	sys_NOTE_ALLEVENTS = syscall.NOTE_DELETE | syscall.NOTE_WRITE | syscall.NOTE_ATTRIB | syscall.NOTE_RENAME
 
 	// Block for 100 ms on each call to kevent
 	keventWaitTime = 100e6
@@ -38,16 +29,16 @@ func newEvent(name string, mask uint32, create bool) Event {
 	if create {
 		e.Op |= Create
 	}
-	if mask&sys_NOTE_DELETE == sys_NOTE_DELETE {
+	if mask&syscall.NOTE_DELETE == syscall.NOTE_DELETE {
 		e.Op |= Remove
 	}
-	if mask&sys_NOTE_WRITE == sys_NOTE_WRITE || mask&sys_NOTE_ATTRIB == sys_NOTE_ATTRIB {
+	if mask&syscall.NOTE_WRITE == syscall.NOTE_WRITE || mask&syscall.NOTE_ATTRIB == syscall.NOTE_ATTRIB {
 		e.Op |= Write
 	}
-	if mask&sys_NOTE_RENAME == sys_NOTE_RENAME {
+	if mask&syscall.NOTE_RENAME == syscall.NOTE_RENAME {
 		e.Op |= Rename
 	}
-	if mask&sys_NOTE_ATTRIB == sys_NOTE_ATTRIB {
+	if mask&syscall.NOTE_ATTRIB == syscall.NOTE_ATTRIB {
 		e.Op |= Chmod
 	}
 	return e
@@ -183,8 +174,8 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 	w.pmut.Lock()
 	w.enmut.Lock()
 	if w.finfo[watchfd].IsDir() &&
-		(flags&sys_NOTE_WRITE) == sys_NOTE_WRITE &&
-		(!found || (w.enFlags[path]&sys_NOTE_WRITE) != sys_NOTE_WRITE) {
+		(flags&syscall.NOTE_WRITE) == syscall.NOTE_WRITE &&
+		(!found || (w.enFlags[path]&syscall.NOTE_WRITE) != syscall.NOTE_WRITE) {
 		watchDir = true
 	}
 	w.enmut.Unlock()
@@ -418,7 +409,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 			w.enmut.Lock()
 			currFlags, found := w.enFlags[filePath]
 			w.enmut.Unlock()
-			var newFlags uint32 = sys_NOTE_DELETE
+			var newFlags uint32 = syscall.NOTE_DELETE
 			if found {
 				newFlags |= currFlags
 			}
