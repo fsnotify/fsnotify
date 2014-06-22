@@ -275,13 +275,13 @@ func (w *Watcher) Remove(path string) error {
 // received events into Event objects and sends them via the Events channel
 func (w *Watcher) readEvents() {
 	var (
-		eventbuf [10]syscall.Kevent_t // Event buffer
-		events   []syscall.Kevent_t   // Received events
-		twait    *syscall.Timespec    // Time to block waiting for events
-		n        int                  // Number of events returned from kevent
-		errno    error                // Syscall errno
+		keventbuf [10]syscall.Kevent_t // Event buffer
+		kevents   []syscall.Kevent_t   // Received events
+		twait     *syscall.Timespec    // Time to block waiting for events
+		n         int                  // Number of events returned from kevent
+		errno     error                // Syscall errno
 	)
-	events = eventbuf[0:0]
+	kevents = keventbuf[0:0]
 	twait = new(syscall.Timespec)
 	*twait = syscall.NsecToTimespec(keventWaitTime)
 
@@ -305,8 +305,8 @@ func (w *Watcher) readEvents() {
 		}
 
 		// Get new events
-		if len(events) == 0 {
-			n, errno = syscall.Kevent(w.kq, nil, eventbuf[:], twait)
+		if len(kevents) == 0 {
+			n, errno = syscall.Kevent(w.kq, nil, keventbuf[:], twait)
 
 			// EINTR is okay, basically the syscall was interrupted before
 			// timeout expired.
@@ -317,57 +317,57 @@ func (w *Watcher) readEvents() {
 
 			// Received some events
 			if n > 0 {
-				events = eventbuf[0:n]
+				kevents = keventbuf[0:n]
 			}
 		}
 
-		// Flush the events we received to the events channel
-		for len(events) > 0 {
-			watchEvent := &events[0]
+		// Flush the events we received to the Events channel
+		for len(kevents) > 0 {
+			watchEvent := &kevents[0]
 			mask := uint32(watchEvent.Fflags)
 			w.pmut.Lock()
 			name := w.paths[int(watchEvent.Ident)]
 			fileInfo := w.finfo[int(watchEvent.Ident)]
 			w.pmut.Unlock()
 
-			fileEvent := newEvent(name, mask, false)
+			event := newEvent(name, mask, false)
 
-			if fileInfo != nil && fileInfo.IsDir() && !(fileEvent.Op&Remove == Remove) {
+			if fileInfo != nil && fileInfo.IsDir() && !(event.Op&Remove == Remove) {
 				// Double check to make sure the directory exist. This can happen when
 				// we do a rm -fr on a recursively watched folders and we receive a
 				// modification event first but the folder has been deleted and later
 				// receive the delete event
-				if _, err := os.Lstat(fileEvent.Name); os.IsNotExist(err) {
+				if _, err := os.Lstat(event.Name); os.IsNotExist(err) {
 					// mark is as delete event
-					fileEvent.Op |= Remove
+					event.Op |= Remove
 				}
 			}
 
-			if fileInfo != nil && fileInfo.IsDir() && fileEvent.Op&Write == Write && !(fileEvent.Op&Remove == Remove) {
-				w.sendDirectoryChangeEvents(fileEvent.Name)
+			if fileInfo != nil && fileInfo.IsDir() && event.Op&Write == Write && !(event.Op&Remove == Remove) {
+				w.sendDirectoryChangeEvents(event.Name)
 			} else {
-				// Send the event on the events channel
-				w.Events <- fileEvent
+				// Send the event on the Events channel
+				w.Events <- event
 			}
 
 			// Move to next event
-			events = events[1:]
+			kevents = kevents[1:]
 
-			if fileEvent.Op&Rename == Rename {
-				w.Remove(fileEvent.Name)
+			if event.Op&Rename == Rename {
+				w.Remove(event.Name)
 				w.femut.Lock()
-				delete(w.fileExists, fileEvent.Name)
+				delete(w.fileExists, event.Name)
 				w.femut.Unlock()
 			}
-			if fileEvent.Op&Remove == Remove {
-				w.Remove(fileEvent.Name)
+			if event.Op&Remove == Remove {
+				w.Remove(event.Name)
 				w.femut.Lock()
-				delete(w.fileExists, fileEvent.Name)
+				delete(w.fileExists, event.Name)
 				w.femut.Unlock()
 
 				// Look for a file that may have overwritten this
 				// (ie mv f1 f2 will delete f2 then create f2)
-				fileDir, _ := filepath.Split(fileEvent.Name)
+				fileDir, _ := filepath.Split(event.Name)
 				fileDir = filepath.Clean(fileDir)
 				w.wmut.Lock()
 				_, found := w.watches[fileDir]
@@ -447,8 +447,8 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 		w.femut.Unlock()
 		if !doesExist {
 			// Send create event (mask=0)
-			fileEvent := newEvent(filePath, 0, true)
-			w.Events <- fileEvent
+			event := newEvent(filePath, 0, true)
+			w.Events <- event
 		}
 		w.femut.Lock()
 		w.fileExists[filePath] = true
