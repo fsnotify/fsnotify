@@ -15,60 +15,26 @@ import (
 )
 
 const (
-	// Options for inotify_init() are not exported
-	// sys_IN_CLOEXEC    uint32 = syscall.IN_CLOEXEC
-	// sys_IN_NONBLOCK   uint32 = syscall.IN_NONBLOCK
-
-	// Options for AddWatch
-	sys_IN_DONT_FOLLOW uint32 = syscall.IN_DONT_FOLLOW
-	sys_IN_ONESHOT     uint32 = syscall.IN_ONESHOT
-	sys_IN_ONLYDIR     uint32 = syscall.IN_ONLYDIR
-
-	// The "sys_IN_MASK_ADD" option is not exported, as AddWatch
-	// adds it automatically, if there is already a watch for the given path
-	// sys_IN_MASK_ADD      uint32 = syscall.IN_MASK_ADD
-
-	// Events
-	sys_IN_ACCESS        uint32 = syscall.IN_ACCESS
-	sys_IN_ALL_EVENTS    uint32 = syscall.IN_ALL_EVENTS
-	sys_IN_ATTRIB        uint32 = syscall.IN_ATTRIB
-	sys_IN_CLOSE         uint32 = syscall.IN_CLOSE
-	sys_IN_CLOSE_NOWRITE uint32 = syscall.IN_CLOSE_NOWRITE
-	sys_IN_CLOSE_WRITE   uint32 = syscall.IN_CLOSE_WRITE
-	sys_IN_CREATE        uint32 = syscall.IN_CREATE
-	sys_IN_DELETE        uint32 = syscall.IN_DELETE
-	sys_IN_DELETE_SELF   uint32 = syscall.IN_DELETE_SELF
-	sys_IN_MODIFY        uint32 = syscall.IN_MODIFY
-	sys_IN_MOVE          uint32 = syscall.IN_MOVE
-	sys_IN_MOVED_FROM    uint32 = syscall.IN_MOVED_FROM
-	sys_IN_MOVED_TO      uint32 = syscall.IN_MOVED_TO
-	sys_IN_MOVE_SELF     uint32 = syscall.IN_MOVE_SELF
-	sys_IN_OPEN          uint32 = syscall.IN_OPEN
-
-	sys_AGNOSTIC_EVENTS = sys_IN_MOVED_TO | sys_IN_MOVED_FROM | sys_IN_CREATE | sys_IN_ATTRIB | sys_IN_MODIFY | sys_IN_MOVE_SELF | sys_IN_DELETE | sys_IN_DELETE_SELF
-
-	// Special events
-	sys_IN_ISDIR      uint32 = syscall.IN_ISDIR
-	sys_IN_IGNORED    uint32 = syscall.IN_IGNORED
-	sys_IN_Q_OVERFLOW uint32 = syscall.IN_Q_OVERFLOW
-	sys_IN_UNMOUNT    uint32 = syscall.IN_UNMOUNT
+	sys_AGNOSTIC_EVENTS = syscall.IN_MOVED_TO | syscall.IN_MOVED_FROM |
+		syscall.IN_CREATE | syscall.IN_ATTRIB | syscall.IN_MODIFY |
+		syscall.IN_MOVE_SELF | syscall.IN_DELETE | syscall.IN_DELETE_SELF
 )
 
-func newEvent(name string, mask uint32) *Event {
-	e := &Event{Name: name}
-	if mask&sys_IN_CREATE == sys_IN_CREATE || mask&sys_IN_MOVED_TO == sys_IN_MOVED_TO {
+func newEvent(name string, mask uint32) Event {
+	e := Event{Name: name}
+	if mask&syscall.IN_CREATE == syscall.IN_CREATE || mask&syscall.IN_MOVED_TO == syscall.IN_MOVED_TO {
 		e.Op |= Create
 	}
-	if mask&sys_IN_DELETE_SELF == sys_IN_DELETE_SELF || mask&sys_IN_DELETE == sys_IN_DELETE {
+	if mask&syscall.IN_DELETE_SELF == syscall.IN_DELETE_SELF || mask&syscall.IN_DELETE == syscall.IN_DELETE {
 		e.Op |= Remove
 	}
-	if mask&sys_IN_MODIFY == sys_IN_MODIFY || mask&sys_IN_ATTRIB == sys_IN_ATTRIB {
+	if mask&syscall.IN_MODIFY == syscall.IN_MODIFY || mask&syscall.IN_ATTRIB == syscall.IN_ATTRIB {
 		e.Op |= Write
 	}
-	if mask&sys_IN_MOVE_SELF == sys_IN_MOVE_SELF || mask&sys_IN_MOVED_FROM == sys_IN_MOVED_FROM {
+	if mask&syscall.IN_MOVE_SELF == syscall.IN_MOVE_SELF || mask&syscall.IN_MOVED_FROM == syscall.IN_MOVED_FROM {
 		e.Op |= Rename
 	}
-	if mask&sys_IN_ATTRIB == sys_IN_ATTRIB {
+	if mask&syscall.IN_ATTRIB == syscall.IN_ATTRIB {
 		e.Op |= Chmod
 	}
 	return e
@@ -85,7 +51,7 @@ type Watcher struct {
 	watches  map[string]*watch // Map of inotify watches (key: path)
 	paths    map[int]string    // Map of watched paths (key: watch descriptor)
 	Errors   chan error        // Errors are sent on this channel
-	Events   chan *Event       // Events are returned on this channel
+	Events   chan Event        // Events are returned on this channel
 	done     chan bool         // Channel for sending a "quit message" to the reader goroutine
 	isClosed bool              // Set to true when Close() is first called
 }
@@ -100,7 +66,7 @@ func NewWatcher() (*Watcher, error) {
 		fd:      fd,
 		watches: make(map[string]*watch),
 		paths:   make(map[int]string),
-		Events:  make(chan *Event),
+		Events:  make(chan Event),
 		Errors:  make(chan error),
 		done:    make(chan bool, 1),
 	}
@@ -119,8 +85,8 @@ func (w *Watcher) Close() error {
 	w.isClosed = true
 
 	// Remove all watches
-	for path := range w.watches {
-		w.Remove(path)
+	for name := range w.watches {
+		w.Remove(name)
 	}
 
 	// Send "quit" message to the reader goroutine
@@ -129,51 +95,47 @@ func (w *Watcher) Close() error {
 	return nil
 }
 
-// AddWatch adds path to the watched file set.
-// The flags are interpreted as described in inotify_add_watch(2).
-func (w *Watcher) addWatch(path string, flags uint32) error {
+// Add starts watching on the named file.
+func (w *Watcher) Add(name string) error {
 	if w.isClosed {
 		return errors.New("inotify instance already closed")
 	}
 
+	var flags uint32 = sys_AGNOSTIC_EVENTS
+
 	w.mu.Lock()
-	watchEntry, found := w.watches[path]
+	watchEntry, found := w.watches[name]
 	w.mu.Unlock()
 	if found {
 		watchEntry.flags |= flags
 		flags |= syscall.IN_MASK_ADD
 	}
-	wd, errno := syscall.InotifyAddWatch(w.fd, path, flags)
+	wd, errno := syscall.InotifyAddWatch(w.fd, name, flags)
 	if wd == -1 {
 		return errno
 	}
 
 	w.mu.Lock()
-	w.watches[path] = &watch{wd: uint32(wd), flags: flags}
-	w.paths[wd] = path
+	w.watches[name] = &watch{wd: uint32(wd), flags: flags}
+	w.paths[wd] = name
 	w.mu.Unlock()
 
 	return nil
 }
 
-// Add starts watching on the named file.
-func (w *Watcher) Add(path string) error {
-	return w.addWatch(path, sys_AGNOSTIC_EVENTS)
-}
-
 // Remove stops watching on the named file.
-func (w *Watcher) Remove(path string) error {
+func (w *Watcher) Remove(name string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	watch, ok := w.watches[path]
+	watch, ok := w.watches[name]
 	if !ok {
-		return errors.New(fmt.Sprintf("can't remove non-existent inotify watch for: %s", path))
+		return errors.New(fmt.Sprintf("can't remove non-existent inotify watch for: %s", name))
 	}
 	success, errno := syscall.InotifyRmWatch(w.fd, watch.wd)
 	if success == -1 {
 		return os.NewSyscallError("inotify_rm_watch", errno)
 	}
-	delete(w.watches, path)
+	delete(w.watches, name)
 	return nil
 }
 
@@ -257,7 +219,7 @@ func (w *Watcher) readEvents() {
 // against files that do not exist.
 func (e *Event) ignoreLinux(mask uint32) bool {
 	// Ignore anything the inotify API says to ignore
-	if mask&sys_IN_IGNORED == sys_IN_IGNORED {
+	if mask&syscall.IN_IGNORED == syscall.IN_IGNORED {
 		return true
 	}
 

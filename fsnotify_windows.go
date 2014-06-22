@@ -39,8 +39,8 @@ const (
 	sys_FS_Q_OVERFLOW = 0x4000
 )
 
-func newEvent(name string, mask uint32) *Event {
-	e := &Event{Name: name}
+func newEvent(name string, mask uint32) Event {
+	e := Event{Name: name}
 	if mask&sys_FS_CREATE == sys_FS_CREATE {
 		e.Op |= Create
 	}
@@ -101,7 +101,7 @@ type Watcher struct {
 	port     syscall.Handle // Handle to completion port
 	watches  watchMap       // Map of watches (key: i-number)
 	input    chan *input    // Inputs to the reader are sent on this channel
-	Events   chan *Event    // Events are returned on this channel
+	Events   chan Event     // Events are returned on this channel
 	Errors   chan error     // Errors are sent on this channel
 	isClosed bool           // Set to true when Close() is first called
 	quit     chan chan<- error
@@ -117,7 +117,7 @@ func NewWatcher() (*Watcher, error) {
 		port:    port,
 		watches: make(watchMap),
 		input:   make(chan *input, 1),
-		Events:  make(chan *Event, 50),
+		Events:  make(chan Event, 50),
 		Errors:  make(chan error),
 		quit:    make(chan chan<- error, 1),
 	}
@@ -144,13 +144,13 @@ func (w *Watcher) Close() error {
 }
 
 // AddWatch adds path to the watched file set.
-func (w *Watcher) AddWatch(path string, flags uint32) error {
+func (w *Watcher) AddWatch(name string, flags uint32) error {
 	if w.isClosed {
 		return errors.New("watcher already closed")
 	}
 	in := &input{
 		op:    opAddWatch,
-		path:  filepath.Clean(path),
+		path:  filepath.Clean(name),
 		flags: flags,
 		reply: make(chan error),
 	}
@@ -162,15 +162,15 @@ func (w *Watcher) AddWatch(path string, flags uint32) error {
 }
 
 // Add starts watching on the named file.
-func (w *Watcher) Add(path string) error {
-	return w.AddWatch(path, sys_FS_ALL_EVENTS)
+func (w *Watcher) Add(name string) error {
+	return w.AddWatch(name, sys_FS_ALL_EVENTS)
 }
 
 // Remove stops watching on the named file.
-func (w *Watcher) Remove(path string) error {
+func (w *Watcher) Remove(name string) error {
 	in := &input{
 		op:    opRemoveWatch,
-		path:  filepath.Clean(path),
+		path:  filepath.Clean(name),
 		reply: make(chan error),
 	}
 	w.input <- in
