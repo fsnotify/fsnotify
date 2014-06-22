@@ -20,8 +20,8 @@ const (
 		syscall.IN_MOVE_SELF | syscall.IN_DELETE | syscall.IN_DELETE_SELF
 )
 
-func newEvent(name string, mask uint32) *Event {
-	e := &Event{Name: name}
+func newEvent(name string, mask uint32) Event {
+	e := Event{Name: name}
 	if mask&syscall.IN_CREATE == syscall.IN_CREATE || mask&syscall.IN_MOVED_TO == syscall.IN_MOVED_TO {
 		e.Op |= Create
 	}
@@ -51,7 +51,7 @@ type Watcher struct {
 	watches  map[string]*watch // Map of inotify watches (key: path)
 	paths    map[int]string    // Map of watched paths (key: watch descriptor)
 	Errors   chan error        // Errors are sent on this channel
-	Events   chan *Event       // Events are returned on this channel
+	Events   chan Event        // Events are returned on this channel
 	done     chan bool         // Channel for sending a "quit message" to the reader goroutine
 	isClosed bool              // Set to true when Close() is first called
 }
@@ -66,7 +66,7 @@ func NewWatcher() (*Watcher, error) {
 		fd:      fd,
 		watches: make(map[string]*watch),
 		paths:   make(map[int]string),
-		Events:  make(chan *Event),
+		Events:  make(chan Event),
 		Errors:  make(chan error),
 		done:    make(chan bool, 1),
 	}

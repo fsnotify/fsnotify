@@ -33,9 +33,8 @@ const (
 	keventWaitTime = 100e6
 )
 
-func newEvent(name string, mask uint32, create bool) *Event {
-	e := new(Event)
-	e.Name = name
+func newEvent(name string, mask uint32, create bool) Event {
+	e := Event{Name: name}
 	if create {
 		e.Op |= Create
 	}
@@ -69,7 +68,7 @@ type Watcher struct {
 	externalWatches map[string]bool     // Map of watches added by user of the library.
 	ewmut           sync.Mutex          // Protects access to externalWatches.
 	Errors          chan error          // Errors are sent on this channel
-	Events          chan *Event         // Events are returned on this channel
+	Events          chan Event          // Events are returned on this channel
 	done            chan bool           // Channel for sending a "quit message" to the reader goroutine
 	isClosed        bool                // Set to true when Close() is first called
 }
@@ -88,7 +87,7 @@ func NewWatcher() (*Watcher, error) {
 		finfo:           make(map[int]os.FileInfo),
 		fileExists:      make(map[string]bool),
 		externalWatches: make(map[string]bool),
-		Events:          make(chan *Event),
+		Events:          make(chan Event),
 		Errors:          make(chan error),
 		done:            make(chan bool, 1),
 	}

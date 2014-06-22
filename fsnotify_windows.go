@@ -39,8 +39,8 @@ const (
 	sys_FS_Q_OVERFLOW = 0x4000
 )
 
-func newEvent(name string, mask uint32) *Event {
-	e := &Event{Name: name}
+func newEvent(name string, mask uint32) Event {
+	e := Event{Name: name}
 	if mask&sys_FS_CREATE == sys_FS_CREATE {
 		e.Op |= Create
 	}
@@ -101,7 +101,7 @@ type Watcher struct {
 	port     syscall.Handle // Handle to completion port
 	watches  watchMap       // Map of watches (key: i-number)
 	input    chan *input    // Inputs to the reader are sent on this channel
-	Events   chan *Event    // Events are returned on this channel
+	Events   chan Event     // Events are returned on this channel
 	Errors   chan error     // Errors are sent on this channel
 	isClosed bool           // Set to true when Close() is first called
 	quit     chan chan<- error
@@ -117,7 +117,7 @@ func NewWatcher() (*Watcher, error) {
 		port:    port,
 		watches: make(watchMap),
 		input:   make(chan *input, 1),
-		Events:  make(chan *Event, 50),
+		Events:  make(chan Event, 50),
 		Errors:  make(chan error),
 		quit:    make(chan chan<- error, 1),
 	}
