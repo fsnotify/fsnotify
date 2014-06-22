@@ -104,8 +104,8 @@ func (w *Watcher) Close() error {
 	w.pmut.Lock()
 	ws := w.watches
 	w.pmut.Unlock()
-	for path := range ws {
-		w.Remove(path)
+	for name := range ws {
+		w.Remove(name)
 	}
 
 	return nil
@@ -207,20 +207,20 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 }
 
 // Add starts watching on the named file.
-func (w *Watcher) Add(path string) error {
+func (w *Watcher) Add(name string) error {
 	w.ewmut.Lock()
-	w.externalWatches[path] = true
+	w.externalWatches[name] = true
 	w.ewmut.Unlock()
-	return w.addWatch(path, sys_NOTE_ALLEVENTS)
+	return w.addWatch(name, sys_NOTE_ALLEVENTS)
 }
 
 // Remove stops watching on the named file.
-func (w *Watcher) Remove(path string) error {
+func (w *Watcher) Remove(name string) error {
 	w.wmut.Lock()
-	watchfd, ok := w.watches[path]
+	watchfd, ok := w.watches[name]
 	w.wmut.Unlock()
 	if !ok {
-		return errors.New(fmt.Sprintf("can't remove non-existent kevent watch for: %s", path))
+		return errors.New(fmt.Sprintf("can't remove non-existent kevent watch for: %s", name))
 	}
 	var kbuf [1]syscall.Kevent_t
 	watchEntry := &kbuf[0]
@@ -234,10 +234,10 @@ func (w *Watcher) Remove(path string) error {
 	}
 	syscall.Close(watchfd)
 	w.wmut.Lock()
-	delete(w.watches, path)
+	delete(w.watches, name)
 	w.wmut.Unlock()
 	w.enmut.Lock()
-	delete(w.enFlags, path)
+	delete(w.enFlags, name)
 	w.enmut.Unlock()
 	w.pmut.Lock()
 	delete(w.paths, watchfd)
@@ -251,7 +251,7 @@ func (w *Watcher) Remove(path string) error {
 		w.pmut.Lock()
 		for _, wpath := range w.paths {
 			wdir, _ := filepath.Split(wpath)
-			if filepath.Clean(wdir) == filepath.Clean(path) {
+			if filepath.Clean(wdir) == filepath.Clean(name) {
 				w.ewmut.Lock()
 				if !w.externalWatches[wpath] {
 					pathsToRemove = append(pathsToRemove, wpath)
@@ -260,11 +260,11 @@ func (w *Watcher) Remove(path string) error {
 			}
 		}
 		w.pmut.Unlock()
-		for _, p := range pathsToRemove {
+		for _, name := range pathsToRemove {
 			// Since these are internal, not much sense in propagating error
 			// to the user, as that will just confuse them with an error about
 			// a path they did not explicitly watch themselves.
-			w.Remove(p)
+			w.Remove(name)
 		}
 	}
 

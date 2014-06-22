@@ -85,8 +85,8 @@ func (w *Watcher) Close() error {
 	w.isClosed = true
 
 	// Remove all watches
-	for path := range w.watches {
-		w.Remove(path)
+	for name := range w.watches {
+		w.Remove(name)
 	}
 
 	// Send "quit" message to the reader goroutine
@@ -96,7 +96,7 @@ func (w *Watcher) Close() error {
 }
 
 // Add starts watching on the named file.
-func (w *Watcher) Add(path string) error {
+func (w *Watcher) Add(name string) error {
 	if w.isClosed {
 		return errors.New("inotify instance already closed")
 	}
@@ -104,38 +104,38 @@ func (w *Watcher) Add(path string) error {
 	var flags uint32 = sys_AGNOSTIC_EVENTS
 
 	w.mu.Lock()
-	watchEntry, found := w.watches[path]
+	watchEntry, found := w.watches[name]
 	w.mu.Unlock()
 	if found {
 		watchEntry.flags |= flags
 		flags |= syscall.IN_MASK_ADD
 	}
-	wd, errno := syscall.InotifyAddWatch(w.fd, path, flags)
+	wd, errno := syscall.InotifyAddWatch(w.fd, name, flags)
 	if wd == -1 {
 		return errno
 	}
 
 	w.mu.Lock()
-	w.watches[path] = &watch{wd: uint32(wd), flags: flags}
-	w.paths[wd] = path
+	w.watches[name] = &watch{wd: uint32(wd), flags: flags}
+	w.paths[wd] = name
 	w.mu.Unlock()
 
 	return nil
 }
 
 // Remove stops watching on the named file.
-func (w *Watcher) Remove(path string) error {
+func (w *Watcher) Remove(name string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	watch, ok := w.watches[path]
+	watch, ok := w.watches[name]
 	if !ok {
-		return errors.New(fmt.Sprintf("can't remove non-existent inotify watch for: %s", path))
+		return errors.New(fmt.Sprintf("can't remove non-existent inotify watch for: %s", name))
 	}
 	success, errno := syscall.InotifyRmWatch(w.fd, watch.wd)
 	if success == -1 {
 		return os.NewSyscallError("inotify_rm_watch", errno)
 	}
-	delete(w.watches, path)
+	delete(w.watches, name)
 	return nil
 }
 

@@ -144,13 +144,13 @@ func (w *Watcher) Close() error {
 }
 
 // AddWatch adds path to the watched file set.
-func (w *Watcher) AddWatch(path string, flags uint32) error {
+func (w *Watcher) AddWatch(name string, flags uint32) error {
 	if w.isClosed {
 		return errors.New("watcher already closed")
 	}
 	in := &input{
 		op:    opAddWatch,
-		path:  filepath.Clean(path),
+		path:  filepath.Clean(name),
 		flags: flags,
 		reply: make(chan error),
 	}
@@ -162,15 +162,15 @@ func (w *Watcher) AddWatch(path string, flags uint32) error {
 }
 
 // Add starts watching on the named file.
-func (w *Watcher) Add(path string) error {
-	return w.AddWatch(path, sys_FS_ALL_EVENTS)
+func (w *Watcher) Add(name string) error {
+	return w.AddWatch(name, sys_FS_ALL_EVENTS)
 }
 
 // Remove stops watching on the named file.
-func (w *Watcher) Remove(path string) error {
+func (w *Watcher) Remove(name string) error {
 	in := &input{
 		op:    opRemoveWatch,
-		path:  filepath.Clean(path),
+		path:  filepath.Clean(name),
 		reply: make(chan error),
 	}
 	w.input <- in
