@@ -95,12 +95,13 @@ func (w *Watcher) Close() error {
 	return nil
 }
 
-// AddWatch adds path to the watched file set.
-// The flags are interpreted as described in inotify_add_watch(2).
-func (w *Watcher) addWatch(path string, flags uint32) error {
+// Add starts watching on the named file.
+func (w *Watcher) Add(path string) error {
 	if w.isClosed {
 		return errors.New("inotify instance already closed")
 	}
+
+	var flags uint32 = sys_AGNOSTIC_EVENTS
 
 	w.mu.Lock()
 	watchEntry, found := w.watches[path]
@@ -120,11 +121,6 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 	w.mu.Unlock()
 
 	return nil
-}
-
-// Add starts watching on the named file.
-func (w *Watcher) Add(path string) error {
-	return w.addWatch(path, sys_AGNOSTIC_EVENTS)
 }
 
 // Remove stops watching on the named file.
