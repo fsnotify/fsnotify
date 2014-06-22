@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.13.0 / 2014-06-21
+
+* Events channel of type Event rather than *Event.
+* Add/Remove accept a name rather than a path (same behavior).
+* [API] Remove AddWatch on Windows, use Add.
+* [internal] use syscall constants directly for inotify and kqueue.
+* [internal] kqueue: rename events to kevents and fileEvent to event
+
 ## v0.12.0 / 2014-06-19
 
 * Go 1.3+ required on Windows (uses syscall.ERROR_MORE_DATA internally).
