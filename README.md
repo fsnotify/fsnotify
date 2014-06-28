@@ -1,21 +1,28 @@
 # File system notifications for Go
 
-[![Coverage](http://gocover.io/_badge/github.com/nathany/fsnotify)](http://gocover.io/github.com/nathany/fsnotify) [![GoDoc](https://godoc.org/github.com/nathany/fsnotify?status.png)](http://godoc.org/github.com/nathany/fsnotify)
+[![Coverage](http://gocover.io/_badge/github.com/fsnotify/fsnotify)](http://gocover.io/github.com/fsnotify/fsnotify) [![GoDoc](https://godoc.org/github.com/fsnotify/fsnotify?status.png)](http://godoc.org/github.com/fsnotify/fsnotify)
 
-Cross platform, works on:
-* Windows
-* Linux
-* BSD
-* OSX
+Cross platform: Windows, Linux, BSD and OS X.
 
-### Moving Notice
+Please see [the documentation]((http://godoc.org/github.com/fsnotify/fsnotify)) for usage.
 
-We plan to include os/fsnotify in the Go standard library with a new [API](http://goo.gl/MrYxyA). 
+## API stability
 
-* Import `code.google.com/p/go.exp/fsnotify` ([GoDoc](http://godoc.org/code.google.com/p/go.exp/fsnotify)) for the latest API under development.
-* Continue importing `github.com/howeyc/fsnotify` ([GoDoc](http://godoc.org/github.com/howeyc/fsnotify)) for the stable API.
-* [Report Issues](https://code.google.com/p/go/issues/list?q=fsnotify) to go.exp/fsnotify after testing against `code.google.com/p/go.exp/fsnotify`
-* Join [golang-dev](https://groups.google.com/forum/#!forum/golang-dev) to discuss fsnotify.
-* See the [Contribution Guidelines](http://golang.org/doc/contribute.html) for Go and sign the CLA.
+The fsnotify API has changed from what exists at `github.com/howeyc/fsnotify` ([GoDoc](http://godoc.org/github.com/howeyc/fsnotify)).
 
+Further changes are expected. You may use [gopkg.in](https://gopkg.in/fsnotify/fsnotify.v0) to lock to the current API: 
+
+```go
+import "gopkg.in/fsnotify/fsnotify.v0"
+```
+
+A new major revision will be tagged when the API changes.
+
+## Contributing
+
+Send questions to [golang-dev@googlegroups.com](mailto:golang-dev@googlegroups.com). Request features and report bugs using the [GitHub Issue Tracker](https://github.com/fsnotify/fsnotify/issues).
+
+A future version of Go will have [fsnotify in the standard library](https://code.google.com/p/go/issues/detail?id=4068), therefore fsnotify carries the same [LICENSE](https://github.com/fsnotify/fsnotify/blob/master/LICENSE) as Go. Contributors retain their copyright, so we need you to fill out a short form before we can accept your contribution: [Google Individual Contributor License Agreement](https://developers.google.com/open-source/cla/individual).
+
+Please read [CONTRIBUTING](https://github.com/fsnotify/fsnotify/blob/master/CONTRIBUTING.md) before opening a pull request.
 

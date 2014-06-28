@@ -6,7 +6,7 @@
 * Add/Remove accept a name rather than a path (same behavior).
 * [API] Remove AddWatch on Windows, use Add.
 * [internal] use syscall constants directly for inotify and kqueue.
-* [internal] kqueue: rename events to kevents and fileEvent to event
+* [internal] kqueue: rename events to kevents and fileEvent to event.
 
 ## v0.12.0 / 2014-06-19
 
@@ -28,7 +28,7 @@
 
 ## v0.10.0 / 2014-05-23
 
-* [API] Remove current implementation of WatchFlags [#1](https://github.com/nathany/fsnotify/pull/1)
+* [API] Remove current implementation of WatchFlags.
 
 ## v0.9.0 / 2014-01-17
 
@@ -187,4 +187,4 @@
 [#25]: https://github.com/howeyc/fsnotify/issues/25
 [#24]: https://github.com/howeyc/fsnotify/issues/24
 [#21]: https://github.com/howeyc/fsnotify/issues/21
-[#1]: https://github.com/howeyc/fsnotify/issues/1
+
