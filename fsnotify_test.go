@@ -916,8 +916,8 @@ func TestFsnotifyAttrib(t *testing.T) {
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	// Creating/writing a file changes also the mtime, so IsAttrib should be set to true here
 	time.Sleep(500 * time.Millisecond)
-	if modifyReceived.value() == 0 {
-		t.Fatal("fsnotify modify events have not received after 500 ms")
+	if modifyReceived.value() != 0 {
+		t.Fatal("received an unexpected modify event when creating a test file")
 	}
 	if attribReceived.value() == 0 {
 		t.Fatal("fsnotify attribute events have not received after 500 ms")

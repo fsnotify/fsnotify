@@ -28,7 +28,7 @@ func newEvent(name string, mask uint32) Event {
 	if mask&syscall.IN_DELETE_SELF == syscall.IN_DELETE_SELF || mask&syscall.IN_DELETE == syscall.IN_DELETE {
 		e.Op |= Remove
 	}
-	if mask&syscall.IN_MODIFY == syscall.IN_MODIFY || mask&syscall.IN_ATTRIB == syscall.IN_ATTRIB {
+	if mask&syscall.IN_MODIFY == syscall.IN_MODIFY {
 		e.Op |= Write
 	}
 	if mask&syscall.IN_MOVE_SELF == syscall.IN_MOVE_SELF || mask&syscall.IN_MOVED_FROM == syscall.IN_MOVED_FROM {

@@ -32,7 +32,7 @@ func newEvent(name string, mask uint32, create bool) Event {
 	if mask&syscall.NOTE_DELETE == syscall.NOTE_DELETE {
 		e.Op |= Remove
 	}
-	if mask&syscall.NOTE_WRITE == syscall.NOTE_WRITE || mask&syscall.NOTE_ATTRIB == syscall.NOTE_ATTRIB {
+	if mask&syscall.NOTE_WRITE == syscall.NOTE_WRITE {
 		e.Op |= Write
 	}
 	if mask&syscall.NOTE_RENAME == syscall.NOTE_RENAME {
