@@ -4,7 +4,7 @@
 
 Cross platform: Windows, Linux, BSD and OS X.
 
-Please see [the documentation]((http://godoc.org/github.com/fsnotify/fsnotify)) for usage.
+Please see [the documentation](http://godoc.org/github.com/fsnotify/fsnotify) for usage. The [Wiki](https://github.com/fsnotify/fsnotify/wiki) contains an FAQ and other information.
 
 ## API stability
 
@@ -16,7 +16,7 @@ Further changes are expected. You may use [gopkg.in](https://gopkg.in/fsnotify/f
 import "gopkg.in/fsnotify/fsnotify.v0"
 ```
 
-A new major revision will be tagged when the API changes.
+A new major revision will be tagged for any future API changes.
 
 ## Contributing
 
