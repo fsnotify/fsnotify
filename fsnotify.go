@@ -27,8 +27,8 @@ const (
 
 // String formats the event e in the form
 // "filename: REMOVE|WRITE|..."
-func (e *Event) String() string {
-	var events string = ""
+func (e Event) String() string {
+	events := ""
 
 	if e.Op&Create == Create {
 		events += "|" + "CREATE"
