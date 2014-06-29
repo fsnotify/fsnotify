@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.14.0 / 2014-06-28
+
+* [API] Don't set the Write Op for attribute notifications [#4](https://github.com/fsnotify/fsnotify/issues/4)
+* Fix for String() method on Event (thanks Alex Brainman)
+* Don't build on Plan 9 or Solaris (thanks @4ad)
+
 ## v0.13.0 / 2014-06-21
 
 * Events channel of type Event rather than *Event.
