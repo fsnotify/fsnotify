@@ -20,7 +20,8 @@ A new major revision will be tagged for any future API changes.
 
 ## Contributing
 
-Send questions to [golang-dev@googlegroups.com](mailto:golang-dev@googlegroups.com). Request features and report bugs using the [GitHub Issue Tracker](https://github.com/fsnotify/fsnotify/issues).
+* Send questions to [golang-dev@googlegroups.com](mailto:golang-dev@googlegroups.com). 
+* Request features and report bugs using the [GitHub Issue Tracker](https://github.com/fsnotify/fsnotify/issues).
 
 A future version of Go will have [fsnotify in the standard library](https://code.google.com/p/go/issues/detail?id=4068), therefore fsnotify carries the same [LICENSE](https://github.com/fsnotify/fsnotify/blob/master/LICENSE) as Go. Contributors retain their copyright, so we need you to fill out a short form before we can accept your contribution: [Google Individual Contributor License Agreement](https://developers.google.com/open-source/cla/individual).
 
