@@ -26,3 +26,6 @@ A future version of Go will have [fsnotify in the standard library](https://code
 
 Please read [CONTRIBUTING](https://github.com/fsnotify/fsnotify/blob/master/CONTRIBUTING.md) before opening a pull request.
 
+## Example
+
+See [example_test.go](https://github.com/fsnotify/fsnotify/blob/master/example_test.go).

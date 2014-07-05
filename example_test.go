@@ -17,12 +17,16 @@ func ExampleNewWatcher() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer watcher.Close()
 
 	go func() {
 		for {
 			select {
-			case ev := <-watcher.Events:
-				log.Println("event:", ev)
+			case event := <-watcher.Events:
+				log.Println("event:", event)
+				if event.Op&fsnotify.Write == fsnotify.Write {
+					log.Println("modified file:", event.Name)
+				}
 			case err := <-watcher.Errors:
 				log.Println("error:", err)
 			}
