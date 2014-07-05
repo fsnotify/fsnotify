@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.14.1 / 2014-07-04
+
+* kqueue: fix incorrect mutex used in Close()
+* Update example to demonstrate usage of Op.
+
 ## v0.14.0 / 2014-06-28
 
 * [API] Don't set the Write Op for attribute notifications [#4](https://github.com/fsnotify/fsnotify/issues/4)
