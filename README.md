@@ -1,6 +1,6 @@
 # File system notifications for Go
 
-[![Coverage](http://gocover.io/_badge/github.com/fsnotify/fsnotify)](http://gocover.io/github.com/fsnotify/fsnotify) [![GoDoc](https://godoc.org/github.com/fsnotify/fsnotify?status.png)](http://godoc.org/github.com/fsnotify/fsnotify)
+[![Coverage](http://gocover.io/_badge/github.com/fsnotify/fsnotify)](http://gocover.io/github.com/fsnotify/fsnotify) [![GoDoc](https://godoc.org/github.com/fsnotify/fsnotify?status.svg)](https://godoc.org/github.com/fsnotify/fsnotify)
 
 Cross platform: Windows, Linux, BSD and OS X.
 
