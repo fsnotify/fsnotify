@@ -157,7 +157,7 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 
 		fd, errno := syscall.Open(path, open_FLAGS, 0700)
 		if fd == -1 {
-			return errno
+			return os.NewSyscallError("Open", errno)
 		}
 		watchfd = fd
 

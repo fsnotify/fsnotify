@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* Use os.NewSyscallError instead of returning errno (thanks @hariharan-uno)
+ 
 ## v0.14.1 / 2014-07-04
 
 * kqueue: fix incorrect mutex used in Close()
