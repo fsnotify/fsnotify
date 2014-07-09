@@ -112,7 +112,7 @@ func (w *Watcher) Add(name string) error {
 	}
 	wd, errno := syscall.InotifyAddWatch(w.fd, name, flags)
 	if wd == -1 {
-		return errno
+		return os.NewSyscallError("inotify_add_watch", errno)
 	}
 
 	w.mu.Lock()
