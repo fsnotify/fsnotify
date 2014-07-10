@@ -1,11 +1,15 @@
 # Contributing
 
 * Send questions to [golang-dev@googlegroups.com](mailto:golang-dev@googlegroups.com). 
-* Request features and report bugs using the [GitHub Issue Tracker](https://github.com/go-fsnotify/fsnotify/issues).
 
-A future version of Go will have [fsnotify in the standard library](https://code.google.com/p/go/issues/detail?id=4068), therefore fsnotify carries the same [LICENSE](https://github.com/go-fsnotify/fsnotify/blob/master/LICENSE) as Go. Contributors retain their copyright, so we need you to fill out a short form before we can accept your contribution: [Google Individual Contributor License Agreement](https://developers.google.com/open-source/cla/individual).
+### Issues
+
+* Request features and report bugs using the [GitHub Issue Tracker](https://github.com/go-fsnotify/fsnotify/issues).
+* Please indicate the platform you are running on.
 
 ### Pull Requests
+
+A future version of Go will have [fsnotify in the standard library](https://code.google.com/p/go/issues/detail?id=4068), therefore fsnotify carries the same [LICENSE](https://github.com/go-fsnotify/fsnotify/blob/master/LICENSE) as Go. Contributors retain their copyright, so we need you to fill out a short form before we can accept your contribution: [Google Individual Contributor License Agreement](https://developers.google.com/open-source/cla/individual).
 
 To hack on fsnotify:
 
@@ -28,6 +32,8 @@ If other team members need your patch before I merge it:
 3. Pull your revisions (`git fetch fork; git checkout -b my-new-feature fork/my-new-feature`)
 
 Notice: For smooth sailing, always use the original import path. Installing with `go get` makes this easy.
+
+Note: The maintainers will update the CHANGELOG on your behalf. Please don't modify it in your pull request.
 
 ### Testing
 
