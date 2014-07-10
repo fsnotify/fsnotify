@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.14.2 / 2014-07-09
 
+* Moved to [github.com/go-fsnotify/fsnotify](https://github.com/go-fsnotify/fsnotify).
 * Use os.NewSyscallError instead of returning errno (thanks @hariharan-uno)
  
 ## v0.14.1 / 2014-07-04
