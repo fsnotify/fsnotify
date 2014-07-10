@@ -10,7 +10,7 @@ Please see [the documentation](http://godoc.org/github.com/go-fsnotify/fsnotify)
 
 The fsnotify API has changed from what exists at `github.com/howeyc/fsnotify` ([GoDoc](http://godoc.org/github.com/howeyc/fsnotify)).
 
-Further changes are expected. You may use [gopkg.in](https://gopkg.in/go-fsnotify/fsnotify.v0) to lock to the current API: 
+Further changes are expected. You may use [gopkg.in](https://gopkg.in/fsnotify.v0) to lock to the current API: 
 
 ```go
 import "gopkg.in/fsnotify.v0"
