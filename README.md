@@ -6,7 +6,8 @@ Cross platform: Windows, Linux, BSD and OS X.
 
 ## Moving Notice
 
-For the latest version of fsnotify, please use [github.com/fsnotify/fsnotify](https://github.com/fsnotify/fsnotify).
+There is a fork being actively developed with a new API in preparation for the Go Standard Library:
+[github.com/fsnotify/fsnotify](https://github.com/fsnotify/fsnotify)
 
 ## Example:
 
