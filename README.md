@@ -7,7 +7,7 @@ Cross platform: Windows, Linux, BSD and OS X.
 ## Moving Notice
 
 There is a fork being actively developed with a new API in preparation for the Go Standard Library:
-[github.com/fsnotify/fsnotify](https://github.com/fsnotify/fsnotify)
+[github.com/go-fsnotify/fsnotify](https://github.com/go-fsnotify/fsnotify)
 
 ## Example:
 
