@@ -121,9 +121,9 @@ func (w *Watcher) Close() error {
 
 	// Send "quit" message to the reader goroutine
 	w.done <- true
-	w.pmut.Lock()
+	w.wmut.Lock()
 	ws := w.watches
-	w.pmut.Unlock()
+	w.wmut.Unlock()
 	for path := range ws {
 		w.removeWatch(path)
 	}
