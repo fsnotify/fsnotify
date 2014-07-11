@@ -59,10 +59,7 @@ func (w *Watcher) purgeEvents() {
 
 // Watch a given file path
 func (w *Watcher) Watch(path string) error {
-	w.fsnmut.Lock()
-	w.fsnFlags[path] = FSN_ALL
-	w.fsnmut.Unlock()
-	return w.watch(path)
+	return w.WatchFlags(path, FSN_ALL)
 }
 
 // Watch a given file path for a particular set of notifications (FSN_MODIFY etc.)
