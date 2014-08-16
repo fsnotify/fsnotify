@@ -94,20 +94,19 @@ type watch struct {
 type indexMap map[uint64]*watch
 type watchMap map[uint32]indexMap
 
-// A Watcher waits for and receives event notifications
-// for a specific set of files and directories.
+// Watcher watches a set of files, delivering events to a channel.
 type Watcher struct {
+	Events   chan Event
+	Errors   chan error
+	isClosed bool           // Set to true when Close() is first called
 	mu       sync.Mutex     // Map access
 	port     syscall.Handle // Handle to completion port
 	watches  watchMap       // Map of watches (key: i-number)
 	input    chan *input    // Inputs to the reader are sent on this channel
-	Events   chan Event     // Events are returned on this channel
-	Errors   chan error     // Errors are sent on this channel
-	isClosed bool           // Set to true when Close() is first called
 	quit     chan chan<- error
 }
 
-// NewWatcher creates and returns a Watcher.
+// NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
 func NewWatcher() (*Watcher, error) {
 	port, e := syscall.CreateIoCompletionPort(syscall.InvalidHandle, 0, 0, 0)
 	if e != nil {
@@ -125,9 +124,7 @@ func NewWatcher() (*Watcher, error) {
 	return w, nil
 }
 
-// Close closes a Watcher.
-// It sends a message to the reader goroutine to quit and removes all watches
-// associated with the watcher.
+// Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error {
 	if w.isClosed {
 		return nil
@@ -161,12 +158,12 @@ func (w *Watcher) AddWatch(name string, flags uint32) error {
 	return <-in.reply
 }
 
-// Add starts watching on the named file.
+// Add starts watching the named file or directory (non-recursively).
 func (w *Watcher) Add(name string) error {
 	return w.AddWatch(name, sys_FS_ALL_EVENTS)
 }
 
-// Remove stops watching on the named file.
+// Remove stops watching the the named file or directory (non-recursively).
 func (w *Watcher) Remove(name string) error {
 	in := &input{
 		op:    opRemoveWatch,

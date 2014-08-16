@@ -15,11 +15,12 @@ import (
 )
 
 const (
-	sys_AGNOSTIC_EVENTS = syscall.IN_MOVED_TO | syscall.IN_MOVED_FROM |
+	agnosticEvents = syscall.IN_MOVED_TO | syscall.IN_MOVED_FROM |
 		syscall.IN_CREATE | syscall.IN_ATTRIB | syscall.IN_MODIFY |
 		syscall.IN_MOVE_SELF | syscall.IN_DELETE | syscall.IN_DELETE_SELF
 )
 
+// newEvent returns an platform-independent Event based on an inotify mask.
 func newEvent(name string, mask uint32) Event {
 	e := Event{Name: name}
 	if mask&syscall.IN_CREATE == syscall.IN_CREATE || mask&syscall.IN_MOVED_TO == syscall.IN_MOVED_TO {
@@ -45,18 +46,19 @@ type watch struct {
 	flags uint32 // inotify flags of this watch (see inotify(7) for the list of valid flags)
 }
 
+// Watcher watches a set of files, delivering events to a channel.
 type Watcher struct {
+	Events   chan Event
+	Errors   chan error
 	mu       sync.Mutex        // Map access
 	fd       int               // File descriptor (as returned by the inotify_init() syscall)
 	watches  map[string]*watch // Map of inotify watches (key: path)
 	paths    map[int]string    // Map of watched paths (key: watch descriptor)
-	Errors   chan error        // Errors are sent on this channel
-	Events   chan Event        // Events are returned on this channel
 	done     chan bool         // Channel for sending a "quit message" to the reader goroutine
 	isClosed bool              // Set to true when Close() is first called
 }
 
-// NewWatcher creates and returns a new inotify instance using inotify_init(2)
+// NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
 func NewWatcher() (*Watcher, error) {
 	fd, errno := syscall.InotifyInit()
 	if fd == -1 {
@@ -75,9 +77,7 @@ func NewWatcher() (*Watcher, error) {
 	return w, nil
 }
 
-// Close closes an inotify watcher instance
-// It sends a message to the reader goroutine to quit and removes all watches
-// associated with the inotify instance
+// Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error {
 	if w.isClosed {
 		return nil
@@ -95,13 +95,13 @@ func (w *Watcher) Close() error {
 	return nil
 }
 
-// Add starts watching on the named file.
+// Add starts watching the named file or directory (non-recursively).
 func (w *Watcher) Add(name string) error {
 	if w.isClosed {
 		return errors.New("inotify instance already closed")
 	}
 
-	var flags uint32 = sys_AGNOSTIC_EVENTS
+	var flags uint32 = agnosticEvents
 
 	w.mu.Lock()
 	watchEntry, found := w.watches[name]
@@ -123,13 +123,13 @@ func (w *Watcher) Add(name string) error {
 	return nil
 }
 
-// Remove stops watching on the named file.
+// Remove stops watching the the named file or directory (non-recursively).
 func (w *Watcher) Remove(name string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	watch, ok := w.watches[name]
 	if !ok {
-		return errors.New(fmt.Sprintf("can't remove non-existent inotify watch for: %s", name))
+		return fmt.Errorf("can't remove non-existent inotify watch for: %s", name)
 	}
 	success, errno := syscall.InotifyRmWatch(w.fd, watch.wd)
 	if success == -1 {
@@ -178,7 +178,7 @@ func (w *Watcher) readEvents() {
 			continue
 		}
 
-		var offset uint32 = 0
+		var offset uint32
 		// We don't know how many events we just read into the buffer
 		// While the offset points to at least one whole event...
 		for offset <= uint32(n-syscall.SizeofInotifyEvent) {

@@ -8,4 +8,4 @@ package fsnotify
 
 import "syscall"
 
-const open_FLAGS = syscall.O_NONBLOCK | syscall.O_RDONLY
+const openMode = syscall.O_NONBLOCK | syscall.O_RDONLY

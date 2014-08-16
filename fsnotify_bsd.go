@@ -17,13 +17,14 @@ import (
 )
 
 const (
-	// Watch all events
-	sys_NOTE_ALLEVENTS = syscall.NOTE_DELETE | syscall.NOTE_WRITE | syscall.NOTE_ATTRIB | syscall.NOTE_RENAME
+	// Watch all events (except NOTE_EXTEND, NOTE_LINK, NOTE_REVOKE)
+	noteAllEvents = syscall.NOTE_DELETE | syscall.NOTE_WRITE | syscall.NOTE_ATTRIB | syscall.NOTE_RENAME
 
 	// Block for 100 ms on each call to kevent
 	keventWaitTime = 100e6
 )
 
+// newEvent returns an platform-independent Event based on kqueue Fflags.
 func newEvent(name string, mask uint32, create bool) Event {
 	e := Event{Name: name}
 	if create {
@@ -44,27 +45,28 @@ func newEvent(name string, mask uint32, create bool) Event {
 	return e
 }
 
+// Watcher watches a set of files, delivering events to a channel.
 type Watcher struct {
+	Events          chan Event
+	Errors          chan error
 	mu              sync.Mutex          // Mutex for the Watcher itself.
-	kq              int                 // File descriptor (as returned by the kqueue() syscall)
-	watches         map[string]int      // Map of watched file descriptors (key: path)
+	kq              int                 // File descriptor (as returned by the kqueue() syscall).
+	watches         map[string]int      // Map of watched file descriptors (key: path).
 	wmut            sync.Mutex          // Protects access to watches.
-	enFlags         map[string]uint32   // Map of watched files to evfilt note flags used in kqueue
+	enFlags         map[string]uint32   // Map of watched files to evfilt note flags used in kqueue.
 	enmut           sync.Mutex          // Protects access to enFlags.
-	paths           map[int]string      // Map of watched paths (key: watch descriptor)
-	finfo           map[int]os.FileInfo // Map of file information (isDir, isReg; key: watch descriptor)
+	paths           map[int]string      // Map of watched paths (key: watch descriptor).
+	finfo           map[int]os.FileInfo // Map of file information (isDir, isReg; key: watch descriptor).
 	pmut            sync.Mutex          // Protects access to paths and finfo.
-	fileExists      map[string]bool     // Keep track of if we know this file exists (to stop duplicate create events)
+	fileExists      map[string]bool     // Keep track of if we know this file exists (to stop duplicate create events).
 	femut           sync.Mutex          // Protects access to fileExists.
 	externalWatches map[string]bool     // Map of watches added by user of the library.
 	ewmut           sync.Mutex          // Protects access to externalWatches.
-	Errors          chan error          // Errors are sent on this channel
-	Events          chan Event          // Events are returned on this channel
 	done            chan bool           // Channel for sending a "quit message" to the reader goroutine
 	isClosed        bool                // Set to true when Close() is first called
 }
 
-// NewWatcher creates and returns a new kevent instance using kqueue(2)
+// NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
 func NewWatcher() (*Watcher, error) {
 	fd, errno := syscall.Kqueue()
 	if fd == -1 {
@@ -87,9 +89,7 @@ func NewWatcher() (*Watcher, error) {
 	return w, nil
 }
 
-// Close closes a kevent watcher instance
-// It sends a message to the reader goroutine to quit and removes all watches
-// associated with the kevent instance
+// Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error {
 	w.mu.Lock()
 	if w.isClosed {
@@ -99,7 +99,7 @@ func (w *Watcher) Close() error {
 	w.isClosed = true
 	w.mu.Unlock()
 
-	// Send "quit" message to the reader goroutine
+	// Send "quit" message to the reader goroutine:
 	w.done <- true
 	w.wmut.Lock()
 	ws := w.watches
@@ -111,7 +111,7 @@ func (w *Watcher) Close() error {
 	return nil
 }
 
-// AddWatch adds path to the watched file set.
+// addWatch adds path to the watched file set.
 // The flags are interpreted as described in kevent(2).
 func (w *Watcher) addWatch(path string, flags uint32) error {
 	w.mu.Lock()
@@ -155,7 +155,7 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 			}
 		}
 
-		fd, errno := syscall.Open(path, open_FLAGS, 0700)
+		fd, errno := syscall.Open(path, openMode, 0700)
 		if fd == -1 {
 			return os.NewSyscallError("Open", errno)
 		}
@@ -206,21 +206,21 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 	return nil
 }
 
-// Add starts watching on the named file.
+// Add starts watching the named file or directory (non-recursively).
 func (w *Watcher) Add(name string) error {
 	w.ewmut.Lock()
 	w.externalWatches[name] = true
 	w.ewmut.Unlock()
-	return w.addWatch(name, sys_NOTE_ALLEVENTS)
+	return w.addWatch(name, noteAllEvents)
 }
 
-// Remove stops watching on the named file.
+// Remove stops watching the the named file or directory (non-recursively).
 func (w *Watcher) Remove(name string) error {
 	w.wmut.Lock()
 	watchfd, ok := w.watches[name]
 	w.wmut.Unlock()
 	if !ok {
-		return errors.New(fmt.Sprintf("can't remove non-existent kevent watch for: %s", name))
+		return fmt.Errorf("can't remove non-existent kevent watch for: %s", name)
 	}
 	var kbuf [1]syscall.Kevent_t
 	watchEntry := &kbuf[0]
@@ -399,7 +399,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 
 		if fileInfo.IsDir() == false {
 			// Watch file to mimic linux fsnotify
-			e := w.addWatch(filePath, sys_NOTE_ALLEVENTS)
+			e := w.addWatch(filePath, noteAllEvents)
 			if e != nil {
 				return e
 			}
