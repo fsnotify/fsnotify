@@ -6,15 +6,16 @@ Cross platform: Windows, Linux, BSD and OS X.
 
 |Adapter   |OS        |Status    |
 |----------|----------|----------|
-|inotify   |Linux, Android|Supported|
-|kqueue    |BSD, OS X, iOS|Supported|
+|inotify   |Linux, Android\*|Supported|
+|kqueue    |BSD, OS X, iOS\*|Supported|
 |ReadDirectoryChangesW|Windows|Supported|
 |FSEvents  |OS X          |[Planned](https://github.com/go-fsnotify/fsnotify/issues/11)|
 |FEN       |Solaris 11    |[Planned](https://github.com/go-fsnotify/fsnotify/issues/12)|
 |fanotify  |Linux 2.6.37+ | |
-|[Polling](https://github.com/go-fsnotify/fsnotify/issues/9)|*All*         | |
+|Polling   |*All*         |[Maybe](https://github.com/go-fsnotify/fsnotify/issues/9)|
 |          |Plan 9        | |
 
+\* Android and iOS are untested.
 
 Please see [the documentation](http://godoc.org/github.com/go-fsnotify/fsnotify) for usage. The [Wiki](https://github.com/go-fsnotify/fsnotify/wiki) contains an FAQ and further information.
 
