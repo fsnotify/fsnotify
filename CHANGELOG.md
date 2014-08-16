@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.0 / 2014-08-15
+
+* [API] Remove AddWatch on Windows, use Add.
+
 ## v0.14.3 / 2014-08-15
 
 * Improve documentation for exported identifiers. [#30](https://github.com/go-fsnotify/fsnotify/issues/30)
@@ -24,7 +28,6 @@
 ## v0.13.0 / 2014-06-21
 
 * Events channel of type Event rather than *Event.
-* [API] Remove AddWatch on Windows, use Add.
 * [internal] use syscall constants directly for inotify and kqueue.
 * [internal] kqueue: rename events to kevents and fileEvent to event.
 
