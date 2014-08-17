@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.9.1 / 2014-06-12
+
+* Fix data race on kevent buffer (thanks @tilaks) [#98](https://github.com/howeyc/fsnotify/pull/98)
+
 ## v0.9.0 / 2014-01-17
 
 * IsAttrib() for events that only concern a file's metadata [#79][] (thanks @abustany)
