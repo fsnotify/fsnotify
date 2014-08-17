@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.2 / 2014-08-17
+
+* [Fix] Missing create events on OS X. [#14](https://github.com/go-fsnotify/fsnotify/issues/14) (thanks @zhsso)
+* [Fix] Make ./path and path equivalent. (thanks @zhsso)
+
 ## v1.0.0 / 2014-08-15
 
 * [API] Remove AddWatch on Windows, use Add.
