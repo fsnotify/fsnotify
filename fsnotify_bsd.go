@@ -492,7 +492,7 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 		// watchDirectoryFiles (but without doing another ReadDir)
 		if fileInfo.IsDir() == false {
 			// Watch file to mimic linux fsnotify
-			w.addWatch(filePath, noteAllEvents)
+			w.addWatch(filePath, sys_NOTE_ALLEVENTS)
 		} else {
 			// If the user is currently watching directory
 			// we want to preserve the flags used
