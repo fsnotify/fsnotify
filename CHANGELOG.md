@@ -3,53 +3,50 @@
 ## v1.0.0 / 2014-08-15
 
 * [API] Remove AddWatch on Windows, use Add.
-
-## v0.14.3 / 2014-08-15
-
 * Improve documentation for exported identifiers. [#30](https://github.com/go-fsnotify/fsnotify/issues/30)
 * Minor updates based on feedback from golint.
 
-## v0.14.2 / 2014-07-09
+## dev / 2014-07-09
 
 * Moved to [github.com/go-fsnotify/fsnotify](https://github.com/go-fsnotify/fsnotify).
 * Use os.NewSyscallError instead of returning errno (thanks @hariharan-uno)
  
-## v0.14.1 / 2014-07-04
+## dev / 2014-07-04
 
 * kqueue: fix incorrect mutex used in Close()
 * Update example to demonstrate usage of Op.
 
-## v0.14.0 / 2014-06-28
+## dev / 2014-06-28
 
 * [API] Don't set the Write Op for attribute notifications [#4](https://github.com/go-fsnotify/fsnotify/issues/4)
 * Fix for String() method on Event (thanks Alex Brainman)
 * Don't build on Plan 9 or Solaris (thanks @4ad)
 
-## v0.13.0 / 2014-06-21
+## dev / 2014-06-21
 
 * Events channel of type Event rather than *Event.
 * [internal] use syscall constants directly for inotify and kqueue.
 * [internal] kqueue: rename events to kevents and fileEvent to event.
 
-## v0.12.0 / 2014-06-19
+## dev / 2014-06-19
 
 * Go 1.3+ required on Windows (uses syscall.ERROR_MORE_DATA internally).
 * [internal] remove cookie from Event struct (unused).
 * [internal] Event struct has the same definition across every OS.
 * [internal] remove internal watch and removeWatch methods.
 
-## v0.11.0 / 2014-06-12
+## dev / 2014-06-12
 
 * [API] Renamed Watch() to Add() and RemoveWatch() to Remove().
 * [API] Pluralized channel names: Events and Errors.
 * [API] Renamed FileEvent struct to Event.
 * [API] Op constants replace methods like IsCreate().
 
-## v0.10.1 / 2014-06-12
+## dev / 2014-06-12
 
 * Fix data race on kevent buffer (thanks @tilaks) [#98](https://github.com/howeyc/fsnotify/pull/98)
 
-## v0.10.0 / 2014-05-23
+## dev / 2014-05-23
 
 * [API] Remove current implementation of WatchFlags.
     * current implementation doesn't take advantage of OS for efficiency
