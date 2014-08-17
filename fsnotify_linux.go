@@ -97,6 +97,7 @@ func (w *Watcher) Close() error {
 
 // Add starts watching the named file or directory (non-recursively).
 func (w *Watcher) Add(name string) error {
+	name = filepath.Clean(name)
 	if w.isClosed {
 		return errors.New("inotify instance already closed")
 	}
@@ -125,6 +126,7 @@ func (w *Watcher) Add(name string) error {
 
 // Remove stops watching the the named file or directory (non-recursively).
 func (w *Watcher) Remove(name string) error {
+	name = filepath.Clean(name)
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	watch, ok := w.watches[name]

@@ -114,6 +114,7 @@ func (w *Watcher) Close() error {
 // addWatch adds path to the watched file set.
 // The flags are interpreted as described in kevent(2).
 func (w *Watcher) addWatch(path string, flags uint32) error {
+	path = filepath.Clean(path)
 	w.mu.Lock()
 	if w.isClosed {
 		w.mu.Unlock()
@@ -216,6 +217,7 @@ func (w *Watcher) Add(name string) error {
 
 // Remove stops watching the the named file or directory (non-recursively).
 func (w *Watcher) Remove(name string) error {
+	name = filepath.Clean(name)
 	w.wmut.Lock()
 	watchfd, ok := w.watches[name]
 	w.wmut.Unlock()
