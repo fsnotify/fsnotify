@@ -488,9 +488,28 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 			fileEvent.create = true
 			w.internalEvent <- fileEvent
 		}
+
+		// watchDirectoryFiles (but without doing another ReadDir)
+		if fileInfo.IsDir() == false {
+			// Watch file to mimic linux fsnotify
+			w.addWatch(filePath, noteAllEvents)
+		} else {
+			// If the user is currently watching directory
+			// we want to preserve the flags used
+			w.enmut.Lock()
+			currFlags, found := w.enFlags[filePath]
+			w.enmut.Unlock()
+			var newFlags uint32 = syscall.NOTE_DELETE
+			if found {
+				newFlags |= currFlags
+			}
+
+			// Linux gives deletes if not explicitly watching
+			w.addWatch(filePath, newFlags)
+		}
+
 		w.femut.Lock()
 		w.fileExists[filePath] = true
 		w.femut.Unlock()
 	}
-	w.watchDirectoryFiles(dirPath)
 }
