@@ -1,6 +1,6 @@
 # File system notifications for Go
 
-[![Coverage](http://gocover.io/_badge/github.com/go-fsnotify/fsnotify)](http://gocover.io/github.com/go-fsnotify/fsnotify) [![GoDoc](https://godoc.org/github.com/go-fsnotify/fsnotify?status.svg)](https://godoc.org/github.com/go-fsnotify/fsnotify)
+[![Coverage](http://gocover.io/_badge/github.com/go-fsnotify/fsnotify)](http://gocover.io/github.com/go-fsnotify/fsnotify) [![GoDoc](https://godoc.org/gopkg.in/fsnotify.v1?status.svg)](https://godoc.org/gopkg.in/fsnotify.v1)
 
 Cross platform: Windows, Linux, BSD and OS X.
 
@@ -17,19 +17,27 @@ Cross platform: Windows, Linux, BSD and OS X.
 
 \* Android and iOS are untested.
 
-Please see [the documentation](http://godoc.org/github.com/go-fsnotify/fsnotify) for usage. The [Wiki](https://github.com/go-fsnotify/fsnotify/wiki) contains an FAQ and further information.
+Please see [the documentation](https://godoc.org/gopkg.in/fsnotify.v1) for usage. Consult the [Wiki](https://github.com/go-fsnotify/fsnotify/wiki) for the FAQ and further information.
 
 ## API stability
 
-The fsnotify API has changed from what exists at `github.com/howeyc/fsnotify` ([v0.9.0](https://github.com/go-fsnotify/fsnotify/blob/master/CHANGELOG.md#v090--2014-01-17)).
+Two major versions of fsnotify exist. 
 
-Further changes are expected. You may use [gopkg.in](https://gopkg.in/fsnotify.v1) to lock to the current API: 
+**[fsnotify.v1](https://gopkg.in/fsnotify.v1)** provides [a new API](https://godoc.org/gopkg.in/fsnotify.v1) based on [this design document](http://goo.gl/MrYxyA). You can import v1 with:
 
 ```go
 import "gopkg.in/fsnotify.v1"
 ```
 
-A new major revision will be tagged for any future API changes.
+\* Refer to the package as fsnotify (without the .v1 suffix).
+
+**[fsnotify.v0](https://gopkg.in/fsnotify.v0)** is API-compatible with [howeyc/fsnotify](https://godoc.org/github.com/howeyc/fsnotify). Bugfixes *may* be backported, but I recommend upgrading to v1.
+
+```go
+import "gopkg.in/fsnotify.v0"
+```
+
+Further API changes are [planned](https://github.com/go-fsnotify/fsnotify/milestones), but a new major revision will be tagged, so you can depend on the v1 API.
 
 ## Contributing
 
