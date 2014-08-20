@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.3 / 2014-08-19
+
+* [Fix] Windows MOVED_TO now translates to Create like on BSD and Linux. [#36](https://github.com/go-fsnotify/fsnotify/issues/36)
+
 ## v1.0.2 / 2014-08-17
 
 * [Fix] Missing create events on OS X. [#14](https://github.com/go-fsnotify/fsnotify/issues/14) (thanks @zhsso)

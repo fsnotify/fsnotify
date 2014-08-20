@@ -41,7 +41,7 @@ const (
 
 func newEvent(name string, mask uint32) Event {
 	e := Event{Name: name}
-	if mask&sys_FS_CREATE == sys_FS_CREATE {
+	if mask&sys_FS_CREATE == sys_FS_CREATE || mask&sys_FS_MOVED_TO == sys_FS_MOVED_TO {
 		e.Op |= Create
 	}
 	if mask&sys_FS_DELETE == sys_FS_DELETE || mask&sys_FS_DELETE_SELF == sys_FS_DELETE_SELF {
@@ -50,7 +50,7 @@ func newEvent(name string, mask uint32) Event {
 	if mask&sys_FS_MODIFY == sys_FS_MODIFY {
 		e.Op |= Write
 	}
-	if mask&sys_FS_MOVE == sys_FS_MOVE || mask&sys_FS_MOVE_SELF == sys_FS_MOVE_SELF || mask&sys_FS_MOVED_FROM == sys_FS_MOVED_FROM || mask&sys_FS_MOVED_TO == sys_FS_MOVED_TO {
+	if mask&sys_FS_MOVE == sys_FS_MOVE || mask&sys_FS_MOVE_SELF == sys_FS_MOVE_SELF || mask&sys_FS_MOVED_FROM == sys_FS_MOVED_FROM {
 		e.Op |= Rename
 	}
 	if mask&sys_FS_ATTRIB == sys_FS_ATTRIB {
