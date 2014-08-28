@@ -19,6 +19,7 @@ func ExampleNewWatcher() {
 	}
 	defer watcher.Close()
 
+	done := make(chan bool)
 	go func() {
 		for {
 			select {
@@ -37,4 +38,5 @@ func ExampleNewWatcher() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	<-done
 }
