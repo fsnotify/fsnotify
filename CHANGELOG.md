@@ -1,5 +1,9 @@
 # Changelog
 
+## master
+
+* Add done channel to example code. [#37](https://github.com/go-fsnotify/fsnotify/pull/37) (thanks @chenyukang)
+
 ## v1.0.3 / 2014-08-19
 
 * [Fix] Windows MOVED_TO now translates to Create like on BSD and Linux. [#36](https://github.com/go-fsnotify/fsnotify/issues/36)
