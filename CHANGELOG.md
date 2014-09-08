@@ -1,7 +1,8 @@
 # Changelog
 
-## master
+## v1.0.4 / 2014-09-07
 
+* kqueue: add dragonfly to the build tags.
 * Rename source code files, rearrange code so exported APIs are at the top.
 * Add done channel to example code. [#37](https://github.com/go-fsnotify/fsnotify/pull/37) (thanks @chenyukang)
 
