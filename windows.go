@@ -15,6 +15,84 @@ import (
 	"unsafe"
 )
 
+// Watcher watches a set of files, delivering events to a channel.
+type Watcher struct {
+	Events   chan Event
+	Errors   chan error
+	isClosed bool           // Set to true when Close() is first called
+	mu       sync.Mutex     // Map access
+	port     syscall.Handle // Handle to completion port
+	watches  watchMap       // Map of watches (key: i-number)
+	input    chan *input    // Inputs to the reader are sent on this channel
+	quit     chan chan<- error
+}
+
+// NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
+func NewWatcher() (*Watcher, error) {
+	port, e := syscall.CreateIoCompletionPort(syscall.InvalidHandle, 0, 0, 0)
+	if e != nil {
+		return nil, os.NewSyscallError("CreateIoCompletionPort", e)
+	}
+	w := &Watcher{
+		port:    port,
+		watches: make(watchMap),
+		input:   make(chan *input, 1),
+		Events:  make(chan Event, 50),
+		Errors:  make(chan error),
+		quit:    make(chan chan<- error, 1),
+	}
+	go w.readEvents()
+	return w, nil
+}
+
+// Close removes all watches and closes the events channel.
+func (w *Watcher) Close() error {
+	if w.isClosed {
+		return nil
+	}
+	w.isClosed = true
+
+	// Send "quit" message to the reader goroutine
+	ch := make(chan error)
+	w.quit <- ch
+	if err := w.wakeupReader(); err != nil {
+		return err
+	}
+	return <-ch
+}
+
+// Add starts watching the named file or directory (non-recursively).
+func (w *Watcher) Add(name string) error {
+	if w.isClosed {
+		return errors.New("watcher already closed")
+	}
+	in := &input{
+		op:    opAddWatch,
+		path:  filepath.Clean(name),
+		flags: sys_FS_ALL_EVENTS,
+		reply: make(chan error),
+	}
+	w.input <- in
+	if err := w.wakeupReader(); err != nil {
+		return err
+	}
+	return <-in.reply
+}
+
+// Remove stops watching the the named file or directory (non-recursively).
+func (w *Watcher) Remove(name string) error {
+	in := &input{
+		op:    opRemoveWatch,
+		path:  filepath.Clean(name),
+		reply: make(chan error),
+	}
+	w.input <- in
+	if err := w.wakeupReader(); err != nil {
+		return err
+	}
+	return <-in.reply
+}
+
 const (
 	// Options for AddWatch
 	sys_FS_ONESHOT = 0x80000000
@@ -93,84 +171,6 @@ type watch struct {
 
 type indexMap map[uint64]*watch
 type watchMap map[uint32]indexMap
-
-// Watcher watches a set of files, delivering events to a channel.
-type Watcher struct {
-	Events   chan Event
-	Errors   chan error
-	isClosed bool           // Set to true when Close() is first called
-	mu       sync.Mutex     // Map access
-	port     syscall.Handle // Handle to completion port
-	watches  watchMap       // Map of watches (key: i-number)
-	input    chan *input    // Inputs to the reader are sent on this channel
-	quit     chan chan<- error
-}
-
-// NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
-func NewWatcher() (*Watcher, error) {
-	port, e := syscall.CreateIoCompletionPort(syscall.InvalidHandle, 0, 0, 0)
-	if e != nil {
-		return nil, os.NewSyscallError("CreateIoCompletionPort", e)
-	}
-	w := &Watcher{
-		port:    port,
-		watches: make(watchMap),
-		input:   make(chan *input, 1),
-		Events:  make(chan Event, 50),
-		Errors:  make(chan error),
-		quit:    make(chan chan<- error, 1),
-	}
-	go w.readEvents()
-	return w, nil
-}
-
-// Close removes all watches and closes the events channel.
-func (w *Watcher) Close() error {
-	if w.isClosed {
-		return nil
-	}
-	w.isClosed = true
-
-	// Send "quit" message to the reader goroutine
-	ch := make(chan error)
-	w.quit <- ch
-	if err := w.wakeupReader(); err != nil {
-		return err
-	}
-	return <-ch
-}
-
-// Add starts watching the named file or directory (non-recursively).
-func (w *Watcher) Add(name string) error {
-	if w.isClosed {
-		return errors.New("watcher already closed")
-	}
-	in := &input{
-		op:    opAddWatch,
-		path:  filepath.Clean(name),
-		flags: sys_FS_ALL_EVENTS,
-		reply: make(chan error),
-	}
-	w.input <- in
-	if err := w.wakeupReader(); err != nil {
-		return err
-	}
-	return <-in.reply
-}
-
-// Remove stops watching the the named file or directory (non-recursively).
-func (w *Watcher) Remove(name string) error {
-	in := &input{
-		op:    opRemoveWatch,
-		path:  filepath.Clean(name),
-		reply: make(chan error),
-	}
-	w.input <- in
-	if err := w.wakeupReader(); err != nil {
-		return err
-	}
-	return <-in.reply
-}
 
 func (w *Watcher) wakeupReader() error {
 	e := syscall.PostQueuedCompletionStatus(w.port, 0, 0, nil)

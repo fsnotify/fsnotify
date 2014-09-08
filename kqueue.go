@@ -16,35 +16,6 @@ import (
 	"syscall"
 )
 
-const (
-	// Watch all events (except NOTE_EXTEND, NOTE_LINK, NOTE_REVOKE)
-	noteAllEvents = syscall.NOTE_DELETE | syscall.NOTE_WRITE | syscall.NOTE_ATTRIB | syscall.NOTE_RENAME
-
-	// Block for 100 ms on each call to kevent
-	keventWaitTime = 100e6
-)
-
-// newEvent returns an platform-independent Event based on kqueue Fflags.
-func newEvent(name string, mask uint32, create bool) Event {
-	e := Event{Name: name}
-	if create {
-		e.Op |= Create
-	}
-	if mask&syscall.NOTE_DELETE == syscall.NOTE_DELETE {
-		e.Op |= Remove
-	}
-	if mask&syscall.NOTE_WRITE == syscall.NOTE_WRITE {
-		e.Op |= Write
-	}
-	if mask&syscall.NOTE_RENAME == syscall.NOTE_RENAME {
-		e.Op |= Rename
-	}
-	if mask&syscall.NOTE_ATTRIB == syscall.NOTE_ATTRIB {
-		e.Op |= Chmod
-	}
-	return e
-}
-
 // Watcher watches a set of files, delivering events to a channel.
 type Watcher struct {
 	Events          chan Event
@@ -110,6 +81,80 @@ func (w *Watcher) Close() error {
 
 	return nil
 }
+
+// Add starts watching the named file or directory (non-recursively).
+func (w *Watcher) Add(name string) error {
+	w.ewmut.Lock()
+	w.externalWatches[name] = true
+	w.ewmut.Unlock()
+	return w.addWatch(name, noteAllEvents)
+}
+
+// Remove stops watching the the named file or directory (non-recursively).
+func (w *Watcher) Remove(name string) error {
+	name = filepath.Clean(name)
+	w.wmut.Lock()
+	watchfd, ok := w.watches[name]
+	w.wmut.Unlock()
+	if !ok {
+		return fmt.Errorf("can't remove non-existent kevent watch for: %s", name)
+	}
+	var kbuf [1]syscall.Kevent_t
+	watchEntry := &kbuf[0]
+	syscall.SetKevent(watchEntry, watchfd, syscall.EVFILT_VNODE, syscall.EV_DELETE)
+	entryFlags := watchEntry.Flags
+	success, errno := syscall.Kevent(w.kq, kbuf[:], nil, nil)
+	if success == -1 {
+		return os.NewSyscallError("kevent_rm_watch", errno)
+	} else if (entryFlags & syscall.EV_ERROR) == syscall.EV_ERROR {
+		return errors.New("kevent rm error")
+	}
+	syscall.Close(watchfd)
+	w.wmut.Lock()
+	delete(w.watches, name)
+	w.wmut.Unlock()
+	w.enmut.Lock()
+	delete(w.enFlags, name)
+	w.enmut.Unlock()
+	w.pmut.Lock()
+	delete(w.paths, watchfd)
+	fInfo := w.finfo[watchfd]
+	delete(w.finfo, watchfd)
+	w.pmut.Unlock()
+
+	// Find all watched paths that are in this directory that are not external.
+	if fInfo.IsDir() {
+		var pathsToRemove []string
+		w.pmut.Lock()
+		for _, wpath := range w.paths {
+			wdir, _ := filepath.Split(wpath)
+			if filepath.Clean(wdir) == filepath.Clean(name) {
+				w.ewmut.Lock()
+				if !w.externalWatches[wpath] {
+					pathsToRemove = append(pathsToRemove, wpath)
+				}
+				w.ewmut.Unlock()
+			}
+		}
+		w.pmut.Unlock()
+		for _, name := range pathsToRemove {
+			// Since these are internal, not much sense in propagating error
+			// to the user, as that will just confuse them with an error about
+			// a path they did not explicitly watch themselves.
+			w.Remove(name)
+		}
+	}
+
+	return nil
+}
+
+const (
+	// Watch all events (except NOTE_EXTEND, NOTE_LINK, NOTE_REVOKE)
+	noteAllEvents = syscall.NOTE_DELETE | syscall.NOTE_WRITE | syscall.NOTE_ATTRIB | syscall.NOTE_RENAME
+
+	// Block for 100 ms on each call to kevent
+	keventWaitTime = 100e6
+)
 
 // addWatch adds path to the watched file set.
 // The flags are interpreted as described in kevent(2).
@@ -204,72 +249,6 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 			return errdir
 		}
 	}
-	return nil
-}
-
-// Add starts watching the named file or directory (non-recursively).
-func (w *Watcher) Add(name string) error {
-	w.ewmut.Lock()
-	w.externalWatches[name] = true
-	w.ewmut.Unlock()
-	return w.addWatch(name, noteAllEvents)
-}
-
-// Remove stops watching the the named file or directory (non-recursively).
-func (w *Watcher) Remove(name string) error {
-	name = filepath.Clean(name)
-	w.wmut.Lock()
-	watchfd, ok := w.watches[name]
-	w.wmut.Unlock()
-	if !ok {
-		return fmt.Errorf("can't remove non-existent kevent watch for: %s", name)
-	}
-	var kbuf [1]syscall.Kevent_t
-	watchEntry := &kbuf[0]
-	syscall.SetKevent(watchEntry, watchfd, syscall.EVFILT_VNODE, syscall.EV_DELETE)
-	entryFlags := watchEntry.Flags
-	success, errno := syscall.Kevent(w.kq, kbuf[:], nil, nil)
-	if success == -1 {
-		return os.NewSyscallError("kevent_rm_watch", errno)
-	} else if (entryFlags & syscall.EV_ERROR) == syscall.EV_ERROR {
-		return errors.New("kevent rm error")
-	}
-	syscall.Close(watchfd)
-	w.wmut.Lock()
-	delete(w.watches, name)
-	w.wmut.Unlock()
-	w.enmut.Lock()
-	delete(w.enFlags, name)
-	w.enmut.Unlock()
-	w.pmut.Lock()
-	delete(w.paths, watchfd)
-	fInfo := w.finfo[watchfd]
-	delete(w.finfo, watchfd)
-	w.pmut.Unlock()
-
-	// Find all watched paths that are in this directory that are not external.
-	if fInfo.IsDir() {
-		var pathsToRemove []string
-		w.pmut.Lock()
-		for _, wpath := range w.paths {
-			wdir, _ := filepath.Split(wpath)
-			if filepath.Clean(wdir) == filepath.Clean(name) {
-				w.ewmut.Lock()
-				if !w.externalWatches[wpath] {
-					pathsToRemove = append(pathsToRemove, wpath)
-				}
-				w.ewmut.Unlock()
-			}
-		}
-		w.pmut.Unlock()
-		for _, name := range pathsToRemove {
-			// Since these are internal, not much sense in propagating error
-			// to the user, as that will just confuse them with an error about
-			// a path they did not explicitly watch themselves.
-			w.Remove(name)
-		}
-	}
-
 	return nil
 }
 
@@ -386,6 +365,27 @@ func (w *Watcher) readEvents() {
 			}
 		}
 	}
+}
+
+// newEvent returns an platform-independent Event based on kqueue Fflags.
+func newEvent(name string, mask uint32, create bool) Event {
+	e := Event{Name: name}
+	if create {
+		e.Op |= Create
+	}
+	if mask&syscall.NOTE_DELETE == syscall.NOTE_DELETE {
+		e.Op |= Remove
+	}
+	if mask&syscall.NOTE_WRITE == syscall.NOTE_WRITE {
+		e.Op |= Write
+	}
+	if mask&syscall.NOTE_RENAME == syscall.NOTE_RENAME {
+		e.Op |= Rename
+	}
+	if mask&syscall.NOTE_ATTRIB == syscall.NOTE_ATTRIB {
+		e.Op |= Chmod
+	}
+	return e
 }
 
 func (w *Watcher) watchDirectoryFiles(dirPath string) error {

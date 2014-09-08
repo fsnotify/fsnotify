@@ -15,38 +15,6 @@ import (
 	"unsafe"
 )
 
-const (
-	agnosticEvents = syscall.IN_MOVED_TO | syscall.IN_MOVED_FROM |
-		syscall.IN_CREATE | syscall.IN_ATTRIB | syscall.IN_MODIFY |
-		syscall.IN_MOVE_SELF | syscall.IN_DELETE | syscall.IN_DELETE_SELF
-)
-
-// newEvent returns an platform-independent Event based on an inotify mask.
-func newEvent(name string, mask uint32) Event {
-	e := Event{Name: name}
-	if mask&syscall.IN_CREATE == syscall.IN_CREATE || mask&syscall.IN_MOVED_TO == syscall.IN_MOVED_TO {
-		e.Op |= Create
-	}
-	if mask&syscall.IN_DELETE_SELF == syscall.IN_DELETE_SELF || mask&syscall.IN_DELETE == syscall.IN_DELETE {
-		e.Op |= Remove
-	}
-	if mask&syscall.IN_MODIFY == syscall.IN_MODIFY {
-		e.Op |= Write
-	}
-	if mask&syscall.IN_MOVE_SELF == syscall.IN_MOVE_SELF || mask&syscall.IN_MOVED_FROM == syscall.IN_MOVED_FROM {
-		e.Op |= Rename
-	}
-	if mask&syscall.IN_ATTRIB == syscall.IN_ATTRIB {
-		e.Op |= Chmod
-	}
-	return e
-}
-
-type watch struct {
-	wd    uint32 // Watch descriptor (as returned by the inotify_add_watch() syscall)
-	flags uint32 // inotify flags of this watch (see inotify(7) for the list of valid flags)
-}
-
 // Watcher watches a set of files, delivering events to a channel.
 type Watcher struct {
 	Events   chan Event
@@ -103,6 +71,10 @@ func (w *Watcher) Add(name string) error {
 		return errors.New("inotify instance already closed")
 	}
 
+	const agnosticEvents = syscall.IN_MOVED_TO | syscall.IN_MOVED_FROM |
+		syscall.IN_CREATE | syscall.IN_ATTRIB | syscall.IN_MODIFY |
+		syscall.IN_MOVE_SELF | syscall.IN_DELETE | syscall.IN_DELETE_SELF
+
 	var flags uint32 = agnosticEvents
 
 	w.mu.Lock()
@@ -140,6 +112,11 @@ func (w *Watcher) Remove(name string) error {
 	}
 	delete(w.watches, name)
 	return nil
+}
+
+type watch struct {
+	wd    uint32 // Watch descriptor (as returned by the inotify_add_watch() syscall)
+	flags uint32 // inotify flags of this watch (see inotify(7) for the list of valid flags)
 }
 
 // readEvents reads from the inotify file descriptor, converts the
@@ -236,4 +213,25 @@ func (e *Event) ignoreLinux(mask uint32) bool {
 		return os.IsNotExist(statErr)
 	}
 	return false
+}
+
+// newEvent returns an platform-independent Event based on an inotify mask.
+func newEvent(name string, mask uint32) Event {
+	e := Event{Name: name}
+	if mask&syscall.IN_CREATE == syscall.IN_CREATE || mask&syscall.IN_MOVED_TO == syscall.IN_MOVED_TO {
+		e.Op |= Create
+	}
+	if mask&syscall.IN_DELETE_SELF == syscall.IN_DELETE_SELF || mask&syscall.IN_DELETE == syscall.IN_DELETE {
+		e.Op |= Remove
+	}
+	if mask&syscall.IN_MODIFY == syscall.IN_MODIFY {
+		e.Op |= Write
+	}
+	if mask&syscall.IN_MOVE_SELF == syscall.IN_MOVE_SELF || mask&syscall.IN_MOVED_FROM == syscall.IN_MOVED_FROM {
+		e.Op |= Rename
+	}
+	if mask&syscall.IN_ATTRIB == syscall.IN_ATTRIB {
+		e.Op |= Chmod
+	}
+	return e
 }

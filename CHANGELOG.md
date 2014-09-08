@@ -2,6 +2,7 @@
 
 ## master
 
+* Rename source code files, rearrange code so exported APIs are at the top.
 * Add done channel to example code. [#37](https://github.com/go-fsnotify/fsnotify/pull/37) (thanks @chenyukang)
 
 ## v1.0.3 / 2014-08-19
