@@ -240,3 +240,12 @@ func newEvent(name string, mask uint32) Event {
 	}
 	return e
 }
+
+func (w *Watcher) length() int {
+        w.mu.Lock()
+        defer w.mu.Unlock()
+        if len(w.watches) != len(w.paths) {
+                panic("internal maps lengh is differ")
+        }
+        return len(w.watches)
+}
