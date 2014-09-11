@@ -27,6 +27,7 @@ type Watcher struct {
 	paths    map[int]string    // Map of watched paths (key: watch descriptor)
 	done     chan bool         // Channel for sending a "quit message" to the reader goroutine
 	isClosed bool              // Set to true when Close() is first called
+	isRunning bool             // readEvents go routine is running or not
 }
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
@@ -130,6 +131,8 @@ func (w *Watcher) readEvents() {
 		errno error                                   // Syscall errno
 	)
 
+	w.isRunning = true
+	defer func() { w.isRunning = false }()
 	for {
 		// See if there is a message on the "done" channel
 		select {
