@@ -205,3 +205,32 @@ func TestIgnoredEvents(t *testing.T) {
 		t.Fatal("still running after Close()")
 	}
 }
+
+func TestRemoveWatch(t *testing.T) {
+	// Create an inotify watcher instance and initialize it
+	watcher, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("NewWatcher failed: %s", err)
+	}
+	dir, err := ioutil.TempDir("", "inotify")
+	if err != nil {
+		t.Fatalf("TempDir failed: %s", err)
+	}
+	defer os.RemoveAll(dir)
+
+	if err = watcher.Add(dir); err != nil {
+		t.Fatalf("Watch failed: %s", err)
+	}
+
+	if err = watcher.Remove(dir); err != nil {
+		t.Fatalf("Remove failed: %s, err")
+	}
+
+	if watcher.length() != 0 {
+		t.Fatalf("watcher entries should be 0, but got: %d", watcher.length())
+	}
+	watcher.Close()
+	if watcher.isRunning {
+		t.Fatal("still running after Close()")
+	}
+}
