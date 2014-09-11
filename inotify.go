@@ -22,6 +22,7 @@ type Watcher struct {
 	Events   chan Event
 	Errors   chan error
 	mu       sync.Mutex        // Map access
+        cv       *sync.Cond        // sync removing on rm_watch with IN_IGNORE
 	fd       int               // File descriptor (as returned by the inotify_init() syscall)
 	watches  map[string]*watch // Map of inotify watches (key: path)
 	paths    map[int]string    // Map of watched paths (key: watch descriptor)
@@ -44,6 +45,7 @@ func NewWatcher() (*Watcher, error) {
 		Errors:  make(chan error),
 		done:    make(chan bool, 1),
 	}
+        w.cv = sync.NewCond(&w.mu)
 
 	go w.readEvents()
 	return w, nil
@@ -113,7 +115,14 @@ func (w *Watcher) Remove(name string) error {
 	if success == -1 {
 		return os.NewSyscallError("inotify_rm_watch", errno)
 	}
-	delete(w.watches, name)
+
+	// not delete(w.watches, name) here, but in ignoreLinux()
+	// use condv to sync with ignoreLinux()
+	for ok {
+		w.cv.Wait()
+		_, ok = w.watches[name]
+	}
+
 	return nil
 }
 
@@ -189,7 +198,7 @@ func (w *Watcher) readEvents() {
 			event := newEvent(name, mask)
 
 			// Send the events that are not ignored on the events channel
-			if !event.ignoreLinux(mask) {
+			if !event.ignoreLinux(w, raw.Wd, mask) {
 				w.Events <- event
 			}
 
@@ -202,9 +211,15 @@ func (w *Watcher) readEvents() {
 // Certain types of events can be "ignored" and not sent over the Events
 // channel. Such as events marked ignore by the kernel, or MODIFY events
 // against files that do not exist.
-func (e *Event) ignoreLinux(mask uint32) bool {
+func (e *Event) ignoreLinux(w *Watcher, wd int32, mask uint32) bool {
 	// Ignore anything the inotify API says to ignore
 	if mask&syscall.IN_IGNORED == syscall.IN_IGNORED {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		name := w.paths[int(wd)]
+		delete(w.paths, int(wd))
+		delete(w.watches, name)
+		w.cv.Broadcast()
 		return true
 	}
 
