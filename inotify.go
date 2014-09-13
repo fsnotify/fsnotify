@@ -275,10 +275,10 @@ func (w *Watcher) length() int {
 func (w *Watcher) epollEvents(epfd int, donePipe *os.File) {
 	w.isRunning = true
 	defer func() {
+		syscall.Close(epfd)
 		w.isRunning = false
 		w.closed <- true
 	}()
-	defer syscall.Close(epfd)
 	events := make([]syscall.EpollEvent, EPOLL_MAX_EVENTS)
 	doneFd := int32(donePipe.Fd())
 	for {
