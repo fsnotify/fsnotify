@@ -19,23 +19,31 @@ import (
 
 // Watcher watches a set of files, delivering events to a channel.
 type Watcher struct {
-	Events          chan Event
-	Errors          chan error
-	mu              sync.Mutex          // Mutex for the Watcher itself.
-	kq              int                 // File descriptor (as returned by the kqueue() syscall).
-	watches         map[string]int      // Map of watched file descriptors (key: path).
-	wmut            sync.Mutex          // Protects access to watches.
-	dirFlags        map[string]uint32   // Map of watched directories to fflags used in kqueue.
-	dirmut          sync.Mutex          // Protects access to dirFlags.
-	paths           map[int]string      // Map of watched paths (key: watch descriptor).
-	finfo           map[int]os.FileInfo // Map of file information (isDir, isReg; key: watch descriptor).
-	pmut            sync.Mutex          // Protects access to paths and finfo.
-	fileExists      map[string]bool     // Keep track of if we know this file exists (to stop duplicate create events).
-	femut           sync.Mutex          // Protects access to fileExists.
-	externalWatches map[string]bool     // Map of watches added by user of the library.
-	ewmut           sync.Mutex          // Protects access to externalWatches.
-	done            chan bool           // Channel for sending a "quit message" to the reader goroutine
-	isClosed        bool                // Set to true when Close() is first called
+	Events chan Event
+	Errors chan error
+
+	kq              int               // File descriptor (as returned by the kqueue() syscall).
+	watches         map[string]int    // Map of watched file descriptors (key: path).
+	externalWatches map[string]bool   // Map of watches added by user of the library.
+	dirFlags        map[string]uint32 // Map of watched directories to fflags used in kqueue.
+	paths           map[int]pathInfo  // Map file descriptors to path names for processing kqueue events.
+	fileExists      map[string]bool   // Keep track of if we know this file exists (to stop duplicate create events).
+	done            chan bool         // Channel for sending a "quit message" to the reader goroutine
+	isClosed        bool              // Set to true when Close() is first called
+
+	mu sync.Mutex // Mutex for the Watcher itself (isClosed).
+
+	wmut  sync.Mutex // Protects access to watches.
+	pmut  sync.Mutex // Protects access to paths.
+	ewmut sync.Mutex // Protects access to externalWatches.
+
+	dirmut sync.Mutex // Protects access to dirFlags.
+	femut  sync.Mutex // Protects access to fileExists.
+}
+
+type pathInfo struct {
+	name  string
+	isDir bool
 }
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
@@ -49,8 +57,7 @@ func NewWatcher() (*Watcher, error) {
 		kq:              kq,
 		watches:         make(map[string]int),
 		dirFlags:        make(map[string]uint32),
-		paths:           make(map[int]string),
-		finfo:           make(map[int]os.FileInfo),
+		paths:           make(map[int]pathInfo),
 		fileExists:      make(map[string]bool),
 		externalWatches: make(map[string]bool),
 		Events:          make(chan Event),
@@ -116,21 +123,20 @@ func (w *Watcher) Remove(name string) error {
 	delete(w.dirFlags, name)
 	w.dirmut.Unlock()
 	w.pmut.Lock()
+	isDir := w.paths[watchfd].isDir
 	delete(w.paths, watchfd)
-	fInfo := w.finfo[watchfd]
-	delete(w.finfo, watchfd)
 	w.pmut.Unlock()
 
 	// Find all watched paths that are in this directory that are not external.
-	if fInfo.IsDir() {
+	if isDir {
 		var pathsToRemove []string
 		w.pmut.Lock()
-		for _, wpath := range w.paths {
-			wdir, _ := filepath.Split(wpath)
+		for _, path := range w.paths {
+			wdir, _ := filepath.Split(path.name)
 			if filepath.Clean(wdir) == filepath.Clean(name) {
 				w.ewmut.Lock()
-				if !w.externalWatches[wpath] {
-					pathsToRemove = append(pathsToRemove, wpath)
+				if !w.externalWatches[path.name] {
+					pathsToRemove = append(pathsToRemove, path.name)
 				}
 				w.ewmut.Unlock()
 			}
@@ -153,9 +159,9 @@ const noteAllEvents = syscall.NOTE_DELETE | syscall.NOTE_WRITE | syscall.NOTE_AT
 // keventWaitTime to block on each read from kevent
 var keventWaitTime = durationToTimespec(100 * time.Millisecond)
 
-// addWatch adds path to the watched file set.
+// addWatch adds name to the watched file set.
 // The flags are interpreted as described in kevent(2).
-func (w *Watcher) addWatch(path string, flags uint32) error {
+func (w *Watcher) addWatch(name string, flags uint32) error {
 	w.mu.Lock()
 	if w.isClosed {
 		w.mu.Unlock()
@@ -163,26 +169,22 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 	}
 	w.mu.Unlock()
 
-	var (
-		watchfd int
-		fi      os.FileInfo
-		err     error
-	)
-
-	// Make ./path and path equivalent
-	path = filepath.Clean(path)
+	// Make ./name and name equivalent
+	name = filepath.Clean(name)
 
 	w.wmut.Lock()
-	watchfd, found := w.watches[path]
+	watchfd, alreadyWatching := w.watches[name]
 	w.wmut.Unlock()
 
-	if found {
+	var isDir bool
+
+	if alreadyWatching {
 		// We already have a watch, but we can still override flags
 		w.pmut.Lock()
-		fi = w.finfo[watchfd]
+		isDir = w.paths[watchfd].isDir
 		w.pmut.Unlock()
 	} else {
-		fi, err = os.Lstat(path)
+		fi, err := os.Lstat(name)
 		if err != nil {
 			return err
 		}
@@ -199,21 +201,23 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 		// be no file events for broken symlinks.
 		// Hence the returns of nil on errors.
 		if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
-			path, err := filepath.EvalSymlinks(path)
+			name, err = filepath.EvalSymlinks(name)
 			if err != nil {
 				return nil
 			}
 
-			fi, err = os.Lstat(path)
+			fi, err = os.Lstat(name)
 			if err != nil {
 				return nil
 			}
 		}
 
-		watchfd, err = syscall.Open(path, openMode, 0700)
+		watchfd, err = syscall.Open(name, openMode, 0700)
 		if watchfd == -1 {
 			return os.NewSyscallError("Open", err)
 		}
+
+		isDir = fi.IsDir()
 	}
 
 	const registerAdd = syscall.EV_ADD | syscall.EV_CLEAR | syscall.EV_ENABLE
@@ -222,29 +226,28 @@ func (w *Watcher) addWatch(path string, flags uint32) error {
 		return err
 	}
 
-	if !found {
+	if !alreadyWatching {
 		w.wmut.Lock()
-		w.watches[path] = watchfd
+		w.watches[name] = watchfd
 		w.wmut.Unlock()
 
 		w.pmut.Lock()
-		w.paths[watchfd] = path
-		w.finfo[watchfd] = fi
+		w.paths[watchfd] = pathInfo{name: name, isDir: isDir}
 		w.pmut.Unlock()
 	}
 
-	if fi.IsDir() {
+	if isDir {
 		// Watch the directory if it has not been watched before,
 		// or if it was watched before, but perhaps only a NOTE_DELETE (watchDirectoryFiles)
 		w.dirmut.Lock()
 		watchDir := (flags&syscall.NOTE_WRITE) == syscall.NOTE_WRITE &&
-			(!found || (w.dirFlags[path]&syscall.NOTE_WRITE) != syscall.NOTE_WRITE)
+			(!alreadyWatching || (w.dirFlags[name]&syscall.NOTE_WRITE) != syscall.NOTE_WRITE)
 		// Store flags so this watch can be updated later
-		w.dirFlags[path] = flags
+		w.dirFlags[name] = flags
 		w.dirmut.Unlock()
 
 		if watchDir {
-			if err := w.watchDirectoryFiles(path); err != nil {
+			if err := w.watchDirectoryFiles(name); err != nil {
 				return err
 			}
 		}
@@ -286,13 +289,12 @@ func (w *Watcher) readEvents() {
 			mask := uint32(watchEvent.Fflags)
 
 			w.pmut.Lock()
-			name := w.paths[watchfd]
-			fileInfo := w.finfo[watchfd]
+			path := w.paths[watchfd]
 			w.pmut.Unlock()
 
-			event := newEvent(name, mask)
+			event := newEvent(path.name, mask)
 
-			if fileInfo != nil && fileInfo.IsDir() && !(event.Op&Remove == Remove) {
+			if path.isDir && !(event.Op&Remove == Remove) {
 				// Double check to make sure the directory exist. This can happen when
 				// we do a rm -fr on a recursively watched folders and we receive a
 				// modification event first but the folder has been deleted and later
@@ -303,7 +305,7 @@ func (w *Watcher) readEvents() {
 				}
 			}
 
-			if fileInfo != nil && fileInfo.IsDir() && event.Op&Write == Write && !(event.Op&Remove == Remove) {
+			if path.isDir && event.Op&Write == Write && !(event.Op&Remove == Remove) {
 				w.sendDirectoryChangeEvents(event.Name)
 			} else {
 				// Send the event on the Events channel
@@ -423,20 +425,20 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 	}
 }
 
-func (w *Watcher) internalWatch(path string, fileInfo os.FileInfo) error {
+func (w *Watcher) internalWatch(name string, fileInfo os.FileInfo) error {
 	if fileInfo.IsDir() {
 		// mimic Linux providing delete events for subdirectories
 		// but preserve the flags used if currently watching subdirectory
 		w.dirmut.Lock()
-		flags := w.dirFlags[path]
+		flags := w.dirFlags[name]
 		w.dirmut.Unlock()
 
 		flags |= syscall.NOTE_DELETE
-		return w.addWatch(path, flags)
+		return w.addWatch(name, flags)
 	}
 
 	// watch file to mimic Linux inotify
-	return w.addWatch(path, noteAllEvents)
+	return w.addWatch(name, noteAllEvents)
 }
 
 // kqueue creates a new kernel event queue and returns a descriptor.
