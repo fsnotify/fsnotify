@@ -278,7 +278,7 @@ func (w *Watcher) readEvents() {
 		kevents, err := read(w.kq, eventBuffer, &keventWaitTime)
 		// EINTR is okay, the syscall was interrupted before timeout expired.
 		if err != nil && err != syscall.EINTR {
-			w.Errors <- err
+			w.Errors <- os.NewSyscallError("Kevent", err)
 			continue
 		}
 
@@ -473,7 +473,7 @@ func register(kq int, fds []int, flags int, fflags uint32) error {
 func read(kq int, events []syscall.Kevent_t, timeout *syscall.Timespec) ([]syscall.Kevent_t, error) {
 	n, err := syscall.Kevent(kq, nil, events, timeout)
 	if err != nil {
-		return nil, os.NewSyscallError("Kevent", err)
+		return nil, err
 	}
 	return events[0:n], nil
 }
