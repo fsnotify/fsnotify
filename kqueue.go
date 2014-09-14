@@ -282,13 +282,15 @@ func (w *Watcher) readEvents() {
 		// Flush the events we received to the Events channel
 		for len(kevents) > 0 {
 			watchEvent := &kevents[0]
+			watchfd := int(watchEvent.Ident)
 			mask := uint32(watchEvent.Fflags)
+
 			w.pmut.Lock()
-			name := w.paths[int(watchEvent.Ident)]
-			fileInfo := w.finfo[int(watchEvent.Ident)]
+			name := w.paths[watchfd]
+			fileInfo := w.finfo[watchfd]
 			w.pmut.Unlock()
 
-			event := newEvent(name, mask, false)
+			event := newEvent(name, mask)
 
 			if fileInfo != nil && fileInfo.IsDir() && !(event.Op&Remove == Remove) {
 				// Double check to make sure the directory exist. This can happen when
@@ -345,11 +347,8 @@ func (w *Watcher) readEvents() {
 }
 
 // newEvent returns an platform-independent Event based on kqueue Fflags.
-func newEvent(name string, mask uint32, create bool) Event {
+func newEvent(name string, mask uint32) Event {
 	e := Event{Name: name}
-	if create {
-		e.Op |= Create
-	}
 	if mask&syscall.NOTE_DELETE == syscall.NOTE_DELETE {
 		e.Op |= Remove
 	}
@@ -363,6 +362,10 @@ func newEvent(name string, mask uint32, create bool) Event {
 		e.Op |= Chmod
 	}
 	return e
+}
+
+func newCreateEvent(name string) Event {
+	return Event{Name: name, Op: Create}
 }
 
 // watchDirectoryFiles to mimic inotify when adding a watch on a directory
@@ -405,9 +408,8 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 		_, doesExist := w.fileExists[filePath]
 		w.femut.Unlock()
 		if !doesExist {
-			// Send create event (mask=0)
-			event := newEvent(filePath, 0, true)
-			w.Events <- event
+			// Send create event
+			w.Events <- newCreateEvent(filePath)
 		}
 
 		// like watchDirectoryFiles (but without doing another ReadDir)
