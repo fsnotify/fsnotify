@@ -327,20 +327,21 @@ func (w *Watcher) readEvents() {
 				delete(w.fileExists, event.Name)
 				w.femut.Unlock()
 
-				// Look for a file that may have overwritten this
-				// (ie mv f1 f2 will delete f2 then create f2)
+				// Look for a file that may have overwritten this.
+				// For example, mv f1 f2 will delete f2, then create f2.
 				fileDir, _ := filepath.Split(event.Name)
 				fileDir = filepath.Clean(fileDir)
 				w.wmut.Lock()
 				_, found := w.watches[fileDir]
 				w.wmut.Unlock()
 				if found {
-					// make sure the directory exist before we watch for changes. When we
+					// make sure the directory exists before we watch for changes. When we
 					// do a recursive watch and perform rm -fr, the parent directory might
 					// have gone missing, ignore the missing directory and let the
 					// upcoming delete event remove the watch from the parent directory.
-					if _, err := os.Lstat(fileDir); !os.IsNotExist(err) {
+					if _, err := os.Lstat(fileDir); os.IsExist(err) {
 						w.sendDirectoryChangeEvents(fileDir)
+						// FIXME: should this be for events on files or just isDir?
 					}
 				}
 			}
