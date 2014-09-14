@@ -55,7 +55,7 @@ func NewWatcher() (*Watcher, error) {
 		externalWatches: make(map[string]bool),
 		Events:          make(chan Event),
 		Errors:          make(chan error),
-		done:            make(chan bool, 1),
+		done:            make(chan bool),
 	}
 
 	go w.readEvents()
@@ -250,14 +250,8 @@ func (w *Watcher) readEvents() {
 
 	for {
 		// See if there is a message on the "done" channel
-		var done bool
 		select {
-		case done = <-w.done:
-		default:
-		}
-
-		// If "done" message is received
-		if done {
+		case <-w.done:
 			errno := syscall.Close(w.kq)
 			if errno != nil {
 				w.Errors <- os.NewSyscallError("close", errno)
@@ -265,6 +259,7 @@ func (w *Watcher) readEvents() {
 			close(w.Events)
 			close(w.Errors)
 			return
+		default:
 		}
 
 		// Get new events
