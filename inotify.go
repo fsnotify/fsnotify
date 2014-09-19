@@ -17,21 +17,21 @@ import (
 	"unsafe"
 )
 
-const EPOLL_MAX_EVENTS	= 16
+const EPOLL_MAX_EVENTS = 16
 
 // Watcher watches a set of files, delivering events to a channel.
 type Watcher struct {
-	Events   chan Event
-	Errors   chan error
-	mu       sync.Mutex        // Map access
-        cv       *sync.Cond        // sync removing on rm_watch with IN_IGNORE
-	fd       int               // File descriptor (as returned by the inotify_init() syscall)
-	watches  map[string]*watch // Map of inotify watches (key: path)
-	paths    map[int]string    // Map of watched paths (key: watch descriptor)
-	done     chan bool         // Channel for sending a "quit message" to the reader goroutine
-	isClosed bool              // Set to true when Close() is first called
-	isRunning bool             // epollEvents go routine is running or not
-	closed   chan bool         // Channel for syncing Close()
+	Events    chan Event
+	Errors    chan error
+	mu        sync.Mutex        // Map access
+	cv        *sync.Cond        // sync removing on rm_watch with IN_IGNORE
+	fd        int               // File descriptor (as returned by the inotify_init() syscall)
+	watches   map[string]*watch // Map of inotify watches (key: path)
+	paths     map[int]string    // Map of watched paths (key: watch descriptor)
+	done      chan bool         // Channel for sending a "quit message" to the reader goroutine
+	isClosed  bool              // Set to true when Close() is first called
+	isRunning bool              // epollEvents go routine is running or not
+	closed    chan bool         // Channel for syncing Close()
 }
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
@@ -49,7 +49,7 @@ func NewWatcher() (*Watcher, error) {
 		done:    make(chan bool),
 		closed:  make(chan bool),
 	}
-        w.cv = sync.NewCond(&w.mu)
+	w.cv = sync.NewCond(&w.mu)
 
 	rp, wp, err := os.Pipe() // for done
 	if err != nil {
@@ -69,7 +69,7 @@ func NewWatcher() (*Watcher, error) {
 	}
 
 	go func() {
-		<- w.done
+		<-w.done
 		wp.Close() // make rp readable
 	}()
 	go w.epollEvents(epfd, rp)
@@ -92,7 +92,7 @@ func (w *Watcher) Close() error {
 	// Send "quit" message to the reader goroutine
 	w.done <- true
 	// And wait receiving it's actually closed
-	<- w.closed
+	<-w.closed
 
 	return nil
 }
@@ -264,12 +264,12 @@ func newEvent(name string, mask uint32) Event {
 }
 
 func (w *Watcher) length() int {
-        w.mu.Lock()
-        defer w.mu.Unlock()
-        if len(w.watches) != len(w.paths) {
-                panic("internal maps lengh is differ")
-        }
-        return len(w.watches)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.watches) != len(w.paths) {
+		panic("internal maps lengh is differ")
+	}
+	return len(w.watches)
 }
 
 func (w *Watcher) epollEvents(epfd int, donePipe *os.File) {

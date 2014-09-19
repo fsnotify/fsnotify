@@ -153,7 +153,7 @@ func TestIgnoredEvents(t *testing.T) {
 		t.Fatalf("creating test file: %s", err)
 	}
 	event = <-eventstream
-	if event.Op & Create == 0 {
+	if event.Op&Create == 0 {
 		t.Fatal("inotify hasn't received IN_CREATE")
 	}
 	if err = testFile.Close(); err != nil {
@@ -165,14 +165,14 @@ func TestIgnoredEvents(t *testing.T) {
 		t.Fatal("removing test file: %s", err)
 	}
 	event = <-eventstream
-	if event.Op & Remove == 0 {
+	if event.Op&Remove == 0 {
 		t.Fatal("inotify hasn't received IN_DELETE")
 	}
 
 	// IN_DELETE_SELF, IN_IGNORED
 	os.RemoveAll(dir)
 	event = <-eventstream
-	if event.Op & Remove == 0 {
+	if event.Op&Remove == 0 {
 		t.Fatal("inotify hasn't received IN_DELETE_SELF")
 	}
 
@@ -187,7 +187,7 @@ func TestIgnoredEvents(t *testing.T) {
 		os.RemoveAll(dir)
 		// IN_DELETE_SELF, IN_IGNORED
 		event = <-eventstream
-		if event.Op & Remove == 0 {
+		if event.Op&Remove == 0 {
 			t.Fatal("inotify hasn't received IN_DELETE_SELF")
 		}
 		if event.Name != dir {
