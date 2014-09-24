@@ -197,7 +197,7 @@ func (w *Watcher) addWatch(name string, flags uint32) error {
 
 		watchfd, err = syscall.Open(name, openMode, 0700)
 		if watchfd == -1 {
-			return os.NewSyscallError("Open", err)
+			return err
 		}
 
 		isDir = fi.IsDir()
@@ -246,7 +246,7 @@ func (w *Watcher) readEvents() {
 		case <-w.done:
 			err := syscall.Close(w.kq)
 			if err != nil {
-				w.Errors <- os.NewSyscallError("close", err)
+				w.Errors <- err
 			}
 			close(w.Events)
 			close(w.Errors)
@@ -258,7 +258,7 @@ func (w *Watcher) readEvents() {
 		kevents, err := read(w.kq, eventBuffer, &keventWaitTime)
 		// EINTR is okay, the syscall was interrupted before timeout expired.
 		if err != nil && err != syscall.EINTR {
-			w.Errors <- os.NewSyscallError("Kevent", err)
+			w.Errors <- err
 			continue
 		}
 
@@ -419,7 +419,7 @@ func (w *Watcher) internalWatch(name string, fileInfo os.FileInfo) error {
 func kqueue() (kq int, err error) {
 	kq, err = syscall.Kqueue()
 	if kq == -1 {
-		return kq, os.NewSyscallError("Kqueue", err)
+		return kq, err
 	}
 	return kq, nil
 }
@@ -437,7 +437,7 @@ func register(kq int, fds []int, flags int, fflags uint32) error {
 	// register the events
 	success, err := syscall.Kevent(kq, changes, nil, nil)
 	if success == -1 {
-		return os.NewSyscallError("Kevent", err)
+		return err
 	}
 	return nil
 }
