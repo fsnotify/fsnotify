@@ -1,5 +1,14 @@
 # Changelog
 
+## dev / 2014-09-24
+
+* kqueue: rework internals [#43](https://github.com/go-fsnotify/fsnotify/pull/43)
+    * add low-level functions
+    * only need to store flags on directories
+    * less mutexes [#13](https://github.com/go-fsnotify/fsnotify/issues/13)
+    * done can be an unbuffered channel
+    * remove calls to os.NewSyscallError
+
 ## v1.0.4 / 2014-09-07
 
 * kqueue: add dragonfly to the build tags.
