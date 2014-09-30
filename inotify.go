@@ -84,16 +84,13 @@ func (w *Watcher) Close() error {
 	}
 	w.isClosed = true
 
-	// Remove all watches
-	for name := range w.watches {
-		w.Remove(name)
-	}
-
 	// Send "quit" message to the reader goroutine
 	w.done <- true
 	// And wait receiving it's actually closed
 	<-w.closed
 
+	w.watches = nil
+	w.paths = nil
 	return nil
 }
 
