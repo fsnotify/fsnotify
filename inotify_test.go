@@ -7,14 +7,18 @@
 package fsnotify
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
 var TIMEOUT = 100 * time.Millisecond
+var TMP_PREFIX = "_fsnotify_tmp_"
 
 func TestInotifyEvents(t *testing.T) {
 	// Create an inotify watcher instance and initialize it
@@ -23,7 +27,7 @@ func TestInotifyEvents(t *testing.T) {
 		t.Fatalf("NewWatcher failed: %s", err)
 	}
 
-	dir, err := ioutil.TempDir("", "inotify")
+	dir, err := ioutil.TempDir("", TMP_PREFIX)
 	if err != nil {
 		t.Fatalf("TempDir failed: %s", err)
 	}
@@ -122,7 +126,7 @@ func TestIgnoredEvents(t *testing.T) {
 		t.Fatalf("NewWatcher failed: %s", err)
 	}
 
-	dir, err := ioutil.TempDir("", "inotify")
+	dir, err := ioutil.TempDir("", TMP_PREFIX)
 	if err != nil {
 		t.Fatalf("TempDir failed: %s", err)
 	}
@@ -212,7 +216,7 @@ func TestRemoveWatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWatcher failed: %s", err)
 	}
-	dir, err := ioutil.TempDir("", "inotify")
+	dir, err := ioutil.TempDir("", TMP_PREFIX)
 	if err != nil {
 		t.Fatalf("TempDir failed: %s", err)
 	}
@@ -232,5 +236,236 @@ func TestRemoveWatch(t *testing.T) {
 	watcher.Close()
 	if watcher.isRunning {
 		t.Fatal("still running after Close()")
+	}
+}
+
+func TestRemoveClose(t *testing.T) {
+	dir, err := ioutil.TempDir("", TMP_PREFIX)
+	if err != nil {
+		t.Fatalf("TempDir failed: %s", err)
+	}
+	defer os.RemoveAll(dir)
+
+	watcher, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("NewWatcher failed: %s", err)
+	}
+	go func() {
+		for err := range watcher.Errors {
+			t.Fatalf("error received: %s", err)
+		}
+	}()
+	done := make(chan bool)
+	go func() {
+		var i int
+		for e := range watcher.Events {
+			testFileName := filepath.Join(dir, fmt.Sprintf("TestInotifyEvents.%d", i))
+			if e.Name != testFileName {
+				t.Fatalf("should be %s, but got: %s", testFileName, e.Name)
+			}
+			// t.Logf("event: %s", e)
+			if e.Op&Remove == 0 {
+				t.Fatalf("Op should be Remove, but: %s", e.Op)
+			}
+			i++
+			if i == 1000 {
+				break
+			}
+		}
+		done <- true
+	}()
+
+	for i := 0; i < 1000; i++ {
+		testFileName := filepath.Join(dir, fmt.Sprintf("TestInotifyEvents.%d", i))
+		testFile, err := os.OpenFile(testFileName, os.O_WRONLY|os.O_CREATE, 0666)
+		if err != nil {
+			t.Fatalf("creating test file: %s", err)
+		}
+		if err = testFile.Close(); err != nil {
+			t.Fatalf("close test file: %s", err)
+		}
+		if err = watcher.Add(testFileName); err != nil {
+			t.Fatalf("Watch(%s) failed: %s", testFileName, err)
+		}
+		if err = os.Remove(testFileName); err != nil {
+			t.Fatalf("remove test file: %s", err)
+		}
+	}
+
+	// wait for catching up all event
+	<-done
+	if watcher.length() != 0 {
+		t.Fatalf("watcher entries should be 0, but got: %d", watcher.length())
+	}
+
+	go func() {
+		watcher.Close()
+		done <- true
+	}()
+	select {
+	case <-done:
+	case <-time.After(TIMEOUT):
+		t.Fatal("Close() not returned")
+	}
+
+	if watcher.isRunning {
+		t.Fatal("still valid after Close()")
+	}
+}
+
+func TestRmdirClose(t *testing.T) {
+	dir, err := ioutil.TempDir("", TMP_PREFIX)
+	if err != nil {
+		t.Fatalf("TempDir failed: %s", err)
+	}
+	defer os.RemoveAll(dir)
+
+	watcher, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("NewWatcher failed: %s", err)
+	}
+	go func() {
+		for err := range watcher.Errors {
+			t.Fatalf("error received: %s", err)
+		}
+	}()
+	done := make(chan bool)
+	go func() {
+		var i int
+		for e := range watcher.Events {
+			testName := filepath.Join(dir, fmt.Sprintf("TestInotifyEvents.%d", i))
+			if e.Name != testName {
+				t.Fatalf("should be %s, but got: %s", testName, e.Name)
+			}
+			if e.Op&Remove == 0 {
+				t.Fatalf("Op should be Remove, but got: %s", e.Op)
+			}
+			i++
+			if i == 1000 {
+				break
+			}
+		}
+		done <- true
+	}()
+
+	for i := 0; i < 1000; i++ {
+		testDir := filepath.Join(dir, fmt.Sprintf("TestInotifyEvents.%d", i))
+		err := os.Mkdir(testDir, 0700)
+		if err != nil {
+			t.Fatalf("creating test dir: %s", err)
+		}
+		if err = watcher.Add(testDir); err != nil {
+			t.Fatalf("Watch(%s) failed: %s", testDir, err)
+		}
+		if err = os.Remove(testDir); err != nil {
+			t.Fatalf("remove test dir: %s", err)
+		}
+	}
+
+	// wait for all event
+	<-done
+	if watcher.length() != 0 {
+		t.Fatalf("watcher entries should be 0, but got: %d", watcher.length())
+	}
+
+	go func() {
+		watcher.Close()
+		done <- true
+	}()
+	select {
+	case <-done:
+	case <-time.After(TIMEOUT):
+		t.Fatal("Close() not returned")
+	}
+
+	if watcher.isRunning {
+		t.Fatal("still valid after Close()")
+	}
+}
+
+func TestRemoveAll(t *testing.T) {
+	dir, err := ioutil.TempDir("", TMP_PREFIX)
+	if err != nil {
+		t.Fatalf("TempDir failed: %s", err)
+	}
+	defer os.RemoveAll(dir)
+
+	nevents := make(map[string]int)
+	var testDirs [100]string
+	for i := 0; i < 100; i++ {
+		testDirs[i] = filepath.Join(dir, fmt.Sprintf("rmtest%d", i))
+		err = os.Mkdir(testDirs[i], 0700)
+		if err != nil {
+			t.Fatalf("failed to create testDir: %s", err)
+		}
+		nevents[testDirs[i]] = 1 // Remove
+		for j := 0; j < 10; j++ {
+			fname := filepath.Join(testDirs[i], fmt.Sprintf("inotify_testfile%d", j))
+			testFile, err := os.OpenFile(fname, os.O_RDWR|os.O_CREATE, 0666)
+			if err != nil {
+				t.Fatalf("failed to create testfile: %s", err)
+			}
+			if err := testFile.Close(); err != nil {
+				t.Fatalf("failed to close testfile: %s", err)
+			}
+			nevents[fname] = 1 // Remove
+		}
+	}
+
+	watcher, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("could not create TailWatcher: %s", err)
+	}
+	go func() {
+		for err := range watcher.Errors {
+			t.Fatalf("error received: %s", err)
+		}
+	}()
+	done := make(chan bool)
+	go func() {
+		var i int
+		for e := range watcher.Events {
+			if !strings.HasPrefix(e.Name, dir) {
+				t.Fatalf("should have %s, but got: %s", dir, e.Name)
+			}
+			if e.Op&Remove == 0 {
+				t.Fatalf("Op should be Remove, but got: %s", e)
+			}
+			nevents[e.Name] = nevents[e.Name] - 1
+			if nevents[e.Name] < 0 {
+				t.Fatalf("receive unexpected event: %s", e)
+			}
+			i++
+			if i == 1100 {
+				// 100 dirs, each have 10 files
+				break
+			}
+		}
+		done <- true
+	}()
+
+	for i := 0; i < 100; i++ {
+		if err = watcher.Add(testDirs[i]); err != nil {
+			t.Fatalf("failed to Add to Watcher: %s", err)
+		}
+	}
+	for i := 0; i < 100; i++ {
+		if err = os.RemoveAll(testDirs[i]); err != nil {
+			t.Fatalf("failed to RemoveAll: %s", err)
+		}
+	}
+
+	<-done
+	time.Sleep(2 * time.Second)
+	if watcher.length() != 0 {
+		for k, _ := range watcher.watches {
+			t.Logf("still watching path: %s", k)
+		}
+		t.Fatalf("watcher entries should be 0, but got: %d", watcher.length())
+	}
+
+	watcher.Close()
+	if watcher.isRunning {
+		t.Fatal("still valid after Close()")
 	}
 }
