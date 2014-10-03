@@ -294,6 +294,7 @@ func (w *Watcher) epollEvents(epfd int, donePipe *os.File) {
 					w.Errors <- err
 				}
 				syscall.Close(w.fd)
+				close(w.done)
 				close(w.Events)
 				close(w.Errors)
 				return
