@@ -2,6 +2,8 @@
 
 [![Coverage](http://gocover.io/_badge/github.com/go-fsnotify/fsnotify)](http://gocover.io/github.com/go-fsnotify/fsnotify) [![GoDoc](https://godoc.org/gopkg.in/fsnotify.v1?status.svg)](https://godoc.org/gopkg.in/fsnotify.v1)
 
+Go 1.3+ required.
+
 Cross platform: Windows, Linux, BSD and OS X.
 
 |Adapter   |OS        |Status    |
