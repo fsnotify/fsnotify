@@ -51,9 +51,9 @@ import "github.com/go-fsnotify/fsnotify"
 ## Contributing
 
 * Send questions to [golang-dev@googlegroups.com](mailto:golang-dev@googlegroups.com). 
-* Request features and report bugs using the [GitHub Issue Tracker](https://github.com/go-fsnotify/fsnotify/issues).
+* Request features and report bugs using the [GitHub Issue Tracker](https://github.com/go-fsnotify/fsnotify/issues). Please indicate the platform you are running on.
 
-A future version of Go will have [fsnotify in the standard library](https://code.google.com/p/go/issues/detail?id=4068), therefore fsnotify carries the same [LICENSE](https://github.com/go-fsnotify/fsnotify/blob/master/LICENSE) as Go. Contributors retain their copyright, so we need you to fill out a short form before we can accept your contribution: [Google Individual Contributor License Agreement](https://developers.google.com/open-source/cla/individual).
+fsnotify is derived from code in the [golang.org/x/exp](https://godoc.org/golang.org/x/exp) package and it may be included [in the standard library](https://github.com/go-fsnotify/fsnotify/issues/1) in the future. Therefore fsnotify carries the same [LICENSE](https://github.com/go-fsnotify/fsnotify/blob/master/LICENSE) as Go. Contributors retain their copyright, so you need to fill out a short form before we can accept your contribution: [Google Individual Contributor License Agreement](https://developers.google.com/open-source/cla/individual).
 
 Please read [CONTRIBUTING](https://github.com/go-fsnotify/fsnotify/blob/master/CONTRIBUTING.md) before opening a pull request.
 
