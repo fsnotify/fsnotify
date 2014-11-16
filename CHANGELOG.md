@@ -8,6 +8,7 @@
     * less mutexes [#13](https://github.com/go-fsnotify/fsnotify/issues/13)
     * done can be an unbuffered channel
     * remove calls to os.NewSyscallError
+* More efficient string concatenation for Event.String() [#52](https://github.com/go-fsnotify/fsnotify/pull/52) (thanks @mdlayher)
 
 ## v1.0.4 / 2014-09-07
 
