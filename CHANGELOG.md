@@ -1,6 +1,6 @@
 # Changelog
 
-## dev / 2014-12-12
+## v1.1.0 / 2014-12-12
 
 * kqueue: rework internals [#43](https://github.com/go-fsnotify/fsnotify/pull/43)
     * add low-level functions
