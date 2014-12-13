@@ -283,6 +283,13 @@ func (w *Watcher) readEvents() {
 				}
 			}
 
+			if event.Op&Rename == Rename || event.Op&Remove == Remove {
+				w.Remove(event.Name)
+				w.mu.Lock()
+				delete(w.fileExists, event.Name)
+				w.mu.Unlock()
+			}
+
 			if path.isDir && event.Op&Write == Write && !(event.Op&Remove == Remove) {
 				w.sendDirectoryChangeEvents(event.Name)
 			} else {
@@ -290,12 +297,6 @@ func (w *Watcher) readEvents() {
 				w.Events <- event
 			}
 
-			if event.Op&Rename == Rename || event.Op&Remove == Remove {
-				w.Remove(event.Name)
-				w.mu.Lock()
-				delete(w.fileExists, event.Name)
-				w.mu.Unlock()
-			}
 			if event.Op&Remove == Remove {
 				// Look for a file that may have overwritten this.
 				// For example, mv f1 f2 will delete f2, then create f2.
