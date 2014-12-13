@@ -204,7 +204,7 @@ func (w *Watcher) addWatch(name string, flags uint32) error {
 	}
 
 	const registerAdd = syscall.EV_ADD | syscall.EV_CLEAR | syscall.EV_ENABLE
-	if err := register(w.kq, []int{watchfd}, registerAdd, noteAllEvents); err != nil {
+	if err := register(w.kq, []int{watchfd}, registerAdd, flags); err != nil {
 		syscall.Close(watchfd)
 		return err
 	}

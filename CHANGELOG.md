@@ -1,6 +1,6 @@
 # Changelog
 
-## dev / 2014-09-24
+## dev / 2014-12-12
 
 * kqueue: rework internals [#43](https://github.com/go-fsnotify/fsnotify/pull/43)
     * add low-level functions
@@ -9,6 +9,7 @@
     * done can be an unbuffered channel
     * remove calls to os.NewSyscallError
 * More efficient string concatenation for Event.String() [#52](https://github.com/go-fsnotify/fsnotify/pull/52) (thanks @mdlayher)
+* kqueue: fix regression in  rework causing subdirectories to be watched [#48](https://github.com/go-fsnotify/fsnotify/issues/48)
 
 ## v1.0.4 / 2014-09-07
 
