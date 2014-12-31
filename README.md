@@ -10,7 +10,7 @@ Cross platform: Windows, Linux, BSD and OS X.
 |----------|----------|----------|
 |inotify   |Linux, Android\*|Supported [![Build Status](https://travis-ci.org/go-fsnotify/fsnotify.svg?branch=master)](https://travis-ci.org/go-fsnotify/fsnotify)|
 |kqueue    |BSD, OS X, iOS\*|Supported|
-|ReadDirectoryChangesW|Windows|Supported|
+|ReadDirectoryChangesW|Windows|Supported [![Build status](https://ci.appveyor.com/api/projects/status/ivwjubaih4r0udeh/branch/master?svg=true)](https://ci.appveyor.com/project/NathanYoungman/fsnotify/branch/master)|
 |FSEvents  |OS X          |[Planned](https://github.com/go-fsnotify/fsnotify/issues/11)|
 |FEN       |Solaris 11    |[Planned](https://github.com/go-fsnotify/fsnotify/issues/12)|
 |fanotify  |Linux 2.6.37+ | |
