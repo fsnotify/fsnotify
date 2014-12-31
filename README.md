@@ -8,7 +8,7 @@ Cross platform: Windows, Linux, BSD and OS X.
 
 |Adapter   |OS        |Status    |
 |----------|----------|----------|
-|inotify   |Linux, Android\*|Supported|
+|inotify   |Linux, Android\*|Supported [![Build Status](https://travis-ci.org/go-fsnotify/fsnotify.svg?branch=master)](https://travis-ci.org/go-fsnotify/fsnotify)|
 |kqueue    |BSD, OS X, iOS\*|Supported|
 |ReadDirectoryChangesW|Windows|Supported|
 |FSEvents  |OS X          |[Planned](https://github.com/go-fsnotify/fsnotify/issues/11)|

@@ -7,7 +7,7 @@ go:
 # not yet https://github.com/travis-ci/travis-ci/issues/2318
 os:
   - linux
-  - osx
+  # - osx
 
 notifications:
   email: false
