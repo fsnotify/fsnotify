@@ -1,8 +1,8 @@
+sudo: false
 language: go
 
 go:
-  - 1.2
-  - tip
+  - 1.4
 
 # not yet https://github.com/travis-ci/travis-ci/issues/2318
 os:
