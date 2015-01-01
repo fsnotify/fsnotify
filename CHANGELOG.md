@@ -81,6 +81,10 @@
     * no tests for the current implementation
     * not fully implemented on Windows [#93](https://github.com/howeyc/fsnotify/issues/93#issuecomment-39285195)
 
+## v0.9.3 / 2014-12-31
+
+* kqueue: cleanup internal watch before sending remove event [#51](https://github.com/go-fsnotify/fsnotify/issues/51)
+
 ## v0.9.2 / 2014-08-17
 
 * [Backport] Fix missing create events on OS X. [#14](https://github.com/go-fsnotify/fsnotify/issues/14) (thanks @zhsso)
