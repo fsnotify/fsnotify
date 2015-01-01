@@ -14,8 +14,8 @@ Cross platform: Windows, Linux, BSD and OS X.
 |FSEvents  |OS X          |[Planned](https://github.com/go-fsnotify/fsnotify/issues/11)|
 |FEN       |Solaris 11    |[Planned](https://github.com/go-fsnotify/fsnotify/issues/12)|
 |fanotify  |Linux 2.6.37+ | |
+|USN Journals |Windows    |[Maybe](https://github.com/go-fsnotify/fsnotify/issues/53)|
 |Polling   |*All*         |[Maybe](https://github.com/go-fsnotify/fsnotify/issues/9)|
-|          |Plan 9        | |
 
 \* Android and iOS are untested.
 
