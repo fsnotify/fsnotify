@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package fsnotify implements file system notification.
+// Package fsnotify provides a platform-independent interface for file system notifications.
 package fsnotify
 
 import "fmt"
