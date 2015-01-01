@@ -361,6 +361,13 @@ func (w *Watcher) readEvents() {
 				}
 			}
 
+			if fileEvent.IsRename() {
+				w.removeWatch(fileEvent.Name)
+				w.femut.Lock()
+				delete(w.fileExists, fileEvent.Name)
+				w.femut.Unlock()
+			}
+
 			if fileInfo != nil && fileInfo.IsDir() && fileEvent.IsModify() && !fileEvent.IsDelete() {
 				w.sendDirectoryChangeEvents(fileEvent.Name)
 			} else {
@@ -371,12 +378,6 @@ func (w *Watcher) readEvents() {
 			// Move to next event
 			events = events[1:]
 
-			if fileEvent.IsRename() {
-				w.removeWatch(fileEvent.Name)
-				w.femut.Lock()
-				delete(w.fileExists, fileEvent.Name)
-				w.femut.Unlock()
-			}
 			if fileEvent.IsDelete() {
 				w.removeWatch(fileEvent.Name)
 				w.femut.Lock()
