@@ -142,6 +142,12 @@ func (w *Watcher) readEvents() {
 		}
 
 		n, errno = syscall.Read(w.fd, buf[:])
+		// If a signal interrupted execution, see if we've been asked to close, and try again.
+		// http://man7.org/linux/man-pages/man7/signal.7.html :
+		// "Before Linux 3.8, reads from an inotify(7) file descriptor were not restartable"
+		if errno == syscall.EINTR {
+			continue
+		}
 
 		// If EOF is received
 		if n == 0 {

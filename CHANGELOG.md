@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.1.1 / 2015-02-05
+
+* inotify: Retry read on EINTR [#61](https://github.com/go-fsnotify/fsnotify/issues/61) (thanks @PieterD)
+
 ## v1.1.0 / 2014-12-12
 
 * kqueue: rework internals [#43](https://github.com/go-fsnotify/fsnotify/pull/43)
