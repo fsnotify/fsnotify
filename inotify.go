@@ -68,21 +68,13 @@ func (w *Watcher) Close() error {
 	// Remove all watches.
 	// Everything after this may generate errors because the inotify channel
 	// has been closed; we don't care.
-	w.mu.Lock()
-	hasWatches := false
-	for name := range w.watches {
-		err := w.remove(name)
-		if err == nil {
-			hasWatches = true
-		}
-	}
-	w.mu.Unlock()
+	numWatches := w.removeAll()
 
 	// If no watches were removed, it's possible syscall.Read is still blocking.
 	// In this case, create a watch and remove it to wake it up.
 	// If that fails, there's really nothing left to do. we've done our best,
 	// but the goroutine may be alive forever.
-	if !hasWatches {
+	if numWatches == 0 {
 		wd, _ := syscall.InotifyAddWatch(w.fd, ".", syscall.IN_DELETE_SELF)
 		syscall.InotifyRmWatch(w.fd, uint32(wd))
 	}
@@ -123,17 +115,19 @@ func (w *Watcher) Add(name string) error {
 	return nil
 }
 
-// Remove stops watching the the named file or directory (non-recursively).
+// Remove stops watching the named file or directory (non-recursively).
 func (w *Watcher) Remove(name string) error {
+	name = filepath.Clean(name)
+	if w.isClosed() {
+		return errors.New("inotify instance already closed")
+	}
+
+	// Fetch the watch.
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return w.remove(name)
-}
-
-// Only call this when w.mu is locked, like from Remove or Close.
-func (w *Watcher) remove(name string) error {
-	name = filepath.Clean(name)
 	watch, ok := w.watches[name]
+
+	// Remove it from inotify.
 	if !ok {
 		return fmt.Errorf("can't remove non-existent inotify watch for: %s", name)
 	}
@@ -143,6 +137,21 @@ func (w *Watcher) remove(name string) error {
 	}
 	delete(w.watches, name)
 	return nil
+}
+
+// Called from Close(); remove all watches.
+func (w *Watcher) removeAll() int {
+	successful := 0
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for name, watch := range w.watches {
+		success, _ := syscall.InotifyRmWatch(w.fd, watch.wd)
+		if success != -1 {
+			successful++
+		}
+		delete(w.watches, name)
+	}
+	return successful
 }
 
 type watch struct {
