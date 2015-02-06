@@ -1,5 +1,9 @@
 # Changelog
 
+## master / 2015-02-07
+
+* inotify: closing watcher should now always shut down goroutine [#63](https://github.com/go-fsnotify/fsnotify/pull/63) (thanks @PieterD)
+
 ## v1.1.1 / 2015-02-05
 
 * inotify: Retry read on EINTR [#61](https://github.com/go-fsnotify/fsnotify/issues/61) (thanks @PieterD)
