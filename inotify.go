@@ -19,14 +19,13 @@ import (
 
 // Watcher watches a set of files, delivering events to a channel.
 type Watcher struct {
-	Events   chan Event
-	Errors   chan error
-	mu       sync.Mutex        // Map access
-	fd       int               // File descriptor (as returned by the inotify_init() syscall)
-	watches  map[string]*watch // Map of inotify watches (key: path)
-	paths    map[int]string    // Map of watched paths (key: watch descriptor)
-	done     chan bool         // Channel for sending a "quit message" to the reader goroutine
-	isClosed bool              // Set to true when Close() is first called
+	Events  chan Event
+	Errors  chan error
+	mu      sync.Mutex        // Map access
+	fd      int               // File descriptor (as returned by the inotify_init() syscall)
+	watches map[string]*watch // Map of inotify watches (key: path)
+	paths   map[int]string    // Map of watched paths (key: watch descriptor)
+	done    chan struct{}     // Channel for sending a "quit message" to the reader goroutine
 }
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
@@ -41,27 +40,52 @@ func NewWatcher() (*Watcher, error) {
 		paths:   make(map[int]string),
 		Events:  make(chan Event),
 		Errors:  make(chan error),
-		done:    make(chan bool, 1),
+		done:    make(chan struct{}),
 	}
 
 	go w.readEvents()
 	return w, nil
 }
 
+func (w *Watcher) isClosed() bool {
+	select {
+	case <-w.done:
+		return true
+	default:
+		return false
+	}
+}
+
 // Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error {
-	if w.isClosed {
+	if w.isClosed() {
 		return nil
 	}
-	w.isClosed = true
 
-	// Remove all watches
+	// Send 'close' signal to goroutine, and set the Watcher to closed.
+	close(w.done)
+
+	// Remove all watches.
+	// Everything after this may generate errors because the inotify channel
+	// has been closed; we don't care.
+	w.mu.Lock()
+	hasWatches := false
 	for name := range w.watches {
-		w.Remove(name)
+		err := w.remove(name)
+		if err == nil {
+			hasWatches = true
+		}
 	}
+	w.mu.Unlock()
 
-	// Send "quit" message to the reader goroutine
-	w.done <- true
+	// If no watches were removed, it's possible syscall.Read is still blocking.
+	// In this case, create a watch and remove it to wake it up.
+	// If that fails, there's really nothing left to do. we've done our best,
+	// but the goroutine may be alive forever.
+	if !hasWatches {
+		wd, _ := syscall.InotifyAddWatch(w.fd, ".", syscall.IN_DELETE_SELF)
+		syscall.InotifyRmWatch(w.fd, uint32(wd))
+	}
 
 	return nil
 }
@@ -69,7 +93,7 @@ func (w *Watcher) Close() error {
 // Add starts watching the named file or directory (non-recursively).
 func (w *Watcher) Add(name string) error {
 	name = filepath.Clean(name)
-	if w.isClosed {
+	if w.isClosed() {
 		return errors.New("inotify instance already closed")
 	}
 
@@ -101,9 +125,14 @@ func (w *Watcher) Add(name string) error {
 
 // Remove stops watching the the named file or directory (non-recursively).
 func (w *Watcher) Remove(name string) error {
-	name = filepath.Clean(name)
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	return w.remove(name)
+}
+
+// Only call this when w.mu is locked, like from Remove or Close.
+func (w *Watcher) remove(name string) error {
+	name = filepath.Clean(name)
 	watch, ok := w.watches[name]
 	if !ok {
 		return fmt.Errorf("can't remove non-existent inotify watch for: %s", name)
@@ -130,15 +159,14 @@ func (w *Watcher) readEvents() {
 		errno error                                   // Syscall errno
 	)
 
+	defer close(w.Errors)
+	defer close(w.Events)
+	defer syscall.Close(w.fd)
+
 	for {
-		// See if there is a message on the "done" channel
-		select {
-		case <-w.done:
-			syscall.Close(w.fd)
-			close(w.Events)
-			close(w.Errors)
+		// See if we have been closed.
+		if w.isClosed() {
 			return
-		default:
 		}
 
 		n, errno = syscall.Read(w.fd, buf[:])
@@ -149,20 +177,31 @@ func (w *Watcher) readEvents() {
 			continue
 		}
 
+		// syscall.Read might have been woken up by Close. If so, we're done.
+		if w.isClosed() {
+			return
+		}
+
 		// If EOF is received
 		if n == 0 {
-			syscall.Close(w.fd)
-			close(w.Events)
-			close(w.Errors)
+			close(w.done)
 			return
 		}
 
 		if n < 0 {
-			w.Errors <- os.NewSyscallError("read", errno)
+			select {
+			case w.Errors <- os.NewSyscallError("read", errno):
+			case <-w.done:
+				return
+			}
 			continue
 		}
 		if n < syscall.SizeofInotifyEvent {
-			w.Errors <- errors.New("inotify: short read in readEvents()")
+			select {
+			case w.Errors <- errors.New("inotify: short read in readEvents()"):
+			case <-w.done:
+				return
+			}
 			continue
 		}
 
@@ -193,7 +232,11 @@ func (w *Watcher) readEvents() {
 
 			// Send the events that are not ignored on the events channel
 			if !event.ignoreLinux(mask) {
-				w.Events <- event
+				select {
+				case w.Events <- event:
+				case <-w.done:
+					return
+				}
 			}
 
 			// Move to the next event in the buffer
