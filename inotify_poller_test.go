@@ -46,7 +46,7 @@ func (tfd testFd) get(t *testing.T) {
 	buf := make([]byte, 10)
 	_, errno := syscall.Read(tfd[0], buf)
 	if errno != nil {
-		t.Fatalf("Failed to write from pipe: %v", errno)
+		t.Fatalf("Failed to read from pipe: %v", errno)
 	}
 }
 
