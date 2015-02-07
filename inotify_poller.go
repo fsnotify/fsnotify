@@ -17,10 +17,19 @@ type fdPoller struct {
 	pipe [2]int // Pipe for waking up
 }
 
+func emptyPoller(fd int) *fdPoller {
+	poller := new(fdPoller)
+	poller.fd = fd
+	poller.epfd = -1
+	poller.pipe[0] = -1
+	poller.pipe[1] = -1
+	return poller
+}
+
 // Create a new inotify poller.
 // This creates an inotify handler, and an epoll handler.
 func newFdPoller(fd int) (_ *fdPoller, errno error) {
-	poller := new(fdPoller)
+	poller := emptyPoller(fd)
 	defer func() {
 		if errno != nil {
 			poller.close()
@@ -155,7 +164,13 @@ func (poller *fdPoller) clearWake() error {
 
 // Close all poller file descriptors, but not the one passed to it.
 func (poller *fdPoller) close() {
-	syscall.Close(poller.pipe[1])
-	syscall.Close(poller.pipe[0])
-	syscall.Close(poller.epfd)
+	if poller.pipe[1] != -1 {
+		syscall.Close(poller.pipe[1])
+	}
+	if poller.pipe[0] != -1 {
+		syscall.Close(poller.pipe[0])
+	}
+	if poller.epfd != -1 {
+		syscall.Close(poller.epfd)
+	}
 }
