@@ -19,8 +19,8 @@ type fdPoller struct {
 
 // Create a new inotify poller.
 // This creates an inotify handler, and an epoll handler.
-func newFdPoller(fd int) (poller *fdPoller, errno error) {
-	poller = new(fdPoller)
+func newFdPoller(fd int) (_ *fdPoller, errno error) {
+	poller := new(fdPoller)
 	defer func() {
 		if errno != nil {
 			poller.close()
