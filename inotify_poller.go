@@ -19,15 +19,11 @@ type fdPoller struct {
 
 // Create a new inotify poller.
 // This creates an inotify handler, and an epoll handler.
-func newFdPoller() (*fdPoller, error) {
+func newFdPoller(fd int) (*fdPoller, error) {
 	var errno error
 	poller := new(fdPoller)
+	poller.fd = fd
 
-	// Create inotify fd
-	poller.fd, errno = syscall.InotifyInit()
-	if poller.fd == -1 {
-		return nil, errno
-	}
 	// Create epoll fd
 	poller.epfd, errno = syscall.EpollCreate(1)
 	if poller.epfd == -1 {
