@@ -32,7 +32,13 @@ type Watcher struct {
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
 func NewWatcher() (*Watcher, error) {
-	poller, err := newFdPoller()
+	// Create inotify fd
+	fd, errno := syscall.InotifyInit()
+	if fd == -1 {
+		return nil, errno
+	}
+	// Create epoll
+	poller, err := newFdPoller(fd)
 	if err != nil {
 		return nil, err
 	}
