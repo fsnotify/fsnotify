@@ -73,6 +73,10 @@ func newFdPoller(fd int) (*fdPoller, error) {
 // Returns true if something is ready to be read,
 // false if there is not.
 func (poller *fdPoller) wait() (bool, error) {
+	// 3 possible events per fd, and 2 fds, makes a maximum of 6 events.
+	// I don't know whether epoll_wait returns the number of events returned,
+	// or the total number of events ready.
+	// I decided to catch both by making the buffer one larger than the maximum.
 	events := make([]syscall.EpollEvent, 7)
 	for {
 		n, errno := syscall.EpollWait(poller.epfd, events, -1)
@@ -87,7 +91,7 @@ func (poller *fdPoller) wait() (bool, error) {
 			continue
 		}
 		if n > 6 {
-			// This should never happen.
+			// This should never happen. More events were returned than should be possible.
 			return false, errors.New("epoll_wait returned more events than I know what to do with")
 		}
 		ready := events[:n]
