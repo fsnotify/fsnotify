@@ -163,8 +163,8 @@ func TestPollerConcurrent(t *testing.T) {
 	defer poller.close()
 
 	oks := make(chan bool)
-	kill := make(chan bool)
-	defer close(kill)
+	live := make(chan bool)
+	defer close(live)
 	go func() {
 		defer close(oks)
 		for {
@@ -173,7 +173,7 @@ func TestPollerConcurrent(t *testing.T) {
 				t.Fatalf("poller failed: %v", err)
 			}
 			oks <- ok
-			if !<-kill {
+			if !<-live {
 				return
 			}
 		}
@@ -190,7 +190,7 @@ func TestPollerConcurrent(t *testing.T) {
 		t.Fatalf("expected true")
 	}
 	tfd.get(t)
-	kill <- true
+	live <- true
 
 	// Try a wakeup
 	select {
@@ -205,7 +205,7 @@ func TestPollerConcurrent(t *testing.T) {
 	if <-oks {
 		t.Fatalf("expected false")
 	}
-	kill <- true
+	live <- true
 
 	// Try a close
 	select {

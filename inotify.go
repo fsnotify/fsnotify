@@ -28,7 +28,7 @@ type Watcher struct {
 	watches  map[string]*watch // Map of inotify watches (key: path)
 	paths    map[int]string    // Map of watched paths (key: watch descriptor)
 	done     chan struct{}     // Channel for sending a "quit message" to the reader goroutine
-	doneresp chan struct{}     // Channel to respond to Close
+	doneResp chan struct{}     // Channel to respond to Close
 }
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
@@ -52,7 +52,7 @@ func NewWatcher() (*Watcher, error) {
 		Events:   make(chan Event),
 		Errors:   make(chan error),
 		done:     make(chan struct{}),
-		doneresp: make(chan struct{}),
+		doneResp: make(chan struct{}),
 	}
 
 	go w.readEvents()
@@ -81,7 +81,7 @@ func (w *Watcher) Close() error {
 	w.poller.wake()
 
 	// Wait for goroutine to close
-	<-w.doneresp
+	<-w.doneResp
 
 	return nil
 }
@@ -155,7 +155,7 @@ func (w *Watcher) readEvents() {
 		ok    bool                                    // For poller.wait
 	)
 
-	defer close(w.doneresp)
+	defer close(w.doneResp)
 	defer close(w.Errors)
 	defer close(w.Events)
 	defer syscall.Close(w.fd)
