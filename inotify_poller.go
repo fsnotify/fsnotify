@@ -19,21 +19,23 @@ type fdPoller struct {
 
 // Create a new inotify poller.
 // This creates an inotify handler, and an epoll handler.
-func newFdPoller(fd int) (*fdPoller, error) {
-	var errno error
-	poller := new(fdPoller)
+func newFdPoller(fd int) (poller *fdPoller, errno error) {
+	poller = new(fdPoller)
+	defer func() {
+		if errno != nil {
+			poller.close()
+		}
+	}()
 	poller.fd = fd
 
 	// Create epoll fd
 	poller.epfd, errno = syscall.EpollCreate(1)
 	if poller.epfd == -1 {
-		syscall.Close(poller.fd)
 		return nil, errno
 	}
 	// Create pipe; pipe[0] is the read end, pipe[1] the write end.
 	errno = syscall.Pipe(poller.pipe[:])
 	if errno != nil {
-		syscall.Close(poller.epfd)
 		return nil, errno
 	}
 
@@ -44,9 +46,6 @@ func newFdPoller(fd int) (*fdPoller, error) {
 	}
 	errno = syscall.EpollCtl(poller.epfd, syscall.EPOLL_CTL_ADD, poller.fd, &event)
 	if errno != nil {
-		syscall.Close(poller.epfd)
-		syscall.Close(poller.pipe[0])
-		syscall.Close(poller.pipe[1])
 		return nil, errno
 	}
 
@@ -57,9 +56,6 @@ func newFdPoller(fd int) (*fdPoller, error) {
 	}
 	errno = syscall.EpollCtl(poller.epfd, syscall.EPOLL_CTL_ADD, poller.pipe[0], &event)
 	if errno != nil {
-		syscall.Close(poller.epfd)
-		syscall.Close(poller.pipe[0])
-		syscall.Close(poller.pipe[1])
 		return nil, errno
 	}
 
