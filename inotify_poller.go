@@ -71,7 +71,7 @@ func newFdPoller(fd int) (_ *fdPoller, errno error) {
 	return poller, nil
 }
 
-// Wait using epoll, then read from inotify.
+// Wait using epoll.
 // Returns true if something is ready to be read,
 // false if there is not.
 func (poller *fdPoller) wait() (bool, error) {
@@ -154,6 +154,7 @@ func (poller *fdPoller) wake() error {
 }
 
 func (poller *fdPoller) clearWake() error {
+	// You have to be woken up a LOT in order to get to 100!
 	buf := make([]byte, 100)
 	n, errno := syscall.Read(poller.pipe[0], buf)
 	if n == -1 {
