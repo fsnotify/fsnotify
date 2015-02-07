@@ -64,6 +64,13 @@ func makePoller(t *testing.T) (testFd, *fdPoller) {
 	return tfd, poller
 }
 
+func TestPollerWithBadFd(t *testing.T) {
+	_, err := newFdPoller(-1)
+	if err != syscall.EBADF {
+		t.Fatalf("Expected EBADF, got: %v", err)
+	}
+}
+
 func TestPollerWithData(t *testing.T) {
 	tfd, poller := makePoller(t)
 	defer tfd.close()
