@@ -95,8 +95,6 @@ func (poller *fdPoller) wait() (bool, error) {
 		epollhup := false
 		epollerr := false
 		epollin := false
-		epollpipehup := false
-		epollpipein := false
 		for _, event := range ready {
 			if event.Fd == int32(poller.fd) {
 				if event.Events&syscall.EPOLLHUP != 0 {
@@ -117,7 +115,6 @@ func (poller *fdPoller) wait() (bool, error) {
 				if event.Events&syscall.EPOLLHUP != 0 {
 					// Write pipe descriptor was closed, by us. This means we're closing down the
 					// watcher, and we should wake up.
-					epollpipehup = true
 				}
 				if event.Events&syscall.EPOLLERR != 0 {
 					// If an error is waiting on the pipe file descriptor.
@@ -125,9 +122,7 @@ func (poller *fdPoller) wait() (bool, error) {
 					return false, errors.New("Error on the pipe descriptor.")
 				}
 				if event.Events&syscall.EPOLLIN != 0 {
-					// This is a regular wakeup.
-					epollpipein = true
-					// Clear the buffer.
+					// This is a regular wakeup, so we have to clear the buffer.
 					err := poller.clearWake()
 					if err != nil {
 						return false, err
@@ -136,16 +131,10 @@ func (poller *fdPoller) wait() (bool, error) {
 			}
 		}
 
-		if epollerr {
+		if epollhup || epollerr || epollin {
 			return true, nil
 		}
-		if epollhup || epollpipehup || epollpipein {
-			return false, nil
-		}
-		if epollin {
-			return true, nil
-		}
-		return false, errors.New("Epoll failed to generate any of the only six possibilities.")
+		return false, nil
 	}
 }
 
