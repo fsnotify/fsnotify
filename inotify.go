@@ -99,7 +99,7 @@ func (w *Watcher) Add(name string) error {
 	}
 	wd, errno := syscall.InotifyAddWatch(w.poller.fd, name, flags)
 	if wd == -1 {
-		return os.NewSyscallError("inotify_add_watch", errno)
+		return errno
 	}
 
 	w.mu.Lock()
@@ -125,7 +125,7 @@ func (w *Watcher) Remove(name string) error {
 	}
 	success, errno := syscall.InotifyRmWatch(w.poller.fd, watch.wd)
 	if success == -1 {
-		return os.NewSyscallError("inotify_rm_watch", errno)
+		return errno
 	}
 	delete(w.watches, name)
 	return nil
@@ -196,7 +196,7 @@ func (w *Watcher) readEvents() {
 
 		if n < 0 {
 			select {
-			case w.Errors <- os.NewSyscallError("read", errno):
+			case w.Errors <- errno:
 			case <-w.done:
 				return
 			}

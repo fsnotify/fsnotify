@@ -8,7 +8,6 @@ package fsnotify
 
 import (
 	"errors"
-	"os"
 	"syscall"
 )
 
@@ -27,20 +26,20 @@ func newFdPoller() (*fdPoller, error) {
 	// Create inotify fd
 	poller.fd, errno = syscall.InotifyInit()
 	if poller.fd == -1 {
-		return nil, os.NewSyscallError("inotify_init", errno)
+		return nil, errno
 	}
 	// Create epoll fd
 	poller.epfd, errno = syscall.EpollCreate(1)
 	if poller.epfd == -1 {
 		syscall.Close(poller.fd)
-		return nil, os.NewSyscallError("epoll_create", errno)
+		return nil, errno
 	}
 	// Create pipe; pipe[0] is the read end, pipe[1] the write end.
 	errno = syscall.Pipe(poller.pipe[:])
 	if errno != nil {
 		syscall.Close(poller.fd)
 		syscall.Close(poller.epfd)
-		return nil, os.NewSyscallError("pipe", errno)
+		return nil, errno
 	}
 
 	// Register inotify fd with epoll
@@ -54,7 +53,7 @@ func newFdPoller() (*fdPoller, error) {
 		syscall.Close(poller.epfd)
 		syscall.Close(poller.pipe[0])
 		syscall.Close(poller.pipe[1])
-		return nil, os.NewSyscallError("epoll_ctl", errno)
+		return nil, errno
 	}
 
 	// Register pipe fd with epoll
@@ -68,7 +67,7 @@ func newFdPoller() (*fdPoller, error) {
 		syscall.Close(poller.epfd)
 		syscall.Close(poller.pipe[0])
 		syscall.Close(poller.pipe[1])
-		return nil, os.NewSyscallError("epoll_ctl", errno)
+		return nil, errno
 	}
 
 	return poller, nil
@@ -85,7 +84,7 @@ func (poller *fdPoller) wait() (bool, error) {
 			if errno == syscall.EINTR {
 				continue
 			}
-			return false, os.NewSyscallError("epoll_wait", errno)
+			return false, errno
 		}
 		if n == 0 {
 			// If there are no events, try again.
@@ -158,7 +157,7 @@ func (poller *fdPoller) wake() error {
 	buf := make([]byte, 1)
 	n, errno := syscall.Write(poller.pipe[1], buf)
 	if n == -1 {
-		return os.NewSyscallError("write", errno)
+		return errno
 	}
 	return nil
 }
@@ -167,7 +166,7 @@ func (poller *fdPoller) clearWake() error {
 	buf := make([]byte, 100)
 	n, errno := syscall.Read(poller.pipe[0], buf)
 	if n == -1 {
-		return os.NewSyscallError("read", errno)
+		return errno
 	}
 	return nil
 }
