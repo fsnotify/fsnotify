@@ -23,6 +23,7 @@ type Watcher struct {
 	Events   chan Event
 	Errors   chan error
 	mu       sync.Mutex // Map access
+	fd       int
 	poller   *fdPoller
 	watches  map[string]*watch // Map of inotify watches (key: path)
 	paths    map[int]string    // Map of watched paths (key: watch descriptor)
@@ -40,9 +41,11 @@ func NewWatcher() (*Watcher, error) {
 	// Create epoll
 	poller, err := newFdPoller(fd)
 	if err != nil {
+		syscall.Close(fd)
 		return nil, err
 	}
 	w := &Watcher{
+		fd:       fd,
 		poller:   poller,
 		watches:  make(map[string]*watch),
 		paths:    make(map[int]string),
@@ -103,7 +106,7 @@ func (w *Watcher) Add(name string) error {
 		watchEntry.flags |= flags
 		flags |= syscall.IN_MASK_ADD
 	}
-	wd, errno := syscall.InotifyAddWatch(w.poller.fd, name, flags)
+	wd, errno := syscall.InotifyAddWatch(w.fd, name, flags)
 	if wd == -1 {
 		return errno
 	}
@@ -129,7 +132,7 @@ func (w *Watcher) Remove(name string) error {
 	if !ok {
 		return fmt.Errorf("can't remove non-existent inotify watch for: %s", name)
 	}
-	success, errno := syscall.InotifyRmWatch(w.poller.fd, watch.wd)
+	success, errno := syscall.InotifyRmWatch(w.fd, watch.wd)
 	if success == -1 {
 		return errno
 	}
@@ -155,6 +158,7 @@ func (w *Watcher) readEvents() {
 	defer close(w.doneresp)
 	defer close(w.Errors)
 	defer close(w.Events)
+	defer syscall.Close(w.fd)
 	defer w.poller.close()
 
 	for {
@@ -177,7 +181,7 @@ func (w *Watcher) readEvents() {
 			continue
 		}
 
-		n, errno = syscall.Read(w.poller.fd, buf[:])
+		n, errno = syscall.Read(w.fd, buf[:])
 		// If a signal interrupted execution, see if we've been asked to close, and try again.
 		// http://man7.org/linux/man-pages/man7/signal.7.html :
 		// "Before Linux 3.8, reads from an inotify(7) file descriptor were not restartable"

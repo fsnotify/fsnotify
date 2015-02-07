@@ -139,6 +139,7 @@ func TestInotifyCloseCreate(t *testing.T) {
 	// Now we try to swap the file descriptor under its nose.
 	w.Close()
 	w, err = NewWatcher()
+	defer w.Close()
 	if err != nil {
 		t.Fatalf("Failed to create second watcher: %v", err)
 	}

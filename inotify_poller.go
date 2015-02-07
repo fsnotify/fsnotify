@@ -33,7 +33,6 @@ func newFdPoller(fd int) (*fdPoller, error) {
 	// Create pipe; pipe[0] is the read end, pipe[1] the write end.
 	errno = syscall.Pipe(poller.pipe[:])
 	if errno != nil {
-		syscall.Close(poller.fd)
 		syscall.Close(poller.epfd)
 		return nil, errno
 	}
@@ -45,7 +44,6 @@ func newFdPoller(fd int) (*fdPoller, error) {
 	}
 	errno = syscall.EpollCtl(poller.epfd, syscall.EPOLL_CTL_ADD, poller.fd, &event)
 	if errno != nil {
-		syscall.Close(poller.fd)
 		syscall.Close(poller.epfd)
 		syscall.Close(poller.pipe[0])
 		syscall.Close(poller.pipe[1])
@@ -59,7 +57,6 @@ func newFdPoller(fd int) (*fdPoller, error) {
 	}
 	errno = syscall.EpollCtl(poller.epfd, syscall.EPOLL_CTL_ADD, poller.pipe[0], &event)
 	if errno != nil {
-		syscall.Close(poller.fd)
 		syscall.Close(poller.epfd)
 		syscall.Close(poller.pipe[0])
 		syscall.Close(poller.pipe[1])
@@ -171,10 +168,9 @@ func (poller *fdPoller) clearWake() error {
 	return nil
 }
 
-// Close all file descriptors.
+// Close all poller file descriptors, but not the one passed to it.
 func (poller *fdPoller) close() {
 	syscall.Close(poller.pipe[1])
 	syscall.Close(poller.pipe[0])
-	syscall.Close(poller.fd)
 	syscall.Close(poller.epfd)
 }
