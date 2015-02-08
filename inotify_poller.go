@@ -28,7 +28,8 @@ func emptyPoller(fd int) *fdPoller {
 
 // Create a new inotify poller.
 // This creates an inotify handler, and an epoll handler.
-func newFdPoller(fd int) (_ *fdPoller, errno error) {
+func newFdPoller(fd int) (*fdPoller, error) {
+	var errno error
 	poller := emptyPoller(fd)
 	defer func() {
 		if errno != nil {

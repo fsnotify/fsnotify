@@ -1,7 +1,8 @@
 # Changelog
 
-## master / 2015-02-07
+## v1.2.0 / 2015-02-08
 
+* inotify: use epoll to wake up readEvents [#66](https://github.com/go-fsnotify/fsnotify/pull/66) (thanks @PieterD)
 * inotify: closing watcher should now always shut down goroutine [#63](https://github.com/go-fsnotify/fsnotify/pull/63) (thanks @PieterD)
 * kqueue: close kqueue after removing watches, fixes [#59](https://github.com/go-fsnotify/fsnotify/issues/59)
 
