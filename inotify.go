@@ -9,6 +9,7 @@ package fsnotify
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,28 +20,39 @@ import (
 
 // Watcher watches a set of files, delivering events to a channel.
 type Watcher struct {
-	Events  chan Event
-	Errors  chan error
-	mu      sync.Mutex        // Map access
-	fd      int               // File descriptor (as returned by the inotify_init() syscall)
-	watches map[string]*watch // Map of inotify watches (key: path)
-	paths   map[int]string    // Map of watched paths (key: watch descriptor)
-	done    chan struct{}     // Channel for sending a "quit message" to the reader goroutine
+	Events   chan Event
+	Errors   chan error
+	mu       sync.Mutex // Map access
+	fd       int
+	poller   *fdPoller
+	watches  map[string]*watch // Map of inotify watches (key: path)
+	paths    map[int]string    // Map of watched paths (key: watch descriptor)
+	done     chan struct{}     // Channel for sending a "quit message" to the reader goroutine
+	doneResp chan struct{}     // Channel to respond to Close
 }
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
 func NewWatcher() (*Watcher, error) {
+	// Create inotify fd
 	fd, errno := syscall.InotifyInit()
 	if fd == -1 {
-		return nil, os.NewSyscallError("inotify_init", errno)
+		return nil, errno
+	}
+	// Create epoll
+	poller, err := newFdPoller(fd)
+	if err != nil {
+		syscall.Close(fd)
+		return nil, err
 	}
 	w := &Watcher{
-		fd:      fd,
-		watches: make(map[string]*watch),
-		paths:   make(map[int]string),
-		Events:  make(chan Event),
-		Errors:  make(chan error),
-		done:    make(chan struct{}),
+		fd:       fd,
+		poller:   poller,
+		watches:  make(map[string]*watch),
+		paths:    make(map[int]string),
+		Events:   make(chan Event),
+		Errors:   make(chan error),
+		done:     make(chan struct{}),
+		doneResp: make(chan struct{}),
 	}
 
 	go w.readEvents()
@@ -65,19 +77,11 @@ func (w *Watcher) Close() error {
 	// Send 'close' signal to goroutine, and set the Watcher to closed.
 	close(w.done)
 
-	// Remove all watches.
-	// Everything after this may generate errors because the inotify channel
-	// has been closed; we don't care.
-	numWatches := w.removeAll()
+	// Wake up goroutine
+	w.poller.wake()
 
-	// If no watches were removed, it's possible syscall.Read is still blocking.
-	// In this case, create a watch and remove it to wake it up.
-	// If that fails, there's really nothing left to do. we've done our best,
-	// but the goroutine may be alive forever.
-	if numWatches == 0 {
-		wd, _ := syscall.InotifyAddWatch(w.fd, ".", syscall.IN_DELETE_SELF)
-		syscall.InotifyRmWatch(w.fd, uint32(wd))
-	}
+	// Wait for goroutine to close
+	<-w.doneResp
 
 	return nil
 }
@@ -104,7 +108,7 @@ func (w *Watcher) Add(name string) error {
 	}
 	wd, errno := syscall.InotifyAddWatch(w.fd, name, flags)
 	if wd == -1 {
-		return os.NewSyscallError("inotify_add_watch", errno)
+		return errno
 	}
 
 	w.mu.Lock()
@@ -128,27 +132,21 @@ func (w *Watcher) Remove(name string) error {
 	if !ok {
 		return fmt.Errorf("can't remove non-existent inotify watch for: %s", name)
 	}
+	// inotify_rm_watch will return EINVAL if the file has been deleted;
+	// the inotify will already have been removed.
+	// That means we can safely delete it from our watches, whatever inotify_rm_watch does.
+	delete(w.watches, name)
 	success, errno := syscall.InotifyRmWatch(w.fd, watch.wd)
 	if success == -1 {
-		return os.NewSyscallError("inotify_rm_watch", errno)
+		// TODO: Perhaps it's not helpful to return an error here in every case.
+		// the only two possible errors are:
+		// EBADF, which happens when w.fd is not a valid file descriptor of any kind.
+		// EINVAL, which is when fd is not an inotify descriptor or wd is not a valid watch descriptor.
+		// Watch descriptors are invalidated when they are removed explicitly or implicitly;
+		// explicitly by inotify_rm_watch, implicitly when the file they are watching is deleted.
+		return errno
 	}
-	delete(w.watches, name)
 	return nil
-}
-
-// removeAll watches
-func (w *Watcher) removeAll() int {
-	removed := 0
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	for name, watch := range w.watches {
-		success, _ := syscall.InotifyRmWatch(w.fd, watch.wd)
-		if success != -1 {
-			removed++
-		}
-		delete(w.watches, name)
-	}
-	return removed
 }
 
 type watch struct {
@@ -163,16 +161,33 @@ func (w *Watcher) readEvents() {
 		buf   [syscall.SizeofInotifyEvent * 4096]byte // Buffer for a maximum of 4096 raw events
 		n     int                                     // Number of bytes read with read()
 		errno error                                   // Syscall errno
+		ok    bool                                    // For poller.wait
 	)
 
+	defer close(w.doneResp)
 	defer close(w.Errors)
 	defer close(w.Events)
 	defer syscall.Close(w.fd)
+	defer w.poller.close()
 
 	for {
 		// See if we have been closed.
 		if w.isClosed() {
 			return
+		}
+
+		ok, errno = w.poller.wait()
+		if errno != nil {
+			select {
+			case w.Errors <- errno:
+			case <-w.done:
+				return
+			}
+			continue
+		}
+
+		if !ok {
+			continue
 		}
 
 		n, errno = syscall.Read(w.fd, buf[:])
@@ -188,23 +203,20 @@ func (w *Watcher) readEvents() {
 			return
 		}
 
-		// If EOF is received
-		if n == 0 {
-			close(w.done)
-			return
-		}
-
-		if n < 0 {
-			select {
-			case w.Errors <- os.NewSyscallError("read", errno):
-			case <-w.done:
-				return
-			}
-			continue
-		}
 		if n < syscall.SizeofInotifyEvent {
+			var err error
+			if n == 0 {
+				// If EOF is received. This should really never happen.
+				err = io.EOF
+			} else if n < 0 {
+				// If an error occured while reading.
+				err = errno
+			} else {
+				// Read was too short.
+				err = errors.New("notify: short read in readEvents()")
+			}
 			select {
-			case w.Errors <- errors.New("inotify: short read in readEvents()"):
+			case w.Errors <- err:
 			case <-w.done:
 				return
 			}
