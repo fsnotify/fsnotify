@@ -194,27 +194,20 @@ func (w *Watcher) readEvents() {
 			return
 		}
 
-		// If EOF is received. This should really never happen.
-		if n == 0 {
-			select {
-			case w.Errors <- io.EOF:
-			case <-w.done:
-				return
-			}
-			continue
-		}
-
-		if n < 0 {
-			select {
-			case w.Errors <- errno:
-			case <-w.done:
-				return
-			}
-			continue
-		}
 		if n < syscall.SizeofInotifyEvent {
+			var err error
+			if n == 0 {
+				// If EOF is received. This should really never happen.
+				err = io.EOF
+			} else if n < 0 {
+				// If an error occured while reading.
+				err = errno
+			} else {
+				// Read was too short.
+				err = errors.New("notify: short read in readEvents()")
+			}
 			select {
-			case w.Errors <- errors.New("inotify: short read in readEvents()"):
+			case w.Errors <- err:
 			case <-w.done:
 				return
 			}
