@@ -43,7 +43,7 @@ func newFdPoller(fd int) (_ *fdPoller, errno error) {
 		return nil, errno
 	}
 	// Create pipe; pipe[0] is the read end, pipe[1] the write end.
-	errno = syscall.Pipe(poller.pipe[:])
+	errno = syscall.Pipe2(poller.pipe[:], syscall.O_NONBLOCK)
 	if errno != nil {
 		return nil, errno
 	}
@@ -148,6 +148,10 @@ func (poller *fdPoller) wake() error {
 	buf := make([]byte, 1)
 	n, errno := syscall.Write(poller.pipe[1], buf)
 	if n == -1 {
+		if errno == syscall.EAGAIN {
+			// Buffer is full, poller will wake.
+			return nil
+		}
 		return errno
 	}
 	return nil
@@ -158,6 +162,10 @@ func (poller *fdPoller) clearWake() error {
 	buf := make([]byte, 100)
 	n, errno := syscall.Read(poller.pipe[0], buf)
 	if n == -1 {
+		if errno == syscall.EAGAIN {
+			// Buffer is empty, someone else cleared our wake.
+			return nil
+		}
 		return errno
 	}
 	return nil
