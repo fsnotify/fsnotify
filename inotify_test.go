@@ -252,3 +252,41 @@ func TestInotifyStress(t *testing.T) {
 		}
 	}
 }
+
+func TestInotifyRemoveTwice(t *testing.T) {
+	testDir := tempMkdir(t)
+	defer os.RemoveAll(testDir)
+	testFile := filepath.Join(testDir, "testfile")
+
+	handle, err := os.Create(testFile)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	handle.Close()
+
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("Failed to create watcher: %v", err)
+	}
+	defer w.Close()
+
+	err = w.Add(testFile)
+	if err != nil {
+		t.Fatalf("Failed to add testFile: %v", err)
+	}
+
+	err = os.Remove(testFile)
+	if err != nil {
+		t.Fatalf("Failed to remove testFile: %v", err)
+	}
+
+	err = w.Remove(testFile)
+	if err != syscall.EINVAL {
+		t.Fatalf("Expected EINVAL from Remove, got: %v", err)
+	}
+
+	err = w.Remove(testFile)
+	if err == syscall.EINVAL {
+		t.Fatalf("Got EINVAL again, watch was not removed")
+	}
+}

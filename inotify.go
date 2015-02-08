@@ -132,11 +132,20 @@ func (w *Watcher) Remove(name string) error {
 	if !ok {
 		return fmt.Errorf("can't remove non-existent inotify watch for: %s", name)
 	}
+	// inotify_rm_watch will return EINVAL if the file has been deleted;
+	// the inotify will already have been removed.
+	// That means we can safely delete it from our watches, whatever inotify_rm_watch does.
+	delete(w.watches, name)
 	success, errno := syscall.InotifyRmWatch(w.fd, watch.wd)
 	if success == -1 {
+		// TODO: Perhaps it's not helpful to return an error here in every case.
+		// the only two possible errors are:
+		// EBADF, which happens when w.fd is not a valid file descriptor of any kind.
+		// EINVAL, which is when fd is not an inotify descriptor or wd is not a valid watch descriptor.
+		// Watch descriptors are invalidated when they are removed explicitly or implicitly;
+		// explicitly by inotify_rm_watch, implicitly when the file they are watching is deleted.
 		return errno
 	}
-	delete(w.watches, name)
 	return nil
 }
 
