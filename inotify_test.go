@@ -7,6 +7,7 @@
 package fsnotify
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -281,13 +282,19 @@ func TestInotifyRemoveTwice(t *testing.T) {
 	}
 
 	err = w.Remove(testFile)
-	if err != syscall.EINVAL {
-		t.Fatalf("Expected EINVAL from Remove, got: %v", err)
+	if err == nil {
+		t.Fatalf("no error on removing invalid file")
 	}
+	s1 := fmt.Sprintf("%s", err)
 
 	err = w.Remove(testFile)
-	if err == syscall.EINVAL {
-		t.Fatalf("Got EINVAL again, watch was not removed")
+	if err == nil {
+		t.Fatalf("no error on removing invalid file")
+	}
+	s2 := fmt.Sprintf("%s", err)
+
+	if s1 != s2 {
+		t.Fatalf("receive different error - %s / %s", s1, s2)
 	}
 }
 

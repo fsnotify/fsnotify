@@ -23,6 +23,7 @@ type Watcher struct {
 	Events   chan Event
 	Errors   chan error
 	mu       sync.Mutex // Map access
+	cv       *sync.Cond // sync removing on rm_watch with IN_IGNORE
 	fd       int
 	poller   *fdPoller
 	watches  map[string]*watch // Map of inotify watches (key: path)
@@ -54,6 +55,7 @@ func NewWatcher() (*Watcher, error) {
 		done:     make(chan struct{}),
 		doneResp: make(chan struct{}),
 	}
+	w.cv = sync.NewCond(&w.mu)
 
 	go w.readEvents()
 	return w, nil
@@ -132,20 +134,19 @@ func (w *Watcher) Remove(name string) error {
 	if !ok {
 		return fmt.Errorf("can't remove non-existent inotify watch for: %s", name)
 	}
-	// inotify_rm_watch will return EINVAL if the file has been deleted;
-	// the inotify will already have been removed.
-	// That means we can safely delete it from our watches, whatever inotify_rm_watch does.
-	delete(w.watches, name)
 	success, errno := syscall.InotifyRmWatch(w.fd, watch.wd)
 	if success == -1 {
-		// TODO: Perhaps it's not helpful to return an error here in every case.
-		// the only two possible errors are:
-		// EBADF, which happens when w.fd is not a valid file descriptor of any kind.
-		// EINVAL, which is when fd is not an inotify descriptor or wd is not a valid watch descriptor.
-		// Watch descriptors are invalidated when they are removed explicitly or implicitly;
-		// explicitly by inotify_rm_watch, implicitly when the file they are watching is deleted.
 		return errno
 	}
+
+	// not delete w.watches and w.paths here, but in ignoreLinux() called:
+	// InotifyRmWatch() above, readEvents() and ignoreLinux() chain
+	exists := true
+	for exists {
+		w.cv.Wait()
+		_, exists = w.watches[name]
+	}
+
 	return nil
 }
 
@@ -249,7 +250,7 @@ func (w *Watcher) readEvents() {
 			event := newEvent(name, mask)
 
 			// Send the events that are not ignored on the events channel
-			if !event.ignoreLinux(mask) {
+			if !event.ignoreLinux(w, raw.Wd, mask) {
 				select {
 				case w.Events <- event:
 				case <-w.done:
@@ -266,9 +267,15 @@ func (w *Watcher) readEvents() {
 // Certain types of events can be "ignored" and not sent over the Events
 // channel. Such as events marked ignore by the kernel, or MODIFY events
 // against files that do not exist.
-func (e *Event) ignoreLinux(mask uint32) bool {
+func (e *Event) ignoreLinux(w *Watcher, wd int32, mask uint32) bool {
 	// Ignore anything the inotify API says to ignore
 	if mask&syscall.IN_IGNORED == syscall.IN_IGNORED {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		name := w.paths[int(wd)]
+		delete(w.paths, int(wd))
+		delete(w.watches, name)
+		w.cv.Broadcast()
 		return true
 	}
 
