@@ -55,5 +55,10 @@ Please refer to [CONTRIBUTING][] before opening an issue or pull request.
 
 See [example_test.go](https://github.com/go-fsnotify/fsnotify/blob/master/example_test.go).
 
-
 [contributing]: https://github.com/go-fsnotify/fsnotify/blob/master/CONTRIBUTING.md
+
+## Related Projects
+
+* [notify](https://github.com/rjeczalik/notify)
+* [fsevents](https://github.com/go-fsnotify/fsevents)
+
