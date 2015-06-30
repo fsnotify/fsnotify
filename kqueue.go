@@ -412,7 +412,7 @@ func (w *Watcher) internalWatch(name string, fileInfo os.FileInfo) error {
 		flags := w.dirFlags[name]
 		w.mu.Unlock()
 
-		flags |= syscall.NOTE_DELETE
+		flags |= syscall.NOTE_DELETE | syscall.NOTE_RENAME
 		return w.addWatch(name, flags)
 	}
 
