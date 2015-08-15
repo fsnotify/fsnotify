@@ -30,6 +30,24 @@ const (
 	Chmod
 )
 
+// String returns a string representation of the Op
+func (o Op) String() string {
+	switch o {
+	case Create:
+		return "CREATE"
+	case Remove:
+		return "REMOVE"
+	case Write:
+		return "WRITE"
+	case Rename:
+		return "RENAME"
+	case Chmod:
+		return "CHMOD"
+	}
+
+	return ""
+}
+
 // String returns a string representation of the event in the form
 // "file: REMOVE|WRITE|..."
 func (e Event) String() string {
