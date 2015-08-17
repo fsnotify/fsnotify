@@ -47,9 +47,7 @@ func (o Op) String() string {
 	return ""
 }
 
-// String returns a string representation of the event in the form
-// "file: REMOVE|WRITE|..."
+// String returns a string representation of the event
 func (e Event) String() string {
-	// Return a list of event names, with leading pipe character stripped
-	return fmt.Sprintf("%q: |%s", e.Name, e.Op.String())
+	return fmt.Sprintf("%q: %s", e.Name, e.Op.String())
 }
