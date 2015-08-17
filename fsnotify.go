@@ -8,7 +8,6 @@
 package fsnotify
 
 import (
-	"bytes"
 	"fmt"
 )
 
@@ -30,33 +29,27 @@ const (
 	Chmod
 )
 
+// String returns a string representation of the Op
+func (o Op) String() string {
+	switch o {
+	case Create:
+		return "CREATE"
+	case Remove:
+		return "REMOVE"
+	case Write:
+		return "WRITE"
+	case Rename:
+		return "RENAME"
+	case Chmod:
+		return "CHMOD"
+	}
+
+	return ""
+}
+
 // String returns a string representation of the event in the form
 // "file: REMOVE|WRITE|..."
 func (e Event) String() string {
-	// Use a buffer for efficient string concatenation
-	var buffer bytes.Buffer
-
-	if e.Op&Create == Create {
-		buffer.WriteString("|CREATE")
-	}
-	if e.Op&Remove == Remove {
-		buffer.WriteString("|REMOVE")
-	}
-	if e.Op&Write == Write {
-		buffer.WriteString("|WRITE")
-	}
-	if e.Op&Rename == Rename {
-		buffer.WriteString("|RENAME")
-	}
-	if e.Op&Chmod == Chmod {
-		buffer.WriteString("|CHMOD")
-	}
-
-	// If buffer remains empty, return no event names
-	if buffer.Len() == 0 {
-		return fmt.Sprintf("%q: ", e.Name)
-	}
-
 	// Return a list of event names, with leading pipe character stripped
-	return fmt.Sprintf("%q: %s", e.Name, buffer.String()[1:])
+	return fmt.Sprintf("%q: |%s", e.Name, e.Op.String())
 }
