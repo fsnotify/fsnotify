@@ -302,8 +302,7 @@ func newEvent(name string, mask uint32) Event {
 	if mask&syscall.IN_ATTRIB == syscall.IN_ATTRIB {
 		e.Op |= Chmod
 	}
-	if mask&syscall.IN_CLOSE == syscall.IN_CLOSE || mask&syscall.IN_CLOSE_WRITE == syscall.IN_CLOSE_WRITE ||
-		mask&syscall.IN_CLOSE_NOWRITE == syscall.IN_CLOSE_NOWRITE {
+	if mask&syscall.IN_CLOSE == syscall.IN_CLOSE || mask&syscall.IN_CLOSE_WRITE == syscall.IN_CLOSE_WRITE || mask&syscall.IN_CLOSE_NOWRITE == syscall.IN_CLOSE_NOWRITE {
 		e.Op |= Closed
 	}
 
