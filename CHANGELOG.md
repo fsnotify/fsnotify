@@ -1,5 +1,9 @@
 # Changelog
 
+## master
+
+* kqueue: don't watch named pipes [#98](https://github.com/go-fsnotify/fsnotify/pull/98) (thanks @evanphx)
+
 ## v1.2.0 / 2015-02-08
 
 * inotify: use epoll to wake up readEvents [#66](https://github.com/go-fsnotify/fsnotify/pull/66) (thanks @PieterD)
