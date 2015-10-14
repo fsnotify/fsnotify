@@ -1,6 +1,6 @@
 # Changelog
 
-## master
+## v1.2.1 / 2015-10-14
 
 * kqueue: don't watch named pipes [#98](https://github.com/go-fsnotify/fsnotify/pull/98) (thanks @evanphx)
 
