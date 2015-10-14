@@ -180,6 +180,12 @@ func (w *Watcher) addWatch(name string, flags uint32) error {
 		if fi.Mode()&os.ModeSocket == os.ModeSocket {
 			return nil
 		}
+		
+		// Don't watch named pipes.
+		if fi.Mode()&os.ModeNamedPipe == os.ModeNamedPipe {
+			return nil
+		}
+
 
 		// Follow Symlinks
 		// Unfortunately, Linux can add bogus symlinks to watch list without
