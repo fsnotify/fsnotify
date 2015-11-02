@@ -1,5 +1,9 @@
 # Changelog
 
+## master / 2015-10-17
+
+* inotify: use epoll_create1 for arm64 support (requires Linux 2.6.27 or later) [#100](https://github.com/go-fsnotify/fsnotify/pull/100) (thanks @suihkulokki)
+
 ## v1.2.1 / 2015-10-14
 
 * kqueue: don't watch named pipes [#98](https://github.com/go-fsnotify/fsnotify/pull/98) (thanks @evanphx)
