@@ -200,17 +200,17 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 				return "", nil
 			}
 
-			fi, err = os.Lstat(name)
-			if err != nil {
-				return "", nil
-			}
-
 			w.mu.Lock()
 			_, alreadyWatching = w.watches[name]
 			w.mu.Unlock()
 
 			if alreadyWatching {
 				return name, nil
+			}
+
+			fi, err = os.Lstat(name)
+			if err != nil {
+				return "", nil
 			}
 		}
 
