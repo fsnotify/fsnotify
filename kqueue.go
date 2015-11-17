@@ -204,6 +204,14 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 			if err != nil {
 				return "", nil
 			}
+
+			w.mu.Lock()
+			_, alreadyWatching = w.watches[name]
+			w.mu.Unlock()
+
+			if alreadyWatching {
+				return name, nil
+			}
 		}
 
 		watchfd, err = syscall.Open(name, openMode, 0700)
@@ -222,7 +230,6 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 
 	if !alreadyWatching {
 		w.mu.Lock()
-		_, alreadyWatching = w.watches[name]
 		w.watches[name] = watchfd
 		w.paths[watchfd] = pathInfo{name: name, isDir: isDir}
 		w.mu.Unlock()
