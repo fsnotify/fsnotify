@@ -97,7 +97,7 @@ func (w *Watcher) Add(name string) error {
 
 	const agnosticEvents = syscall.IN_MOVED_TO | syscall.IN_MOVED_FROM |
 		syscall.IN_CREATE | syscall.IN_ATTRIB | syscall.IN_MODIFY |
-		syscall.IN_MOVE_SELF | syscall.IN_DELETE | syscall.IN_DELETE_SELF
+		syscall.IN_MOVE_SELF | syscall.IN_DELETE | syscall.IN_DELETE_SELF | syscall.IN_CLOSE_WRITE
 
 	var flags uint32 = agnosticEvents
 
@@ -320,5 +320,9 @@ func newEvent(name string, mask uint32) Event {
 	if mask&syscall.IN_ATTRIB == syscall.IN_ATTRIB {
 		e.Op |= Chmod
 	}
+	if mask&syscall.IN_CLOSE_WRITE == syscall.IN_CLOSE_WRITE {
+		e.Op |= Closed
+	}
+
 	return e
 }
