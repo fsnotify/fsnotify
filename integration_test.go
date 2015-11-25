@@ -44,6 +44,16 @@ func tempMkdir(t *testing.T) string {
 	return dir
 }
 
+// tempMkFile makes a temporary file.
+func tempMkFile(t *testing.T, dir string) string {
+	f, err := ioutil.TempFile(dir, "fsnotify")
+	if err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+	defer f.Close()
+	return f.Name()
+}
+
 // newWatcher initializes an fsnotify Watcher instance.
 func newWatcher(t *testing.T) *Watcher {
 	watcher, err := NewWatcher()
@@ -1168,6 +1178,50 @@ func TestClose(t *testing.T) {
 	}
 	err := watcher.Close()
 	if err != nil {
+		t.Fatalf("Expected no error on Close, got %v.", err)
+	}
+}
+
+// TestRemoveWithClose tests if one can handle Remove events and, at the same
+// time, close Watcher object without any data races.
+func TestRemoveWithClose(t *testing.T) {
+	testDir := tempMkdir(t)
+	defer os.RemoveAll(testDir)
+
+	const fileN = 200
+	tempFiles := make([]string, 0, fileN)
+	for i := 0; i < fileN; i++ {
+		tempFiles = append(tempFiles, tempMkFile(t, testDir))
+	}
+	watcher := newWatcher(t)
+	if err := watcher.Add(testDir); err != nil {
+		t.Fatalf("Expected no error on Add, got %v", err)
+	}
+	startC, stopC := make(chan struct{}), make(chan struct{})
+	errC := make(chan error)
+	go func() {
+		for {
+			select {
+			case <-watcher.Errors:
+			case <-watcher.Events:
+			case <-stopC:
+				return
+			}
+		}
+	}()
+	go func() {
+		<-startC
+		for _, fileName := range tempFiles {
+			os.Remove(fileName)
+		}
+	}()
+	go func() {
+		<-startC
+		errC <- watcher.Close()
+	}()
+	close(startC)
+	defer close(stopC)
+	if err := <-errC; err != nil {
 		t.Fatalf("Expected no error on Close, got %v.", err)
 	}
 }
