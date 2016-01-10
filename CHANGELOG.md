@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.2.9 / 2016-01-13
+
+kqueue: Fix logic for CREATE after REMOVE [#111](https://github.com/go-fsnotify/fsnotify/pull/111) (thanks @bep)
+
 ## v1.2.8 / 2015-12-17
 
 * kqueue: fix race condition in Close [#105](https://github.com/go-fsnotify/fsnotify/pull/105) (thanks @djui for reporting the issue and @ppknap for writing a failing test)
