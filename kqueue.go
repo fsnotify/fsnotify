@@ -325,19 +325,24 @@ func (w *Watcher) readEvents() {
 			if event.Op&Remove == Remove {
 				// Look for a file that may have overwritten this.
 				// For example, mv f1 f2 will delete f2, then create f2.
-				fileDir, _ := filepath.Split(event.Name)
-				fileDir = filepath.Clean(fileDir)
-				w.mu.Lock()
-				_, found := w.watches[fileDir]
-				w.mu.Unlock()
-				if found {
-					// make sure the directory exists before we watch for changes. When we
-					// do a recursive watch and perform rm -fr, the parent directory might
-					// have gone missing, ignore the missing directory and let the
-					// upcoming delete event remove the watch from the parent directory.
-					if _, err := os.Lstat(fileDir); os.IsExist(err) {
-						w.sendDirectoryChangeEvents(fileDir)
-						// FIXME: should this be for events on files or just isDir?
+				if path.isDir {
+					fileDir := filepath.Clean(event.Name)
+					w.mu.Lock()
+					_, found := w.watches[fileDir]
+					w.mu.Unlock()
+					if found {
+						// make sure the directory exists before we watch for changes. When we
+						// do a recursive watch and perform rm -fr, the parent directory might
+						// have gone missing, ignore the missing directory and let the
+						// upcoming delete event remove the watch from the parent directory.
+						if _, err := os.Lstat(fileDir); err == nil {
+							w.sendDirectoryChangeEvents(fileDir)
+						}
+					}
+				} else {
+					filePath := filepath.Clean(event.Name)
+					if fileInfo, err := os.Lstat(filePath); err == nil {
+						w.sendFileCreatedEventIfNew(filePath, fileInfo)
 					}
 				}
 			}
@@ -407,24 +412,35 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 	// Search for new files
 	for _, fileInfo := range files {
 		filePath := filepath.Join(dirPath, fileInfo.Name())
-		w.mu.Lock()
-		_, doesExist := w.fileExists[filePath]
-		w.mu.Unlock()
-		if !doesExist {
-			// Send create event
-			w.Events <- newCreateEvent(filePath)
-		}
+		err := w.sendFileCreatedEventIfNew(filePath, fileInfo)
 
-		// like watchDirectoryFiles (but without doing another ReadDir)
-		filePath, err = w.internalWatch(filePath, fileInfo)
 		if err != nil {
 			return
 		}
-
-		w.mu.Lock()
-		w.fileExists[filePath] = true
-		w.mu.Unlock()
 	}
+}
+
+// sendFileCreatedEvent sends a create event if the file isn't already being tracked.
+func (w *Watcher) sendFileCreatedEventIfNew(filePath string, fileInfo os.FileInfo) (err error) {
+	w.mu.Lock()
+	_, doesExist := w.fileExists[filePath]
+	w.mu.Unlock()
+	if !doesExist {
+		// Send create event
+		w.Events <- newCreateEvent(filePath)
+	}
+
+	// like watchDirectoryFiles (but without doing another ReadDir)
+	filePath, err = w.internalWatch(filePath, fileInfo)
+	if err != nil {
+		return err
+	}
+
+	w.mu.Lock()
+	w.fileExists[filePath] = true
+	w.mu.Unlock()
+
+	return nil
 }
 
 func (w *Watcher) internalWatch(name string, fileInfo os.FileInfo) (string, error) {
