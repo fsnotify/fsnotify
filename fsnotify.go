@@ -18,6 +18,7 @@ type Event struct {
 	Op   Op     // File operation that triggered the event.
 }
 
+//go:generate stringer -type=Op -output=op_stringer.go
 // Op describes a set of file operations.
 type Op uint32
 
@@ -36,25 +37,16 @@ func (e Event) String() string {
 	// Use a buffer for efficient string concatenation
 	var buffer bytes.Buffer
 
-	if e.Op&Create == Create {
-		buffer.WriteString("|CREATE")
-	}
-	if e.Op&Remove == Remove {
-		buffer.WriteString("|REMOVE")
-	}
-	if e.Op&Write == Write {
-		buffer.WriteString("|WRITE")
-	}
-	if e.Op&Rename == Rename {
-		buffer.WriteString("|RENAME")
-	}
-	if e.Op&Chmod == Chmod {
-		buffer.WriteString("|CHMOD")
+	ops := []Op{Create, Write, Remove, Rename, Chmod}
+	for _, o := range ops {
+		if e.Op&o == o {
+			buffer.WriteString(fmt.Sprintf("|%s", o))
+		}
 	}
 
 	// If buffer remains empty, return no event names
 	if buffer.Len() == 0 {
-		return fmt.Sprintf("%q: ", e.Name)
+		return fmt.Sprintf("%q: nil", e.Name)
 	}
 
 	// Return a list of event names, with leading pipe character stripped
