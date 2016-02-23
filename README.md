@@ -1,6 +1,6 @@
 # File system notifications for Go
 
-[![GoDoc](https://godoc.org/github.com/fsnotify/fsnotify?status.svg)](https://godoc.org/github.com/fsnotify/fsnotify) [![Coverage](http://gocover.io/_badge/github.com/fsnotify/fsnotify)](http://gocover.io/github.com/fsnotify/fsnotify) 
+[![GoDoc](https://godoc.org/github.com/fsnotify/fsnotify?status.svg)](https://godoc.org/github.com/fsnotify/fsnotify) [![Go Report Card](https://goreportcard.com/badge/github.com/fsnotify/fsnotify)](https://goreportcard.com/report/github.com/fsnotify/fsnotify) [![Coverage](http://gocover.io/_badge/github.com/fsnotify/fsnotify)](http://gocover.io/github.com/fsnotify/fsnotify) 
 
 Go 1.3+ required.
 

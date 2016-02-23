@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.2.10 / 2016-03-02
+
+* Fix golint errors in windows.go [#121](https://github.com/fsnotify/fsnotify/pull/121) (thanks @tiffanyfj)
+
 ## v1.2.9 / 2016-01-13
 
 kqueue: Fix logic for CREATE after REMOVE [#111](https://github.com/fsnotify/fsnotify/pull/111) (thanks @bep)
