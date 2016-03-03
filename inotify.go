@@ -221,7 +221,7 @@ func (w *Watcher) readEvents() {
 				// If EOF is received. This should really never happen.
 				err = io.EOF
 			} else if n < 0 {
-				// If an error occured while reading.
+				// If an error occurred while reading.
 				err = errno
 			} else {
 				// Read was too short.
