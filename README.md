@@ -12,7 +12,7 @@ Cross platform: Windows, Linux, BSD and OS X.
 |kqueue    |BSD, OS X, iOS\*|Supported [![Build Status](https://travis-ci.org/fsnotify/fsnotify.svg?branch=master)](https://travis-ci.org/fsnotify/fsnotify)|
 |ReadDirectoryChangesW|Windows|Supported [![Build status](https://ci.appveyor.com/api/projects/status/ivwjubaih4r0udeh/branch/master?svg=true)](https://ci.appveyor.com/project/NathanYoungman/fsnotify/branch/master)|
 |FSEvents  |OS X          |[Planned](https://github.com/fsnotify/fsnotify/issues/11)|
-|FEN       |Solaris 11    |[Planned](https://github.com/fsnotify/fsnotify/issues/12)|
+|FEN       |Solaris 11    |[In Progress](https://github.com/fsnotify/fsnotify/issues/12)|
 |fanotify  |Linux 2.6.37+ | |
 |USN Journals |Windows    |[Maybe](https://github.com/fsnotify/fsnotify/issues/53)|
 |Polling   |*All*         |[Maybe](https://github.com/fsnotify/fsnotify/issues/9)|
