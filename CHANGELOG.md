@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.3.0 / 2016-04-19
+
+* Support linux/arm64 by [patching](https://go-review.googlesource.com/#/c/21971/) x/sys/unix and switching to to it from syscall (thanks @suihkulokki) [#135](https://github.com/fsnotify/fsnotify/pull/135)
+
 ## v1.2.10 / 2016-03-02
 
 * Fix golint errors in windows.go [#121](https://github.com/fsnotify/fsnotify/pull/121) (thanks @tiffanyfj)
