@@ -13,7 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"syscall"
+	"golang.org/x/sys/unix"
 	"time"
 )
 
@@ -113,12 +113,12 @@ func (w *Watcher) Remove(name string) error {
 		return fmt.Errorf("can't remove non-existent kevent watch for: %s", name)
 	}
 
-	const registerRemove = syscall.EV_DELETE
+	const registerRemove = unix.EV_DELETE
 	if err := register(w.kq, []int{watchfd}, registerRemove, 0); err != nil {
 		return err
 	}
 
-	syscall.Close(watchfd)
+	unix.Close(watchfd)
 
 	w.mu.Lock()
 	isDir := w.paths[watchfd].isDir
@@ -152,7 +152,7 @@ func (w *Watcher) Remove(name string) error {
 }
 
 // Watch all events (except NOTE_EXTEND, NOTE_LINK, NOTE_REVOKE)
-const noteAllEvents = syscall.NOTE_DELETE | syscall.NOTE_WRITE | syscall.NOTE_ATTRIB | syscall.NOTE_RENAME
+const noteAllEvents = unix.NOTE_DELETE | unix.NOTE_WRITE | unix.NOTE_ATTRIB | unix.NOTE_RENAME
 
 // keventWaitTime to block on each read from kevent
 var keventWaitTime = durationToTimespec(100 * time.Millisecond)
@@ -219,7 +219,7 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 			}
 		}
 
-		watchfd, err = syscall.Open(name, openMode, 0700)
+		watchfd, err = unix.Open(name, openMode, 0700)
 		if watchfd == -1 {
 			return "", err
 		}
@@ -227,9 +227,9 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 		isDir = fi.IsDir()
 	}
 
-	const registerAdd = syscall.EV_ADD | syscall.EV_CLEAR | syscall.EV_ENABLE
+	const registerAdd = unix.EV_ADD | unix.EV_CLEAR | unix.EV_ENABLE
 	if err := register(w.kq, []int{watchfd}, registerAdd, flags); err != nil {
-		syscall.Close(watchfd)
+		unix.Close(watchfd)
 		return "", err
 	}
 
@@ -245,8 +245,8 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 		// or if it was watched before, but perhaps only a NOTE_DELETE (watchDirectoryFiles)
 		w.mu.Lock()
 
-		watchDir := (flags&syscall.NOTE_WRITE) == syscall.NOTE_WRITE &&
-			(!alreadyWatching || (w.dirFlags[name]&syscall.NOTE_WRITE) != syscall.NOTE_WRITE)
+		watchDir := (flags&unix.NOTE_WRITE) == unix.NOTE_WRITE &&
+			(!alreadyWatching || (w.dirFlags[name]&unix.NOTE_WRITE) != unix.NOTE_WRITE)
 		// Store flags so this watch can be updated later
 		w.dirFlags[name] = flags
 		w.mu.Unlock()
@@ -263,13 +263,13 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 // readEvents reads from kqueue and converts the received kevents into
 // Event values that it sends down the Events channel.
 func (w *Watcher) readEvents() {
-	eventBuffer := make([]syscall.Kevent_t, 10)
+	eventBuffer := make([]unix.Kevent_t, 10)
 
 	for {
 		// See if there is a message on the "done" channel
 		select {
 		case <-w.done:
-			err := syscall.Close(w.kq)
+			err := unix.Close(w.kq)
 			if err != nil {
 				w.Errors <- err
 			}
@@ -282,7 +282,7 @@ func (w *Watcher) readEvents() {
 		// Get new events
 		kevents, err := read(w.kq, eventBuffer, &keventWaitTime)
 		// EINTR is okay, the syscall was interrupted before timeout expired.
-		if err != nil && err != syscall.EINTR {
+		if err != nil && err != unix.EINTR {
 			w.Errors <- err
 			continue
 		}
@@ -356,16 +356,16 @@ func (w *Watcher) readEvents() {
 // newEvent returns an platform-independent Event based on kqueue Fflags.
 func newEvent(name string, mask uint32) Event {
 	e := Event{Name: name}
-	if mask&syscall.NOTE_DELETE == syscall.NOTE_DELETE {
+	if mask&unix.NOTE_DELETE == unix.NOTE_DELETE {
 		e.Op |= Remove
 	}
-	if mask&syscall.NOTE_WRITE == syscall.NOTE_WRITE {
+	if mask&unix.NOTE_WRITE == unix.NOTE_WRITE {
 		e.Op |= Write
 	}
-	if mask&syscall.NOTE_RENAME == syscall.NOTE_RENAME {
+	if mask&unix.NOTE_RENAME == unix.NOTE_RENAME {
 		e.Op |= Rename
 	}
-	if mask&syscall.NOTE_ATTRIB == syscall.NOTE_ATTRIB {
+	if mask&unix.NOTE_ATTRIB == unix.NOTE_ATTRIB {
 		e.Op |= Chmod
 	}
 	return e
@@ -451,7 +451,7 @@ func (w *Watcher) internalWatch(name string, fileInfo os.FileInfo) (string, erro
 		flags := w.dirFlags[name]
 		w.mu.Unlock()
 
-		flags |= syscall.NOTE_DELETE | syscall.NOTE_RENAME
+		flags |= unix.NOTE_DELETE | unix.NOTE_RENAME
 		return w.addWatch(name, flags)
 	}
 
@@ -461,7 +461,7 @@ func (w *Watcher) internalWatch(name string, fileInfo os.FileInfo) (string, erro
 
 // kqueue creates a new kernel event queue and returns a descriptor.
 func kqueue() (kq int, err error) {
-	kq, err = syscall.Kqueue()
+	kq, err = unix.Kqueue()
 	if kq == -1 {
 		return kq, err
 	}
@@ -470,16 +470,16 @@ func kqueue() (kq int, err error) {
 
 // register events with the queue
 func register(kq int, fds []int, flags int, fflags uint32) error {
-	changes := make([]syscall.Kevent_t, len(fds))
+	changes := make([]unix.Kevent_t, len(fds))
 
 	for i, fd := range fds {
 		// SetKevent converts int to the platform-specific types:
-		syscall.SetKevent(&changes[i], fd, syscall.EVFILT_VNODE, flags)
+		unix.SetKevent(&changes[i], fd, unix.EVFILT_VNODE, flags)
 		changes[i].Fflags = fflags
 	}
 
 	// register the events
-	success, err := syscall.Kevent(kq, changes, nil, nil)
+	success, err := unix.Kevent(kq, changes, nil, nil)
 	if success == -1 {
 		return err
 	}
@@ -488,8 +488,8 @@ func register(kq int, fds []int, flags int, fflags uint32) error {
 
 // read retrieves pending events, or waits until an event occurs.
 // A timeout of nil blocks indefinitely, while 0 polls the queue.
-func read(kq int, events []syscall.Kevent_t, timeout *syscall.Timespec) ([]syscall.Kevent_t, error) {
-	n, err := syscall.Kevent(kq, nil, events, timeout)
+func read(kq int, events []unix.Kevent_t, timeout *unix.Timespec) ([]unix.Kevent_t, error) {
+	n, err := unix.Kevent(kq, nil, events, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -497,6 +497,6 @@ func read(kq int, events []syscall.Kevent_t, timeout *syscall.Timespec) ([]sysca
 }
 
 // durationToTimespec prepares a timeout value
-func durationToTimespec(d time.Duration) syscall.Timespec {
-	return syscall.NsecToTimespec(d.Nanoseconds())
+func durationToTimespec(d time.Duration) unix.Timespec {
+	return unix.NsecToTimespec(d.Nanoseconds())
 }
