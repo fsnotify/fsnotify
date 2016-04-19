@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
+	"golang.org/x/sys/unix"
 	"testing"
 	"time"
 )
@@ -21,7 +21,7 @@ func TestInotifyCloseRightAway(t *testing.T) {
 		t.Fatalf("Failed to create watcher")
 	}
 
-	// Close immediately; it won't even reach the first syscall.Read.
+	// Close immediately; it won't even reach the first unix.Read.
 	w.Close()
 
 	// Wait for the close to complete.
@@ -35,7 +35,7 @@ func TestInotifyCloseSlightlyLater(t *testing.T) {
 		t.Fatalf("Failed to create watcher")
 	}
 
-	// Wait until readEvents has reached syscall.Read, and Close.
+	// Wait until readEvents has reached unix.Read, and Close.
 	<-time.After(50 * time.Millisecond)
 	w.Close()
 
@@ -54,7 +54,7 @@ func TestInotifyCloseSlightlyLaterWithWatch(t *testing.T) {
 	}
 	w.Add(testDir)
 
-	// Wait until readEvents has reached syscall.Read, and Close.
+	// Wait until readEvents has reached unix.Read, and Close.
 	<-time.After(50 * time.Millisecond)
 	w.Close()
 
@@ -137,7 +137,7 @@ func TestInotifyCloseCreate(t *testing.T) {
 	}
 
 	// At this point, we've received one event, so the goroutine is ready.
-	// It's also blocking on syscall.Read.
+	// It's also blocking on unix.Read.
 	// Now we try to swap the file descriptor under its nose.
 	w.Close()
 	w, err = NewWatcher()
@@ -181,7 +181,7 @@ func TestInotifyStress(t *testing.T) {
 		for {
 			select {
 			case <-time.After(5 * time.Millisecond):
-				err := proc.Signal(syscall.SIGUSR1)
+				err := proc.Signal(unix.SIGUSR1)
 				if err != nil {
 					t.Fatalf("Signal failed: %v", err)
 				}
