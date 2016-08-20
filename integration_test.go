@@ -102,16 +102,16 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 			// Only count relevant events
 			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFile) {
 				t.Logf("event received: %s", event)
-				if event.Op&Remove == Remove {
+				if event.HasRemove() {
 					deleteReceived.increment()
 				}
-				if event.Op&Write == Write {
+				if event.HasWrite() {
 					modifyReceived.increment()
 				}
-				if event.Op&Create == Create {
+				if event.HasCreate() {
 					createReceived.increment()
 				}
-				if event.Op&Rename == Rename {
+				if event.HasRename() {
 					renameReceived.increment()
 				}
 			} else {
@@ -215,13 +215,13 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 			// Only count relevant events
 			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFile) {
 				t.Logf("event received: %s", event)
-				if event.Op&Remove == Remove {
+				if event.HasRemove() {
 					deleteReceived.increment()
 				}
-				if event.Op&Create == Create {
+				if event.HasCreate() {
 					createReceived.increment()
 				}
-				if event.Op&Write == Write {
+				if event.HasWrite() {
 					modifyReceived.increment()
 				}
 			} else {
@@ -354,13 +354,13 @@ func TestFsnotifyDirOnly(t *testing.T) {
 			// Only count relevant events
 			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFile) || event.Name == filepath.Clean(testFileAlreadyExists) {
 				t.Logf("event received: %s", event)
-				if event.Op&Remove == Remove {
+				if event.HasRemove() {
 					deleteReceived.increment()
 				}
-				if event.Op&Write == Write {
+				if event.HasWrite() {
 					modifyReceived.increment()
 				}
-				if event.Op&Create == Create {
+				if event.HasCreate() {
 					createReceived.increment()
 				}
 			} else {
@@ -456,7 +456,7 @@ func TestFsnotifyDeleteWatchedDir(t *testing.T) {
 			// Only count relevant events
 			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFileAlreadyExists) {
 				t.Logf("event received: %s", event)
-				if event.Op&Remove == Remove {
+				if event.HasRemove() {
 					deleteReceived.increment()
 				}
 			} else {
@@ -502,10 +502,10 @@ func TestFsnotifySubDir(t *testing.T) {
 			// Only count relevant events
 			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testSubDir) || event.Name == filepath.Clean(testFile1) {
 				t.Logf("event received: %s", event)
-				if event.Op&Create == Create {
+				if event.HasCreate() {
 					createReceived.increment()
 				}
-				if event.Op&Remove == Remove {
+				if event.HasRemove() {
 					deleteReceived.increment()
 				}
 			} else {
@@ -596,7 +596,7 @@ func TestFsnotifyRename(t *testing.T) {
 		for event := range eventstream {
 			// Only count relevant events
 			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFile) || event.Name == filepath.Clean(testFileRenamed) {
-				if event.Op&Rename == Rename {
+				if event.HasRename() {
 					renameReceived.increment()
 				}
 				t.Logf("event received: %s", event)
@@ -678,7 +678,7 @@ func TestFsnotifyRenameToCreate(t *testing.T) {
 		for event := range eventstream {
 			// Only count relevant events
 			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFile) || event.Name == filepath.Clean(testFileRenamed) {
-				if event.Op&Create == Create {
+				if event.HasCreate() {
 					createReceived.increment()
 				}
 				t.Logf("event received: %s", event)
@@ -892,10 +892,10 @@ func TestFsnotifyAttrib(t *testing.T) {
 		for event := range eventstream {
 			// Only count relevant events
 			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFile) {
-				if event.Op&Write == Write {
+				if event.HasWrite() {
 					modifyReceived.increment()
 				}
-				if event.Op&Chmod == Chmod {
+				if event.HasChmod() {
 					attribReceived.increment()
 				}
 				t.Logf("event received: %s", event)
@@ -1037,7 +1037,7 @@ func TestFsnotifyFakeSymlink(t *testing.T) {
 	go func() {
 		for ev := range watcher.Events {
 			t.Logf("event received: %s", ev)
-			if ev.Op&Create == Create {
+			if ev.HasCreate() {
 				createEventsReceived.increment()
 			} else {
 				otherEventsReceived.increment()

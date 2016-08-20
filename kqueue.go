@@ -298,7 +298,7 @@ func (w *Watcher) readEvents() {
 			w.mu.Unlock()
 			event := newEvent(path.name, mask)
 
-			if path.isDir && !(event.Op&Remove == Remove) {
+			if path.isDir && !event.HasRemove() {
 				// Double check to make sure the directory exists. This can happen when
 				// we do a rm -fr on a recursively watched folders and we receive a
 				// modification event first but the folder has been deleted and later
@@ -309,21 +309,21 @@ func (w *Watcher) readEvents() {
 				}
 			}
 
-			if event.Op&Rename == Rename || event.Op&Remove == Remove {
+			if event.HasRename() || event.HasRemove() {
 				w.Remove(event.Name)
 				w.mu.Lock()
 				delete(w.fileExists, event.Name)
 				w.mu.Unlock()
 			}
 
-			if path.isDir && event.Op&Write == Write && !(event.Op&Remove == Remove) {
+			if path.isDir && event.HasWrite() && !event.HasRemove() {
 				w.sendDirectoryChangeEvents(event.Name)
 			} else {
 				// Send the event on the Events channel
 				w.Events <- event
 			}
 
-			if event.Op&Remove == Remove {
+			if event.HasRemove() {
 				// Look for a file that may have overwritten this.
 				// For example, mv f1 f2 will delete f2, then create f2.
 				if path.isDir {

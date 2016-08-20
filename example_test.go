@@ -25,7 +25,7 @@ func ExampleNewWatcher() {
 			select {
 			case event := <-watcher.Events:
 				log.Println("event:", event)
-				if event.Op&fsnotify.Write == fsnotify.Write {
+				if event.HasWrite() {
 					log.Println("modified file:", event.Name)
 				}
 			case err := <-watcher.Errors:

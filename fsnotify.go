@@ -30,25 +30,40 @@ const (
 	Chmod
 )
 
+// HasCreate returns true if Event has the Create opcode
+func (e Event) HasCreate() bool { return e.Op&Create == Create }
+
+// HasWrite returns true if Event has the Write opcode
+func (e Event) HasWrite() bool { return e.Op&Write == Write }
+
+// HasRemove returns true if Event has the Remove opcode
+func (e Event) HasRemove() bool { return e.Op&Remove == Remove }
+
+// HasRename returns true if Event has the Rename opcode
+func (e Event) HasRename() bool { return e.Op&Rename == Rename }
+
+// HasChmod returns true if Event has the Chmod opcode
+func (e Event) HasChmod() bool { return e.Op&Chmod == Chmod }
+
 // String returns a string representation of the event in the form
 // "file: REMOVE|WRITE|..."
 func (e Event) String() string {
 	// Use a buffer for efficient string concatenation
 	var buffer bytes.Buffer
 
-	if e.Op&Create == Create {
+	if e.HasCreate() {
 		buffer.WriteString("|CREATE")
 	}
-	if e.Op&Remove == Remove {
+	if e.HasRemove() {
 		buffer.WriteString("|REMOVE")
 	}
-	if e.Op&Write == Write {
+	if e.HasWrite() {
 		buffer.WriteString("|WRITE")
 	}
-	if e.Op&Rename == Rename {
+	if e.HasRename() {
 		buffer.WriteString("|RENAME")
 	}
-	if e.Op&Chmod == Chmod {
+	if e.HasChmod() {
 		buffer.WriteString("|CHMOD")
 	}
 
