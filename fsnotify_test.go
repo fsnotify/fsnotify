@@ -1,4 +1,4 @@
-// Copyright 2015 The Go Authors. All rights reserved.
+// Copyright 2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -9,10 +9,17 @@ package fsnotify
 import "testing"
 
 func TestEventStringWithValue(t *testing.T) {
-	expectedString := `"/usr/someFile": CREATE|CHMOD`
-	event := Event{Name: "/usr/someFile", Op: Chmod | Create}
-	if event.String() != expectedString {
-		t.Fatalf("Expected %s, got: %v", expectedString, event.String())
+	for opMask, expectedString := range map[Op]string{
+		Chmod | Create: `"/usr/someFile": CREATE|CHMOD`,
+		Rename:         `"/usr/someFile": RENAME`,
+		Remove:         `"/usr/someFile": REMOVE`,
+		Write | Chmod:  `"/usr/someFile": WRITE|CHMOD`,
+	} {
+		event := Event{Name: "/usr/someFile", Op: opMask}
+		if event.String() != expectedString {
+			t.Fatalf("Expected %s, got: %v", expectedString, event.String())
+		}
+
 	}
 }
 
