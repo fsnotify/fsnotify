@@ -26,7 +26,7 @@ type Watcher struct {
 
 	kq int // File descriptor (as returned by the kqueue() syscall).
 
-	mu              sync.Mutex        // Protects access to watcher data
+	mu              *sync.Mutex       // Protects access to watcher data
 	watches         map[string]int    // Map of watched file descriptors (key: path).
 	externalWatches map[string]bool   // Map of watches added by user of the library.
 	dirFlags        map[string]uint32 // Map of watched directories to fflags used in kqueue.
@@ -57,6 +57,7 @@ func NewWatcher() (*Watcher, error) {
 		Events:          make(chan Event),
 		Errors:          make(chan error),
 		done:            make(chan bool),
+		mu:              &sync.Mutex{},
 	}
 
 	go w.readEvents()
