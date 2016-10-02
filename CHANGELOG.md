@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.4.0 / 2016-10-01
+
+* add a String() method to Event.Op [#165](https://github.com/fsnotify/fsnotify/pull/165) (thanks @oozie)
+
 ## v1.3.1 / 2016-06-28
 
 * windows: fix for double backslash when watching the root of a drive [#151](https://github.com/fsnotify/fsnotify/issues/151) (thanks @brunoqc)
