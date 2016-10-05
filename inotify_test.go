@@ -243,9 +243,9 @@ func TestInotifyStress(t *testing.T) {
 		}
 	}
 
-	// Drain remaining events from queues
-	finished = false
-	for !finished {
+	// Drain remaining events from channels
+	count := 0
+	for count < 10 {
 		select {
 		case err := <-errChan:
 			t.Fatalf("Got an error from file creator goroutine: %v", err)
@@ -262,7 +262,9 @@ func TestInotifyStress(t *testing.T) {
 				removes++
 			}
 		default:
-			finished = true
+			count++
+			// Give the watcher chances to fill the channels.
+			time.Sleep(time.Millisecond)
 		}
 	}
 
