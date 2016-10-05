@@ -174,7 +174,7 @@ func TestInotifyStress(t *testing.T) {
 	}
 
 	doneChan := make(chan struct{})
-	// The buffer ensures that the file generation goroutine is never	blocked.
+	// The buffer ensures that the file generation goroutine is never blocked.
 	errChan := make(chan error, 2*maxNumToCreate)
 
 	go func() {
