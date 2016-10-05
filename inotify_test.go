@@ -194,6 +194,10 @@ func TestInotifyStress(t *testing.T) {
 			}
 		}
 
+		// If we delete a newly created file too quickly, inotify will skip the
+		// create event and only send the delete event.
+		time.Sleep(100 * time.Millisecond)
+
 		for i := 0; i < maxNumToCreate; i++ {
 			testFile := fmt.Sprintf("%s%d", testFilePrefix, i)
 			err = os.Remove(testFile)
