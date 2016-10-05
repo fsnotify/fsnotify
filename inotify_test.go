@@ -190,6 +190,8 @@ func TestInotifyStress(t *testing.T) {
 					if err != nil {
 						errChan <- fmt.Errorf("Remove failed: %v", err)
 					}
+
+					time.Sleep(time.Millisecond)
 				}
 
 				close(doneChan)
