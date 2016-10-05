@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.4.1 / 2016-10-04
+
+* Fix flaky inotify stress test on Linux [#177](https://github.com/fsnotify/fsnotify/pull/177) (thanks @pattyshack)
+
 ## v1.4.0 / 2016-10-01
 
 * add a String() method to Event.Op [#165](https://github.com/fsnotify/fsnotify/pull/165) (thanks @oozie)
