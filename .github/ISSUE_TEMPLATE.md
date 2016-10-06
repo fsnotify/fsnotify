@@ -1,6 +1,10 @@
 Before reporting an issue, please ensure you are using the latest release of fsnotify.
 
-### Fsnotify has different code paths for each supported operating system. Which operating system (GOOS) and version are you using?
+### Which operating system (GOOS) and version are you using?
+
+Linux: lsb_release -a
+macOS: sw_vers
+Windows: systeminfo | findstr /B /C:OS
 
 ### Please describe the issue that occurred.
 
