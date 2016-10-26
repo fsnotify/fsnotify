@@ -248,7 +248,7 @@ func (w *Watcher) readEvents() {
 
 			if mask&unix.IN_Q_OVERFLOW != 0 {
 				select {
-				case w.Errors <- errors.New("inotify queue overflow"):
+				case w.Errors <- ErrEventOverflow:
 				case <-w.done:
 					return
 				}
