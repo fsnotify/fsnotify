@@ -358,3 +358,94 @@ func TestInotifyInnerMapLength(t *testing.T) {
 		t.Fatalf("Expected paths len is 0, but got: %d, %v", len(w.paths), w.paths)
 	}
 }
+
+func TestInotifyOverflow(t *testing.T) {
+	// We need to generate many more events than the
+	// fs.inotify.max_queued_events sysctl setting.
+	// We use multiple goroutines (one per directory)
+	// to speed up file creation.
+	numDirs := 128
+	numFiles := 1024
+
+	testDir := tempMkdir(t)
+	defer os.RemoveAll(testDir)
+
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("Failed to create watcher: %v", err)
+	}
+	defer w.Close()
+
+	for dn := 0; dn < numDirs; dn++ {
+		testSubdir := fmt.Sprintf("%s/%d", testDir, dn)
+
+		err := os.Mkdir(testSubdir, 0777)
+		if err != nil {
+			t.Fatalf("Cannot create subdir: %v", err)
+		}
+
+		err = w.Add(testSubdir)
+		if err != nil {
+			t.Fatalf("Failed to add subdir: %v", err)
+		}
+	}
+
+	errChan := make(chan error, numDirs*numFiles)
+
+	for dn := 0; dn < numDirs; dn++ {
+		testSubdir := fmt.Sprintf("%s/%d", testDir, dn)
+
+		go func() {
+			for fn := 0; fn < numFiles; fn++ {
+				testFile := fmt.Sprintf("%s/%d", testSubdir, fn)
+
+				handle, err := os.Create(testFile)
+				if err != nil {
+					errChan <- fmt.Errorf("Create failed: %v", err)
+					continue
+				}
+
+				err = handle.Close()
+				if err != nil {
+					errChan <- fmt.Errorf("Close failed: %v", err)
+					continue
+				}
+			}
+		}()
+	}
+
+	creates := 0
+	overflows := 0
+
+	after := time.After(10 * time.Second)
+	for overflows == 0 && creates < numDirs*numFiles {
+		select {
+		case <-after:
+			t.Fatalf("Not done")
+		case err := <-errChan:
+			t.Fatalf("Got an error from file creator goroutine: %v", err)
+		case err := <-w.Errors:
+			if err == ErrEventOverflow {
+				overflows++
+			} else {
+				t.Fatalf("Got an error from watcher: %v", err)
+			}
+		case evt := <-w.Events:
+			if !strings.HasPrefix(evt.Name, testDir) {
+				t.Fatalf("Got an event for an unknown file: %s", evt.Name)
+			}
+			if evt.Op == Create {
+				creates++
+			}
+		}
+	}
+
+	if creates == numDirs*numFiles {
+		t.Fatalf("Could not trigger overflow")
+	}
+
+	if overflows == 0 {
+		t.Fatalf("No overflow and not enough creates (expected %d, got %d)",
+			numDirs*numFiles, creates)
+	}
+}
