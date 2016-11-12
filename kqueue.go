@@ -71,10 +71,8 @@ func (w *Watcher) Close() error {
 		return nil
 	}
 	w.isClosed = true
-	w.mu.Unlock()
 
 	// copy paths to remove while locked
-	w.mu.Lock()
 	var pathsToRemove = make([]string, 0, len(w.watches))
 	for name := range w.watches {
 		pathsToRemove = append(pathsToRemove, name)
@@ -89,8 +87,8 @@ func (w *Watcher) Close() error {
 		}
 	}
 
-	// Send "quit" message to the reader goroutine:
-	w.done <- true
+	// send a "quit" message to the reader goroutine
+	close(w.done)
 
 	return nil
 }
@@ -266,16 +264,24 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 func (w *Watcher) readEvents() {
 	eventBuffer := make([]unix.Kevent_t, 10)
 
+	defer func() {
+		// cleanup
+		err := unix.Close(w.kq)
+		if err != nil {
+			select {
+			case w.Errors <- err:
+			case <-w.done:
+			}
+		}
+		close(w.Events)
+		close(w.Errors)
+		return
+	}()
+
 	for {
 		// See if there is a message on the "done" channel
 		select {
 		case <-w.done:
-			err := unix.Close(w.kq)
-			if err != nil {
-				w.Errors <- err
-			}
-			close(w.Events)
-			close(w.Errors)
 			return
 		default:
 		}
@@ -284,7 +290,11 @@ func (w *Watcher) readEvents() {
 		kevents, err := read(w.kq, eventBuffer, &keventWaitTime)
 		// EINTR is okay, the syscall was interrupted before timeout expired.
 		if err != nil && err != unix.EINTR {
-			w.Errors <- err
+			select {
+			case w.Errors <- err:
+			case <-w.done:
+				return
+			}
 			continue
 		}
 
@@ -319,8 +329,12 @@ func (w *Watcher) readEvents() {
 			if path.isDir && event.Op&Write == Write && !(event.Op&Remove == Remove) {
 				w.sendDirectoryChangeEvents(event.Name)
 			} else {
-				// Send the event on the Events channel
-				w.Events <- event
+				// Send the event on the Events channel.
+				select {
+				case w.Events <- event:
+				case <-w.done:
+					return
+				}
 			}
 
 			if event.Op&Remove == Remove {
@@ -407,7 +421,11 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 	// Get all files
 	files, err := ioutil.ReadDir(dirPath)
 	if err != nil {
-		w.Errors <- err
+		select {
+		case w.Errors <- err:
+		case <-w.done:
+			return
+		}
 	}
 
 	// Search for new files
@@ -428,7 +446,11 @@ func (w *Watcher) sendFileCreatedEventIfNew(filePath string, fileInfo os.FileInf
 	w.mu.Unlock()
 	if !doesExist {
 		// Send create event
-		w.Events <- newCreateEvent(filePath)
+		select {
+		case w.Events <- newCreateEvent(filePath):
+		case <-w.done:
+			return
+		}
 	}
 
 	// like watchDirectoryFiles (but without doing another ReadDir)
