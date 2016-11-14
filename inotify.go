@@ -106,8 +106,7 @@ func (w *Watcher) Add(name string) error {
 	defer w.mu.Unlock()
 	watchEntry, found := w.watches[name]
 	if found {
-		watchEntry.flags |= flags
-		flags |= unix.IN_MASK_ADD
+		flags |= watchEntry.flags | unix.IN_MASK_ADD
 	}
 	wd, errno := unix.InotifyAddWatch(w.fd, name, flags)
 	if wd == -1 {
