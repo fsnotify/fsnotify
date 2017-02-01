@@ -29,6 +29,8 @@ const (
 	Remove
 	Rename
 	Chmod
+	Update
+	Close
 )
 
 func (op Op) String() string {
@@ -50,6 +52,13 @@ func (op Op) String() string {
 	if op&Chmod == Chmod {
 		buffer.WriteString("|CHMOD")
 	}
+	if op&Update == Update {
+		buffer.WriteString("|UPDATE")
+	}
+	if op&Close == Close {
+		buffer.WriteString("|CLOSE")
+	}
+
 	if buffer.Len() == 0 {
 		return ""
 	}
