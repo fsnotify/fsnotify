@@ -49,6 +49,7 @@ type Watcher struct {
 	closed bool
 }
 
+// NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
 func NewWatcher() (*Watcher, error) {
 	var err error
 
@@ -69,6 +70,7 @@ func NewWatcher() (*Watcher, error) {
 	return w, nil
 }
 
+// Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error {
 	if w.closed {
 		return nil
@@ -83,6 +85,7 @@ func (w *Watcher) Close() error {
 	return nil
 }
 
+// Add starts watching the named file or directory (non-recursively).
 func (w *Watcher) Add(path string) error {
 	stat, err := os.Stat(path)
 	switch {
@@ -95,6 +98,7 @@ func (w *Watcher) Add(path string) error {
 	}
 }
 
+// Remove stops watching the named file or directory (non-recursively).
 func (w *Watcher) Remove(path string) error {
 	if !w.watched(path) {
 		return nil
