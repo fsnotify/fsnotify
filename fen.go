@@ -233,7 +233,7 @@ func (w *Watcher) associateFile(path string, stat os.FileInfo) error {
 
 	mode := C.FILE_MODIFIED | C.FILE_ATTRIB | C.FILE_NOFOLLOW
 
-	_, err := C.port_associate(w.port, C.PORT_SOURCE_FILE, C.from_file_obj(&fobj), mode, unsafe.Pointer(&finfo))
+	_, err := C.port_associate(w.port, C.PORT_SOURCE_FILE, C.from_file_obj(&fobj), C.int(mode), unsafe.Pointer(&finfo))
 	return err
 }
 
