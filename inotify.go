@@ -103,21 +103,23 @@ func (w *Watcher) Add(name string) error {
 	var flags uint32 = agnosticEvents
 
 	w.mu.Lock()
-	watchEntry, found := w.watches[name]
-	w.mu.Unlock()
-	if found {
-		watchEntry.flags |= flags
-		flags |= unix.IN_MASK_ADD
+	defer w.mu.Unlock()
+	watchEntry := w.watches[name]
+	if watchEntry != nil {
+		flags |= watchEntry.flags | unix.IN_MASK_ADD
 	}
 	wd, errno := unix.InotifyAddWatch(w.fd, name, flags)
 	if wd == -1 {
 		return errno
 	}
 
-	w.mu.Lock()
-	w.watches[name] = &watch{wd: uint32(wd), flags: flags}
-	w.paths[wd] = name
-	w.mu.Unlock()
+	if watchEntry == nil {
+		w.watches[name] = &watch{wd: uint32(wd), flags: flags}
+		w.paths[wd] = name
+	} else {
+		watchEntry.wd = uint32(wd)
+		watchEntry.flags = flags
+	}
 
 	return nil
 }
