@@ -22,7 +22,7 @@ type Watcher struct {
 	Events   chan Event
 	Errors   chan error
 	isClosed bool           // Set to true when Close() is first called
-	mu       sync.Mutex     // Map access
+	mu       *sync.Mutex    // Map access
 	port     syscall.Handle // Handle to completion port
 	watches  watchMap       // Map of watches (key: i-number)
 	input    chan *input    // Inputs to the reader are sent on this channel
@@ -42,6 +42,7 @@ func NewWatcher() (*Watcher, error) {
 		Events:  make(chan Event, 50),
 		Errors:  make(chan error),
 		quit:    make(chan chan<- error, 1),
+		mu:      &sync.Mutex{},
 	}
 	go w.readEvents()
 	return w, nil

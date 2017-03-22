@@ -23,8 +23,8 @@ import (
 type Watcher struct {
 	Events   chan Event
 	Errors   chan error
-	mu       sync.Mutex // Map access
-	cv       *sync.Cond // sync removing on rm_watch with IN_IGNORE
+	mu       *sync.Mutex // Map access
+	cv       *sync.Cond  // sync removing on rm_watch with IN_IGNORE
 	fd       int
 	poller   *fdPoller
 	watches  map[string]*watch // Map of inotify watches (key: path)
@@ -55,8 +55,9 @@ func NewWatcher() (*Watcher, error) {
 		Errors:   make(chan error),
 		done:     make(chan struct{}),
 		doneResp: make(chan struct{}),
+		mu:       &sync.Mutex{},
 	}
-	w.cv = sync.NewCond(&w.mu)
+	w.cv = sync.NewCond(w.mu)
 
 	go w.readEvents()
 	return w, nil

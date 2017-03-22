@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1233,5 +1234,47 @@ func testRename(file1, file2 string) error {
 	default:
 		cmd := exec.Command("mv", file1, file2)
 		return cmd.Run()
+	}
+}
+
+type TestStruct struct {
+	Watcher Watcher
+}
+
+func TestMultipleMutexesGuardTheSameMap(t *testing.T) {
+
+	testDirPrefix := tempMkdir(t)
+	defer os.RemoveAll(testDirPrefix)
+
+	w, _ := NewWatcher()
+	tst := TestStruct{Watcher: *w}
+
+	concDirs := 100
+	// Adding watchers
+	for i := 0; i < concDirs; i++ {
+		dirName := path.Join(testDirPrefix, strconv.Itoa(i))
+		os.MkdirAll(dirName, 0700)
+		tst.Watcher.Add(dirName)
+	}
+
+	go func() {
+		// Polling
+		for {
+			select {
+			case <-tst.Watcher.Events:
+			}
+		}
+	}()
+
+	for i := 0; i < concDirs; i++ {
+		dirName := path.Join(testDirPrefix, strconv.Itoa(i))
+		os.MkdirAll(dirName+"/subdir", 700)
+		go func() {
+			for {
+				tst.Watcher.Add(dirName + "/subdir")
+				ioutil.WriteFile(path.Join(dirName, "file"), []byte("blah"), 0600)
+				tst.Watcher.Remove(dirName + "/subdir")
+			}
+		}()
 	}
 }
