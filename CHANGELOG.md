@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.5.0 / 2017-02-05
+
+* Solaris: add support for File Event Notifications (fen) [#12](https://github.com/fsnotify/fsnotify/issues/12)
+
 ## v1.4.2 / 2016-10-10
 
 * Linux: use InotifyInit1 with IN_CLOEXEC to stop leaking a file descriptor to a child process when using fork/exec [#178](https://github.com/fsnotify/fsnotify/pull/178) (thanks @pattyshack)
