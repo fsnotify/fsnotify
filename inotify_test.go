@@ -293,25 +293,23 @@ func TestInotifyRemoveTwice(t *testing.T) {
 		t.Fatalf("Failed to add testFile: %v", err)
 	}
 
-	err = os.Remove(testFile)
+	err = w.Remove(testFile)
 	if err != nil {
-		t.Fatalf("Failed to remove testFile: %v", err)
+		t.Fatalf("wanted successful remove but got:", err)
 	}
 
 	err = w.Remove(testFile)
 	if err == nil {
 		t.Fatalf("no error on removing invalid file")
 	}
-	s1 := fmt.Sprintf("%s", err)
 
-	err = w.Remove(testFile)
-	if err == nil {
-		t.Fatalf("no error on removing invalid file")
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.watches) != 0 {
+		t.Fatalf("Expected watches len is 0, but got: %d, %v", len(w.watches), w.watches)
 	}
-	s2 := fmt.Sprintf("%s", err)
-
-	if s1 != s2 {
-		t.Fatalf("receive different error - %s / %s", s1, s2)
+	if len(w.paths) != 0 {
+		t.Fatalf("Expected paths len is 0, but got: %d, %v", len(w.paths), w.paths)
 	}
 }
 
