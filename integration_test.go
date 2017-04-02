@@ -7,6 +7,7 @@
 package fsnotify
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -1234,4 +1235,41 @@ func testRename(file1, file2 string) error {
 		cmd := exec.Command("mv", file1, file2)
 		return cmd.Run()
 	}
+}
+
+func TestWatcherString(t *testing.T) {
+	testDir := tempMkdir(t)
+	defer os.RemoveAll(testDir)
+	watcher, err := NewWatcher()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer watcher.Close()
+	enough := make(chan bool)
+
+	go func() {
+		for {
+			select {
+			case <-enough:
+				break
+			default:
+				watcher.Add(testDir)
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			select {
+			case <-enough:
+				break
+			default:
+				fmt.Sprintf("%s", watcher)
+			}
+		}
+	}()
+
+	time.Sleep(1 * time.Second)
+	enough <- true
+	enough <- true
 }
