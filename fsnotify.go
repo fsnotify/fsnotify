@@ -15,7 +15,7 @@ import (
 
 // Event represents a single file system notification.
 type Event struct {
-	Name string // Relative path to the file or directory.
+	Name string // Absolute path to the file or directory.
 	Op   Op     // File operation that triggered the event.
 }
 
