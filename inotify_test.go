@@ -498,7 +498,7 @@ func TestInotifyDeleteOpenFile(t *testing.T) {
 			t.Fatalf("Expected second event type %s, got: %v", Remove, event.Op)
 		}
 	case <-time.After(100 * time.Millisecond):
-		t.Fatalf("Expected first event not delivered")
+		t.Fatalf("Expected second event not delivered")
 	}
 
 	w.Close()
