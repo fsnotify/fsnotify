@@ -470,15 +470,15 @@ func TestInotifyDeleteOpenFile(t *testing.T) {
 		t.Fatalf("Failed to add watch for %s: %v", testFile, err)
 	}
 
-	go func() {
-		err = os.Remove(testFile)
-		if err != nil {
-			t.Fatalf("Failed to remove %s: %v", testFile, err)
-		}
-	}()
+	err = os.Remove(testFile)
+	if err != nil {
+		t.Fatalf("Failed to remove %s: %v", testFile, err)
+	}
 
 	var event Event
 
+	// Verify we receive Chmod event caused by the change in the file link count
+	// when we delete it.
 	select {
 	case event = <-w.Events:
 		if event.Op != Chmod {
@@ -488,7 +488,10 @@ func TestInotifyDeleteOpenFile(t *testing.T) {
 		t.Fatalf("Expected first event not delivered")
 	}
 
+	// Now close our open handle...
 	handle.Close()
+
+	// ...and observe the file being deleted from the disk.
 	select {
 	case event = <-w.Events:
 		if event.Op != Remove {
