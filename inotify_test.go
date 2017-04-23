@@ -447,3 +447,60 @@ func TestInotifyOverflow(t *testing.T) {
 			numDirs*numFiles, creates)
 	}
 }
+
+func TestInotifyDeleteOpenFile(t *testing.T) {
+	testDir := tempMkdir(t)
+	defer os.RemoveAll(testDir)
+
+	testFile := filepath.Join(testDir, "testfile")
+
+	handle, err := os.Create(testFile)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("Failed to create watcher: %v", err)
+	}
+	defer w.Close()
+
+	err = w.Add(testFile)
+	if err != nil {
+		t.Fatalf("Failed to add watch for %s: %v", testFile, err)
+	}
+
+	go func() {
+		err = os.Remove(testFile)
+		if err != nil {
+			t.Fatalf("Failed to remove %s: %v", testFile, err)
+		}
+	}()
+
+	var event Event
+
+	select {
+	case event = <-w.Events:
+		if event.Op != Chmod {
+			t.Fatalf("Expected first event type %s, got: %v", Chmod, event.Op)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("Expected first event not delivered")
+	}
+
+	handle.Close()
+	select {
+	case event = <-w.Events:
+		if event.Op != Remove {
+			t.Fatalf("Expected second event type %s, got: %v", Remove, event.Op)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("Expected first event not delivered")
+	}
+
+	w.Close()
+
+	// Wait for the close to complete.
+	time.Sleep(50 * time.Millisecond)
+	isWatcherReallyClosed(t, w)
+}
