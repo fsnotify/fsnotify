@@ -22,7 +22,7 @@ import (
 type Watcher struct {
 	Events chan Event
 	Errors chan error
-	done   chan bool // Channel for sending a "quit message" to the reader goroutine
+	done   chan struct{} // Channel to close to signal to the reader goroutine to exit
 
 	kq int // File descriptor (as returned by the kqueue() syscall).
 
@@ -56,7 +56,7 @@ func NewWatcher() (*Watcher, error) {
 		externalWatches: make(map[string]bool),
 		Events:          make(chan Event),
 		Errors:          make(chan error),
-		done:            make(chan bool),
+		done:            make(chan struct{}),
 	}
 
 	go w.readEvents()
@@ -88,7 +88,7 @@ func (w *Watcher) Close() error {
 	}
 
 	// Send "quit" message to the reader goroutine:
-	w.done <- true
+	close(w.done)
 
 	return nil
 }
