@@ -71,10 +71,8 @@ func (w *Watcher) Close() error {
 		return nil
 	}
 	w.isClosed = true
-	w.mu.Unlock()
 
 	// copy paths to remove while locked
-	w.mu.Lock()
 	var pathsToRemove = make([]string, 0, len(w.watches))
 	for name := range w.watches {
 		pathsToRemove = append(pathsToRemove, name)
