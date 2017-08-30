@@ -8,7 +8,6 @@ package fsnotify
 
 import (
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -111,7 +110,7 @@ func (w *Watcher) Remove(name string) error {
 	watchfd, ok := w.watches[name]
 	w.mu.Unlock()
 	if !ok {
-		return fmt.Errorf("can't remove non-existent kevent watch for: %s", name)
+		return nil
 	}
 
 	const registerRemove = unix.EV_DELETE
