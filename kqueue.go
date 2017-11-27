@@ -92,7 +92,7 @@ func (w *Watcher) Close() error {
 	// Send "quit" message to the reader goroutine:
 	w.done <- true
 
-	return nil
+	return err
 }
 
 // Add starts watching the named file or directory (non-recursively).
