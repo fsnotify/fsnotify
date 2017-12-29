@@ -82,7 +82,8 @@ func (w *Watcher) Close() error {
 
 	var err error
 	for _, name := range pathsToRemove {
-		if e := w.Remove(name); e != nil && err == nil {
+		e := w.Remove(name)
+		if e != nil && err == nil {
 			err = e
 		}
 	}
@@ -90,7 +91,7 @@ func (w *Watcher) Close() error {
 	// send a "quit" message to the reader goroutine
 	close(w.done)
 
-	return nil
+	return err
 }
 
 // Add starts watching the named file or directory (non-recursively).
