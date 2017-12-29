@@ -80,18 +80,14 @@ func (w *Watcher) Close() error {
 	w.mu.Unlock()
 	// unlock before calling Remove, which also locks
 
-	var err error
 	for _, name := range pathsToRemove {
-		e := w.Remove(name)
-		if e != nil && err == nil {
-			err = e
-		}
+		w.Remove(name)
 	}
 
 	// send a "quit" message to the reader goroutine
 	close(w.done)
 
-	return err
+	return nil
 }
 
 // Add starts watching the named file or directory (non-recursively).
@@ -265,11 +261,12 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 func (w *Watcher) readEvents() {
 	eventBuffer := make([]unix.Kevent_t, 10)
 
+loop:
 	for {
 		// See if there is a message on the "done" channel
 		select {
 		case <-w.done:
-			break
+			break loop
 		default:
 		}
 
@@ -280,7 +277,7 @@ func (w *Watcher) readEvents() {
 			select {
 			case w.Errors <- err:
 			case <-w.done:
-				break
+				break loop
 			}
 			continue
 		}
@@ -320,7 +317,7 @@ func (w *Watcher) readEvents() {
 				select {
 				case w.Events <- event:
 				case <-w.done:
-					break
+					break loop
 				}
 			}
 
