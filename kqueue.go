@@ -22,7 +22,7 @@ import (
 type Watcher struct {
 	Events chan Event
 	Errors chan error
-	done   chan bool // Channel for sending a "quit message" to the reader goroutine
+	done   chan struct{} // Channel for sending a "quit message" to the reader goroutine
 
 	kq int // File descriptor (as returned by the kqueue() syscall).
 
@@ -56,7 +56,7 @@ func NewWatcher() (*Watcher, error) {
 		externalWatches: make(map[string]bool),
 		Events:          make(chan Event),
 		Errors:          make(chan error),
-		done:            make(chan bool),
+		done:            make(chan struct{}),
 	}
 
 	go w.readEvents()
@@ -264,25 +264,11 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 func (w *Watcher) readEvents() {
 	eventBuffer := make([]unix.Kevent_t, 10)
 
-	defer func() {
-		// cleanup
-		err := unix.Close(w.kq)
-		if err != nil {
-			select {
-			case w.Errors <- err:
-			case <-w.done:
-			}
-		}
-		close(w.Events)
-		close(w.Errors)
-		return
-	}()
-
 	for {
 		// See if there is a message on the "done" channel
 		select {
 		case <-w.done:
-			return
+			break
 		default:
 		}
 
@@ -293,7 +279,7 @@ func (w *Watcher) readEvents() {
 			select {
 			case w.Errors <- err:
 			case <-w.done:
-				return
+				break
 			}
 			continue
 		}
@@ -333,7 +319,7 @@ func (w *Watcher) readEvents() {
 				select {
 				case w.Events <- event:
 				case <-w.done:
-					return
+					break
 				}
 			}
 
@@ -366,6 +352,18 @@ func (w *Watcher) readEvents() {
 			kevents = kevents[1:]
 		}
 	}
+
+	// cleanup
+	err := unix.Close(w.kq)
+	if err != nil {
+		// only way the previous loop breaks is if w.done was closed so we need to async send to w.Errors.
+		select {
+		case w.Errors <- err:
+		default:
+		}
+	}
+	close(w.Events)
+	close(w.Errors)
 }
 
 // newEvent returns an platform-independent Event based on kqueue Fflags.
