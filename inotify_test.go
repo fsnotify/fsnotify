@@ -295,7 +295,7 @@ func TestInotifyRemoveTwice(t *testing.T) {
 
 	err = w.Remove(testFile)
 	if err != nil {
-		t.Fatalf("wanted successful remove but got:", err)
+		t.Fatalf("wanted successful remove but got: %v", err)
 	}
 
 	err = w.Remove(testFile)
