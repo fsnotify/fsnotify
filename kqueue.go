@@ -27,13 +27,14 @@ type Watcher struct {
 
 	kq int // File descriptor (as returned by the kqueue() syscall).
 
-	mu              sync.Mutex        // Protects access to watcher data
-	watches         map[string]int    // Map of watched file descriptors (key: path).
-	externalWatches map[string]bool   // Map of watches added by user of the library.
-	dirFlags        map[string]uint32 // Map of watched directories to fflags used in kqueue.
-	paths           map[int]pathInfo  // Map file descriptors to path names for processing kqueue events.
-	fileExists      map[string]bool   // Keep track of if we know this file exists (to stop duplicate create events).
-	isClosed        bool              // Set to true when Close() is first called
+	mu              sync.Mutex                  // Protects access to watcher data
+	watches         map[string]int              // Map of watched file descriptors (key: path).
+	watchesByDir    map[string]map[int]struct{} // Map of watched file descriptors indexed by the parent directory (key: dirname(path)).
+	externalWatches map[string]bool             // Map of watches added by user of the library.
+	dirFlags        map[string]uint32           // Map of watched directories to fflags used in kqueue.
+	paths           map[int]pathInfo            // Map file descriptors to path names for processing kqueue events.
+	fileExists      map[string]bool             // Keep track of if we know this file exists (to stop duplicate create events).
+	isClosed        bool                        // Set to true when Close() is first called
 }
 
 type pathInfo struct {
@@ -51,6 +52,7 @@ func NewWatcher() (*Watcher, error) {
 	w := &Watcher{
 		kq:              kq,
 		watches:         make(map[string]int),
+		watchesByDir:    make(map[string]map[int]struct{}),
 		dirFlags:        make(map[string]uint32),
 		paths:           make(map[int]pathInfo),
 		fileExists:      make(map[string]bool),
@@ -120,6 +122,13 @@ func (w *Watcher) Remove(name string) error {
 	w.mu.Lock()
 	isDir := w.paths[watchfd].isDir
 	delete(w.watches, name)
+
+	parentName := filepath.Dir(name)
+	delete(w.watchesByDir[parentName], watchfd)
+	if len(w.watchesByDir[parentName]) == 0 {
+		delete(w.watchesByDir, parentName)
+	}
+
 	delete(w.paths, watchfd)
 	delete(w.dirFlags, name)
 	w.mu.Unlock()
@@ -128,12 +137,10 @@ func (w *Watcher) Remove(name string) error {
 	if isDir {
 		var pathsToRemove []string
 		w.mu.Lock()
-		for _, path := range w.paths {
-			wdir, _ := filepath.Split(path.name)
-			if filepath.Clean(wdir) == name {
-				if !w.externalWatches[path.name] {
-					pathsToRemove = append(pathsToRemove, path.name)
-				}
+		for fd := range w.watchesByDir[name] {
+			path := w.paths[fd]
+			if !w.externalWatches[path.name] {
+				pathsToRemove = append(pathsToRemove, path.name)
 			}
 		}
 		w.mu.Unlock()
@@ -232,7 +239,16 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 
 	if !alreadyWatching {
 		w.mu.Lock()
+		parentName := filepath.Dir(name)
 		w.watches[name] = watchfd
+
+		watchesByDir, ok := w.watchesByDir[parentName]
+		if !ok {
+			watchesByDir = make(map[int]struct{})
+			w.watchesByDir[parentName] = watchesByDir
+		}
+		watchesByDir[watchfd] = struct{}{}
+
 		w.paths[watchfd] = pathInfo{name: name, isDir: isDir}
 		w.mu.Unlock()
 	}
