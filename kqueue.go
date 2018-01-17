@@ -28,6 +28,7 @@ type Watcher struct {
 
 	mu              sync.Mutex        // Protects access to watcher data
 	watches         map[string]int    // Map of watched file descriptors (key: path).
+	watchesByDir    map[string][]int  // Map of watched file descriptors indexed by the parent directory (key: dirname(path)).
 	externalWatches map[string]bool   // Map of watches added by user of the library.
 	dirFlags        map[string]uint32 // Map of watched directories to fflags used in kqueue.
 	paths           map[int]pathInfo  // Map file descriptors to path names for processing kqueue events.
@@ -50,6 +51,7 @@ func NewWatcher() (*Watcher, error) {
 	w := &Watcher{
 		kq:              kq,
 		watches:         make(map[string]int),
+		watchesByDir:    make(map[string][]int),
 		dirFlags:        make(map[string]uint32),
 		paths:           make(map[int]pathInfo),
 		fileExists:      make(map[string]bool),
@@ -119,6 +121,16 @@ func (w *Watcher) Remove(name string) error {
 	w.mu.Lock()
 	isDir := w.paths[watchfd].isDir
 	delete(w.watches, name)
+
+	parentName := filepath.Clean(filepath.Dir(name))
+	parentWatches := w.watchesByDir[parentName]
+	for i, fd := range parentWatches {
+		if fd == watchfd {
+			w.watchesByDir[parentName] = append(parentWatches[:i], parentWatches[i+1:]...)
+			break
+		}
+	}
+
 	delete(w.paths, watchfd)
 	delete(w.dirFlags, name)
 	w.mu.Unlock()
@@ -127,12 +139,10 @@ func (w *Watcher) Remove(name string) error {
 	if isDir {
 		var pathsToRemove []string
 		w.mu.Lock()
-		for _, path := range w.paths {
-			wdir, _ := filepath.Split(path.name)
-			if filepath.Clean(wdir) == name {
-				if !w.externalWatches[path.name] {
-					pathsToRemove = append(pathsToRemove, path.name)
-				}
+		for _, fd := range w.watchesByDir[name] {
+			path := w.paths[fd]
+			if !w.externalWatches[path.name] {
+				pathsToRemove = append(pathsToRemove, path.name)
 			}
 		}
 		w.mu.Unlock()
@@ -231,7 +241,9 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 
 	if !alreadyWatching {
 		w.mu.Lock()
+		parentName := filepath.Clean(filepath.Dir(name))
 		w.watches[name] = watchfd
+		w.watchesByDir[parentName] = append(w.watchesByDir[parentName], watchfd)
 		w.paths[watchfd] = pathInfo{name: name, isDir: isDir}
 		w.mu.Unlock()
 	}
