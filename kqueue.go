@@ -125,9 +125,6 @@ func (w *Watcher) Remove(name string) error {
 
 	parentName := filepath.Dir(name)
 	delete(w.watchesByDir[parentName], watchfd)
-	if len(w.watchesByDir[parentName]) == 0 {
-		delete(w.watchesByDir, parentName)
-	}
 
 	delete(w.paths, watchfd)
 	delete(w.dirFlags, name)
