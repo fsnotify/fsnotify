@@ -126,6 +126,10 @@ func (w *Watcher) Remove(name string) error {
 	parentName := filepath.Dir(name)
 	delete(w.watchesByDir[parentName], watchfd)
 
+	if len(w.watchesByDir[parentName]) == 0 {
+		delete(w.watchesByDir, parentName)
+	}
+
 	delete(w.paths, watchfd)
 	delete(w.dirFlags, name)
 	w.mu.Unlock()
@@ -241,7 +245,7 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 
 		watchesByDir, ok := w.watchesByDir[parentName]
 		if !ok {
-			watchesByDir = make(map[int]struct{})
+			watchesByDir = make(map[int]struct{}, 1)
 			w.watchesByDir[parentName] = watchesByDir
 		}
 		watchesByDir[watchfd] = struct{}{}
