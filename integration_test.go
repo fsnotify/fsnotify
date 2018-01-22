@@ -444,7 +444,7 @@ func TestFsnotifyDeleteWatchedDir(t *testing.T) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Fatalf("error received: %s", err)
+			t.Error("error received: %s", err)
 		}
 	}()
 
