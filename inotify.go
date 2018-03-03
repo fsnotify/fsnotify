@@ -308,7 +308,7 @@ func (e *Event) ignoreLinux(mask uint32) bool {
 	// *Note*: this was put in place because it was seen that a MODIFY
 	// event was sent after the DELETE. This ignores that MODIFY and
 	// assumes a DELETE will come or has come if the file doesn't exist.
-	// A CHMOD event (triggeded by IN_MODIFY) can arrive when an open file is
+	// A CHMOD event (triggered by IN_MODIFY) can arrive when an open file is
 	// deleted.  In that case the DELETE event is deferred until all open
 	// handles for the file are closed. See
 	// https://github.com/fsnotify/fsnotify/issues/194 for more information.
