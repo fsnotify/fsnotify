@@ -24,18 +24,18 @@ func ExampleNewWatcher() {
 		for {
 			select {
 			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
 				log.Println("event:", event)
 				if event.Op&fsnotify.Write == fsnotify.Write {
 					log.Println("modified file:", event.Name)
 				}
-				if !ok {
-					return
-				}
 			case err, ok := <-watcher.Errors:
-				log.Println("error:", err)
 				if !ok {
 					return
 				}
+				log.Println("error:", err)
 			}
 		}
 	}()
