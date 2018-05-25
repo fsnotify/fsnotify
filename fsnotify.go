@@ -62,5 +62,5 @@ func (e Event) String() string {
 	return fmt.Sprintf("%q: %s", e.Name, e.Op.String())
 }
 
-// ErrEventOverflow represents a common error that can be reported by a watcher
+// ErrEventOverflow can be reported by a watcher.
 var ErrEventOverflow = errors.New("fsnotify queue overflow")
