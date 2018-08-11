@@ -124,6 +124,9 @@ func newEvent(name string, mask uint32) Event {
 	if mask&sysFSCREATE == sysFSCREATE || mask&sysFSMOVEDTO == sysFSMOVEDTO {
 		e.Op |= Create
 	}
+	if mask&sysFSMOVEDTO == sysFSMOVEDTO {
+		e.Op |= Movedto
+	}
 	if mask&sysFSDELETE == sysFSDELETE || mask&sysFSDELETESELF == sysFSDELETESELF {
 		e.Op |= Remove
 	}

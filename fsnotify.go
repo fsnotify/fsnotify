@@ -28,6 +28,7 @@ const (
 	Write
 	Remove
 	Rename
+	Movedto
 	Chmod
 )
 
@@ -47,6 +48,9 @@ func (op Op) String() string {
 	if op&Rename == Rename {
 		buffer.WriteString("|RENAME")
 	}
+	if op&Movedto == Movedto {
+		buffer.WriteString("|MOVEDTO")
+	}
 	if op&Chmod == Chmod {
 		buffer.WriteString("|CHMOD")
 	}
@@ -63,4 +67,6 @@ func (e Event) String() string {
 }
 
 // Common errors that can be reported by a watcher
-var ErrEventOverflow = errors.New("fsnotify queue overflow")
+var (
+	ErrEventOverflow = errors.New("fsnotify queue overflow")
+)
