@@ -7,11 +7,23 @@ package fsnotify
 import (
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"golang.org/x/sys/unix"
 )
+
+// darwinVersion returns version os Darwin (17 is macOS 10.13).
+func darwinVersion() (int, error) {
+	s, err := unix.Sysctl("kern.osrelease")
+	if err != nil {
+		return 0, err
+	}
+	s = strings.Split(s, ".")[0]
+	return strconv.Atoi(s)
+}
 
 // testExchangedataForWatcher tests the watcher with the exchangedata operation on macOS.
 //
@@ -20,6 +32,14 @@ import (
 // See https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man2/exchangedata.2.html
 // Also see: https://github.com/textmate/textmate/blob/cd016be29489eba5f3c09b7b70b06da134dda550/Frameworks/io/src/swap_file_data.cc#L20
 func testExchangedataForWatcher(t *testing.T, watchDir bool) {
+	osVersion, err := darwinVersion()
+	if err != nil {
+		t.Fatal("unable to get Darwin version:", err)
+	}
+	if osVersion >= 17 {
+		t.Skip("Exchangedata is deprecated in macOS 10.13")
+	}
+
 	// Create directory to watch
 	testDir1 := tempMkdir(t)
 
@@ -55,7 +75,7 @@ func testExchangedataForWatcher(t *testing.T, watchDir bool) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Fatalf("error received: %s", err)
+			t.Errorf("error received: %s", err)
 		}
 	}()
 

@@ -194,7 +194,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Fatalf("error received: %s", err)
+			t.Errorf("error received: %s", err)
 		}
 	}()
 
@@ -339,7 +339,7 @@ func TestFsnotifyDirOnly(t *testing.T) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Fatalf("error received: %s", err)
+			t.Errorf("error received: %s", err)
 		}
 	}()
 
@@ -444,7 +444,7 @@ func TestFsnotifyDeleteWatchedDir(t *testing.T) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Fatalf("error received: %s", err)
+			t.Errorf("error received: %s", err)
 		}
 	}()
 
@@ -489,7 +489,7 @@ func TestFsnotifySubDir(t *testing.T) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Fatalf("error received: %s", err)
+			t.Errorf("error received: %s", err)
 		}
 	}()
 
@@ -581,7 +581,7 @@ func TestFsnotifyRename(t *testing.T) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Fatalf("error received: %s", err)
+			t.Errorf("error received: %s", err)
 		}
 	}()
 
@@ -663,7 +663,7 @@ func TestFsnotifyRenameToCreate(t *testing.T) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Fatalf("error received: %s", err)
+			t.Errorf("error received: %s", err)
 		}
 	}()
 
@@ -756,7 +756,7 @@ func TestFsnotifyRenameToOverwrite(t *testing.T) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Fatalf("error received: %s", err)
+			t.Errorf("error received: %s", err)
 		}
 	}()
 
@@ -874,7 +874,7 @@ func TestFsnotifyAttrib(t *testing.T) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Fatalf("error received: %s", err)
+			t.Errorf("error received: %s", err)
 		}
 	}()
 
