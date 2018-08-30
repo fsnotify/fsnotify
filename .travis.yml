@@ -6,7 +6,6 @@ go:
   - "1.10.4"
   - "1.9.x"
   - "1.8.x"
-  - tip
 
 matrix:
   allow_failures:
@@ -17,7 +16,7 @@ before_script:
   - go get -u golang.org/x/lint/golint
 
 script:
-  - go test -v --race ./...
+  - go test --race ./...
 
 after_script:
   - test -z "$(gofmt -s -l -w . | tee /dev/stderr)"
