@@ -55,7 +55,7 @@ func testExchangedataForWatcher(t *testing.T, watchDir bool) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Fatalf("error received: %s", err)
+			t.Errorf("error received: %s", err)
 		}
 	}()
 
