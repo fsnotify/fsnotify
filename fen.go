@@ -10,15 +10,24 @@ package fsnotify
 // #include <strings.h>
 // #include <unistd.h>
 // #include <stdio.h>
+// #include <stdlib.h>
 // #include <port.h>
 // #include <sys/stat.h>
 //
-// uintptr_t from_file_obj(struct file_obj *obj) {
+// uintptr_t file_obj_to_uintptr (file_obj_t *obj) {
 //   return (uintptr_t)obj;
 // }
 //
-// struct file_obj*to_file_obj(uintptr_t ptr) {
-//   return (struct file_obj*)ptr;
+// file_obj_t *uintptr_to_file_obj(uintptr_t ptr) {
+//   return (file_obj_t *)ptr;
+// }
+//
+// uintptr_t ptr_to_uintptr(void *p) {
+//	return (uintptr_t)p;
+// }
+//
+// void *uintptr_to_ptr(uintptr_t i) {
+//	return (void *)i;
 // }
 //
 // struct file_info {
@@ -44,7 +53,7 @@ type Watcher struct {
 	port C.int // solaris port for underlying FEN system
 
 	mu      sync.Mutex
-	watches map[string]*C.struct_file_obj
+	watches map[string]*C.file_obj_t
 
 	done     chan struct{} // Channel for sending a "quit message" to the reader goroutine
 	doneResp chan struct{} // Channel to respond to Close
@@ -61,7 +70,7 @@ func NewWatcher() (*Watcher, error) {
 	if err != nil {
 		return nil, err
 	}
-	w.watches = make(map[string]*C.struct_file_obj)
+	w.watches = make(map[string]*C.file_obj_t)
 	w.done = make(chan struct{})
 	w.doneResp = make(chan struct{})
 
@@ -177,8 +186,7 @@ func (w *Watcher) readEvents() {
 			continue
 		}
 
-		finfo := (*C.struct_file_info)(pevent.portev_user)
-		err = w.handleEvent(pevent.portev_object, pevent.portev_events, finfo)
+		err = w.handleEvent(pevent.portev_object, pevent.portev_events, pevent.portev_user)
 		if err != nil {
 			if !w.sendError(err) {
 				return
@@ -205,10 +213,10 @@ func (w *Watcher) handleDirectory(path string, stat os.FileInfo, handler func(st
 	return handler(path, stat)
 }
 
-func (w *Watcher) handleEvent(obj C.uintptr_t, events C.int, finfo *C.struct_file_info) error {
-	fobj := C.to_file_obj(obj)
+func (w *Watcher) handleEvent(obj C.uintptr_t, events C.int, user unsafe.Pointer) error {
+	fobj := C.uintptr_to_file_obj(obj)
+	fmode := os.FileMode(C.ptr_to_uintptr(user))
 	path := C.GoString(fobj.fo_name)
-	fmode := os.FileMode(finfo.mode)
 
 	var toSend *Event
 	reRegister := true
@@ -299,15 +307,18 @@ func (w *Watcher) updateDirectory(path string) error {
 }
 
 func (w *Watcher) associateFile(path string, stat os.FileInfo) error {
-	fobj := buildFileObj(path, stat)
-	w.watch(path, &fobj)
+	// We malloc the file_obj_t here to make sure it stays accessible when handling events
+	fobj := (*C.file_obj_t)(C.malloc(C.sizeof_file_obj_t))
+	// NOTE: C.CString allocates memory on the C heap, which must be freed later with C.free
+	name := C.CString(path)
+	populateFileObj(fobj, name, stat)
+	w.watch(path, fobj)
 
-	var finfo C.struct_file_info
-	finfo.mode = C.uint(stat.Mode())
+	fmode := C.uintptr_t(stat.Mode())
 
 	mode := C.FILE_MODIFIED | C.FILE_ATTRIB | C.FILE_NOFOLLOW
 
-	_, err := C.port_associate(w.port, C.PORT_SOURCE_FILE, C.from_file_obj(&fobj), C.int(mode), unsafe.Pointer(&finfo))
+	_, err := C.port_associate(w.port, C.PORT_SOURCE_FILE, C.file_obj_to_uintptr(fobj), C.int(mode), C.uintptr_to_ptr(fmode))
 	return err
 }
 
@@ -317,13 +328,14 @@ func (w *Watcher) dissociateFile(path string, stat os.FileInfo) error {
 	}
 	fobj := w.unwatch(path)
 
-	_, err := C.port_dissociate(w.port, C.PORT_SOURCE_FILE, C.from_file_obj(fobj))
+	_, err := C.port_dissociate(w.port, C.PORT_SOURCE_FILE, C.file_obj_to_uintptr(fobj))
+	C.free(unsafe.Pointer(fobj.fo_name))
+	C.free(unsafe.Pointer(fobj))
 	return err
 }
 
-func buildFileObj(path string, stat os.FileInfo) C.struct_file_obj {
-	var fobj C.struct_file_obj
-	fobj.fo_name = C.CString(path)
+func populateFileObj(fobj *C.file_obj_t, name *C.char, stat os.FileInfo) {
+	fobj.fo_name = name
 	fobj.fo_atime.tv_sec = C.time_t(stat.Sys().(*syscall.Stat_t).Atim.Sec)
 	fobj.fo_atime.tv_nsec = C.long(stat.Sys().(*syscall.Stat_t).Atim.Nsec)
 
@@ -332,7 +344,6 @@ func buildFileObj(path string, stat os.FileInfo) C.struct_file_obj {
 
 	fobj.fo_ctime.tv_sec = C.time_t(stat.Sys().(*syscall.Stat_t).Ctim.Sec)
 	fobj.fo_ctime.tv_nsec = C.long(stat.Sys().(*syscall.Stat_t).Ctim.Nsec)
-	return fobj
 }
 
 func (w *Watcher) watched(path string) bool {
@@ -342,7 +353,7 @@ func (w *Watcher) watched(path string) bool {
 	return found
 }
 
-func (w *Watcher) unwatch(path string) *C.struct_file_obj {
+func (w *Watcher) unwatch(path string) *C.file_obj_t {
 	w.mu.Lock()
 	fobj := w.watches[path]
 	delete(w.watches, path)
@@ -350,7 +361,7 @@ func (w *Watcher) unwatch(path string) *C.struct_file_obj {
 	return fobj
 }
 
-func (w *Watcher) watch(path string, fobj *C.struct_file_obj) {
+func (w *Watcher) watch(path string, fobj *C.file_obj_t) {
 	w.mu.Lock()
 	w.watches[path] = fobj
 	w.mu.Unlock()
