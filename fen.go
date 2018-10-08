@@ -6,33 +6,35 @@
 
 package fsnotify
 
-// #include <errno.h>
-// #include <strings.h>
-// #include <unistd.h>
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <port.h>
-// #include <sys/stat.h>
-//
-// uintptr_t file_obj_to_uintptr (file_obj_t *obj) {
-//   return (uintptr_t)obj;
-// }
-//
-// file_obj_t *uintptr_to_file_obj(uintptr_t ptr) {
-//   return (file_obj_t *)ptr;
-// }
-//
-// uintptr_t ptr_to_uintptr(void *p) {
-//	return (uintptr_t)p;
-// }
-//
-// void *uintptr_to_ptr(uintptr_t i) {
-//	return (void *)i;
-// }
-//
-// struct file_info {
-//   uint mode;
-// };
+/*
+#include <errno.h>
+#include <strings.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <port.h>
+#include <sys/stat.h>
+
+uintptr_t file_obj_to_uintptr (file_obj_t *obj) {
+  return (uintptr_t)obj;
+}
+
+file_obj_t *uintptr_to_file_obj(uintptr_t ptr) {
+  return (file_obj_t *)ptr;
+}
+
+uintptr_t ptr_to_uintptr(void *p) {
+	return (uintptr_t)p;
+}
+
+void *uintptr_to_ptr(uintptr_t i) {
+	return (void *)i;
+}
+
+struct file_info {
+  uint mode;
+};
+*/
 import "C"
 import (
 	"errors"
@@ -89,7 +91,7 @@ func (w *Watcher) sendEvent(e Event) (sent bool) {
 	}
 }
 
-// sendError attempts to send an event to the user, returning true if the error
+// sendError attempts to send an error to the user, returning true if the error
 // was put in the channel successfully and false if the watcher has been closed.
 func (w *Watcher) sendError(err error) (sent bool) {
 	select {
@@ -121,38 +123,38 @@ func (w *Watcher) Close() error {
 }
 
 // Add starts watching the named file or directory (non-recursively).
-func (w *Watcher) Add(path string) error {
+func (w *Watcher) Add(name string) error {
 	if w.isClosed() {
 		return errors.New("FEN watcher already closed")
 	}
-	stat, err := os.Stat(path)
+	stat, err := os.Stat(name)
 	switch {
 	case err != nil:
 		return err
 	case stat.IsDir():
-		return w.handleDirectory(path, stat, w.associateFile)
+		return w.handleDirectory(name, stat, w.associateFile)
 	default:
-		return w.associateFile(path, stat)
+		return w.associateFile(name, stat)
 	}
 }
 
 // Remove stops watching the the named file or directory (non-recursively).
-func (w *Watcher) Remove(path string) error {
+func (w *Watcher) Remove(name string) error {
 	if w.isClosed() {
 		return errors.New("FEN watcher already closed")
 	}
-	if !w.watched(path) {
-		return fmt.Errorf("can't remove non-existent FEN watch for: %s", path)
+	if !w.watched(name) {
+		return fmt.Errorf("can't remove non-existent FEN watch for: %s", name)
 	}
 
-	stat, err := os.Stat(path)
+	stat, err := os.Stat(name)
 	switch {
 	case err != nil:
 		return err
 	case stat.IsDir():
-		return w.handleDirectory(path, stat, w.dissociateFile)
+		return w.handleDirectory(name, stat, w.dissociateFile)
 	default:
-		return w.dissociateFile(path, stat)
+		return w.dissociateFile(name, stat)
 	}
 }
 
@@ -236,6 +238,11 @@ func (w *Watcher) handleEvent(obj C.uintptr_t, events C.int, user unsafe.Pointer
 		w.unwatch(path)
 		toSend = &Event{path, Remove}
 		reRegister = false
+	case events&C.FILE_RENAME_FROM == C.FILE_RENAME_FROM:
+		toSend = &Event{path, Rename}
+		// Don't keep watching the new file name
+		w.unwatch(path)
+		reRegister = false
 	case events&C.FILE_RENAME_TO == C.FILE_RENAME_TO:
 		// We don't report a Rename event for this case, because
 		// Rename events are interpreted as referring to the _old_ name
@@ -249,11 +256,6 @@ func (w *Watcher) handleEvent(obj C.uintptr_t, events C.int, user unsafe.Pointer
 			toSend = &Event{path, Remove}
 		}
 		// Don't keep watching the file that was removed
-		w.unwatch(path)
-		reRegister = false
-	case events&C.FILE_RENAME_FROM == C.FILE_RENAME_FROM:
-		toSend = &Event{path, Rename}
-		// Don't keep watching the new file name
 		w.unwatch(path)
 		reRegister = false
 	default:
@@ -270,7 +272,7 @@ func (w *Watcher) handleEvent(obj C.uintptr_t, events C.int, user unsafe.Pointer
 	}
 
 	// If we get here, it means we've hit an event above that requires us to
-	// continue watching the file
+	// continue watching the file or directory
 	stat, err := os.Stat(path)
 	if err != nil {
 		return err
