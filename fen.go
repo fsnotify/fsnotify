@@ -205,9 +205,11 @@ func (w *Watcher) handleDirectory(path string, stat os.FileInfo, handler func(st
 
 	// Handle all children of the directory.
 	for _, finfo := range files {
-		err := handler(filepath.Join(path, finfo.Name()), finfo)
-		if err != nil {
-			return err
+		if !finfo.IsDir() {
+			err := handler(filepath.Join(path, finfo.Name()), finfo)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
