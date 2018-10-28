@@ -48,6 +48,8 @@ fsnotify uses build tags to compile different code on Linux, BSD, macOS, and Win
 
 Before doing a pull request, please do your best to test your changes on multiple platforms, and list which platforms you were able/unable to test on.
 
+#### Using vagrant
+
 To aid in cross-platform testing there is a Vagrantfile for Linux and BSD.
 
 * Install [Vagrant](http://www.vagrantup.com/) and [VirtualBox](https://www.virtualbox.org/)
@@ -59,6 +61,14 @@ To aid in cross-platform testing there is a Vagrantfile for Linux and BSD.
 Notice: fsnotify file system events won't trigger in shared folders. The tests get around this limitation by using the /tmp directory.
 
 Right now there is no equivalent solution for Windows and macOS, but there are Windows VMs [freely available from Microsoft](http://www.modern.ie/en-us/virtualization-tools#downloads).
+
+#### Using docker
+
+You can also use docker to perform testing for Linux 
+
+* Install [Docker](https://docs.docker.com/install/)
+* Build docker image `docker build -t fsnotify .`
+* Run test suite on a docker container with the docker image `docker run --rm fsnotify go test`
 
 ### Maintainers
 
