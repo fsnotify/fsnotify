@@ -151,7 +151,7 @@ func (w *Watcher) Remove(name string) error {
 const noteAllEvents = unix.NOTE_DELETE | unix.NOTE_WRITE | unix.NOTE_ATTRIB | unix.NOTE_RENAME
 
 // keventWaitTime to block on each read from kevent
-var keventWaitTime = durationToTimespec(100 * time.Millisecond)
+var keventWaitTime = durationToTimespec(time.Second)
 
 // addWatch adds name to the watched file set.
 // The flags are interpreted as described in kevent(2).
