@@ -2,9 +2,10 @@ sudo: false
 language: go
 
 go:
-  - 1.8.x
-  - 1.9.x
-  - tip
+  - "stable"
+  - "1.10.4"
+  - "1.9.x"
+  - "1.8.x"
 
 matrix:
   allow_failures:
@@ -12,10 +13,10 @@ matrix:
   fast_finish: true
 
 before_script:
-  - go get -u github.com/golang/lint/golint
+  - go get -u golang.org/x/lint/golint
 
 script:
-  - go test -v --race ./...
+  - go test --race ./...
 
 after_script:
   - test -z "$(gofmt -s -l -w . | tee /dev/stderr)"
