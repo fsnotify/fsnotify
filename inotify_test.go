@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -269,6 +270,113 @@ func TestInotifyStress(t *testing.T) {
 	}
 	if creates < 50 {
 		t.Fatalf("Expected at least 50 creates, got %d", creates)
+	}
+}
+
+func TestInotifyGetWatchedFilesEmptyWatcher(t *testing.T) {
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("Failed to create watcher: %v", err)
+	}
+	defer w.Close()
+
+	expectedList := make([]string)
+	actualList := GetWatchedFiles()
+
+	if !(reflect.DeepEqual(expectedList, actualList)) {
+		t.Fatal("expectedList of file paths is not the actual list of file paths")
+	}
+}
+
+// This test verifies that GetWatchedFiles will return a list containing the
+func TestInotifyGetWatchedFilesContainsFiles(t *testing.T) {
+	testDir := tempMkdir(t)
+	defer os.RemoveAll(testDir)
+	testFile := filepath.Join(testDir, "testfile")
+
+	handle, err := os.Create(testFile)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	handle.Close()
+
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("Failed to create watcher: %v", err)
+	}
+	defer w.Close()
+
+	err = w.Add(testFile)
+	if err != nil {
+		t.Fatalf("Failed to add testFile: %v", err)
+	}
+
+	expectedList := make([]string, 0, 1)
+	expectedList = append(expectedList, testFile)
+
+	actualList := w.GetWatchedFiles()
+
+	if !(reflect.DeepEqual(expectedList, actualList)) {
+		t.Fatal("expectedList of file paths is not the actual list of file paths")
+	}
+}
+
+// This test verifies that CheckPath will return true for a path being watched by the
+// watcher
+func TestInotifyCheckPathExists(t *testing.T) {
+	testDir := tempMkdir(t)
+	defer os.RemoveAll(testDir)
+	testFile := filepath.Join(testDir, "testfile")
+
+	handle, err := os.Create(testFile)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	handle.Close()
+
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("Failed to create watcher: %v", err)
+	}
+	defer w.Close()
+
+	err = w.Add(testFile)
+	if err != nil {
+		t.Fatalf("Failed to add testFile: %v", err)
+	}
+
+	if !w.CheckPath(testFile) {
+		t.Fatalf("Expect test file %s is suppose to be present but isn't", testFile)
+	}
+}
+
+// This test verifies that CheckPath will return false for a path that is not being watched
+// by the watcher
+func TestInotifyCheckPathDoesntExist(t *testing.T) {
+	testDir := tempMkdir(t)
+	defer os.RemoveAll(testDir)
+	testFile := filepath.Join(testDir, "testfile")
+	testFileNotAdded := filepath.Join(testDir, "testfile")
+
+	handle, err := os.Create(testFile)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	handle.Close()
+
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("Failed to create watcher: %v", err)
+	}
+	defer w.Close()
+
+	err = w.Add(testFile)
+	if err != nil {
+		t.Fatalf("Failed to add testFile: %v", err)
+	}
+
+	if w.CheckPath(testFileNotAdded) {
+		t.Fatalf("Expect test file %s is not supposed to be present but is", testFile)
 	}
 }
 

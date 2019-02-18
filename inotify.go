@@ -87,6 +87,27 @@ func (w *Watcher) Close() error {
 	return nil
 }
 
+// CheckPath checks if a path is being watched by the watcher or not
+func (w *Watcher) CheckPath(name string) bool {
+	name = filepath.Clean(name)
+
+	if _, ok w.watches[name]; ok {
+		return true
+	}
+	return false
+}
+
+// GetWatchedFiles returns a slice of the paths currently watched by the watcher
+func (w *Watcher) GetWatchedFiles() []string {
+	watchedFiles := make([]string, 0 , len(w.watches))
+	
+	for k := range w.watches {
+		watchedFiles = append(watchedFiles, k)
+	}
+
+	return watchedFiles
+}
+
 // Add starts watching the named file or directory (non-recursively).
 func (w *Watcher) Add(name string) error {
 	name = filepath.Clean(name)
