@@ -9,9 +9,9 @@
 package fsnotify
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Event represents a single file system notification.
@@ -33,28 +33,28 @@ const (
 )
 
 func (op Op) String() string {
-	// Use a buffer for efficient string concatenation
-	var buffer bytes.Buffer
+	// Use a builder for efficient string concatenation
+	var builder strings.Builder
 
 	if op&Create == Create {
-		buffer.WriteString("|CREATE")
+		builder.WriteString("|CREATE")
 	}
 	if op&Remove == Remove {
-		buffer.WriteString("|REMOVE")
+		builder.WriteString("|REMOVE")
 	}
 	if op&Write == Write {
-		buffer.WriteString("|WRITE")
+		builder.WriteString("|WRITE")
 	}
 	if op&Rename == Rename {
-		buffer.WriteString("|RENAME")
+		builder.WriteString("|RENAME")
 	}
 	if op&Chmod == Chmod {
-		buffer.WriteString("|CHMOD")
+		builder.WriteString("|CHMOD")
 	}
-	if buffer.Len() == 0 {
+	if builder.Len() == 0 {
 		return ""
 	}
-	return buffer.String()[1:] // Strip leading pipe
+	return builder.String()[1:] // Strip leading pipe
 }
 
 // String returns a string representation of the event in the form
