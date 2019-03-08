@@ -31,6 +31,7 @@ after_script:
 os:
   - linux
   - osx
+  - windows
 
 notifications:
   email: false
