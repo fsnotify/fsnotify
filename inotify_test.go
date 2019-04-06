@@ -53,7 +53,7 @@ func TestInotifyCloseSlightlyLaterWithWatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create watcher")
 	}
-	w.Add(testDir)
+	w.AddRaw(testDir)
 
 	// Wait until readEvents has reached unix.Read, and Close.
 	<-time.After(50 * time.Millisecond)
@@ -73,7 +73,7 @@ func TestInotifyCloseAfterRead(t *testing.T) {
 		t.Fatalf("Failed to create watcher")
 	}
 
-	err = w.Add(testDir)
+	err = w.AddRaw(testDir)
 	if err != nil {
 		t.Fatalf("Failed to add .")
 	}
@@ -120,7 +120,7 @@ func TestInotifyCloseCreate(t *testing.T) {
 	}
 	defer w.Close()
 
-	err = w.Add(testDir)
+	err = w.AddRaw(testDir)
 	if err != nil {
 		t.Fatalf("Failed to add testDir: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestInotifyCloseCreate(t *testing.T) {
 	}
 
 	<-time.After(50 * time.Millisecond)
-	err = w.Add(testDir)
+	err = w.AddRaw(testDir)
 	if err != nil {
 		t.Fatalf("Error adding testDir again: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestInotifyStress(t *testing.T) {
 	}
 	defer w.Close()
 
-	err = w.Add(testDir)
+	err = w.AddRaw(testDir)
 	if err != nil {
 		t.Fatalf("Failed to add testDir: %v", err)
 	}
@@ -289,7 +289,7 @@ func TestInotifyRemoveTwice(t *testing.T) {
 	}
 	defer w.Close()
 
-	err = w.Add(testFile)
+	err = w.AddRaw(testFile)
 	if err != nil {
 		t.Fatalf("Failed to add testFile: %v", err)
 	}
@@ -331,7 +331,7 @@ func TestInotifyInnerMapLength(t *testing.T) {
 	}
 	defer w.Close()
 
-	err = w.Add(testFile)
+	err = w.AddRaw(testFile)
 	if err != nil {
 		t.Fatalf("Failed to add testFile: %v", err)
 	}
@@ -383,7 +383,7 @@ func TestInotifyOverflow(t *testing.T) {
 			t.Fatalf("Cannot create subdir: %v", err)
 		}
 
-		err = w.Add(testSubdir)
+		err = w.AddRaw(testSubdir)
 		if err != nil {
 			t.Fatalf("Failed to add subdir: %v", err)
 		}
