@@ -16,6 +16,8 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
+// If you want to execute example code, append prefix 'Test'.
+// ex) func TestExampleNewWatcher(t *testing.T)
 func exampleNewWatcher(t *testing.T) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
