@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -293,25 +294,23 @@ func TestInotifyRemoveTwice(t *testing.T) {
 		t.Fatalf("Failed to add testFile: %v", err)
 	}
 
-	err = os.Remove(testFile)
+	err = w.Remove(testFile)
 	if err != nil {
-		t.Fatalf("Failed to remove testFile: %v", err)
+		t.Fatalf("wanted successful remove but got: %v", err)
 	}
 
 	err = w.Remove(testFile)
 	if err == nil {
 		t.Fatalf("no error on removing invalid file")
 	}
-	s1 := fmt.Sprintf("%s", err)
 
-	err = w.Remove(testFile)
-	if err == nil {
-		t.Fatalf("no error on removing invalid file")
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.watches) != 0 {
+		t.Fatalf("Expected watches len is 0, but got: %d, %v", len(w.watches), w.watches)
 	}
-	s2 := fmt.Sprintf("%s", err)
-
-	if s1 != s2 {
-		t.Fatalf("receive different error - %s / %s", s1, s2)
+	if len(w.paths) != 0 {
+		t.Fatalf("Expected paths len is 0, but got: %d, %v", len(w.paths), w.paths)
 	}
 }
 
@@ -392,9 +391,12 @@ func TestInotifyOverflow(t *testing.T) {
 
 	errChan := make(chan error, numDirs*numFiles)
 
+	// All events need to be in the inotify queue before pulling events off it to trigger this error.
+	wg := sync.WaitGroup{}
 	for dn := 0; dn < numDirs; dn++ {
 		testSubdir := fmt.Sprintf("%s/%d", testDir, dn)
 
+		wg.Add(1)
 		go func() {
 			for fn := 0; fn < numFiles; fn++ {
 				testFile := fmt.Sprintf("%s/%d", testSubdir, fn)
@@ -411,8 +413,10 @@ func TestInotifyOverflow(t *testing.T) {
 					continue
 				}
 			}
+			wg.Done()
 		}()
 	}
+	wg.Wait()
 
 	creates := 0
 	overflows := 0
