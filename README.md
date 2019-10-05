@@ -10,16 +10,16 @@ go get -u golang.org/x/sys/...
 
 Cross platform: Windows, Linux, BSD and macOS.
 
-|Adapter   |OS        |Status    |
-|----------|----------|----------|
-|inotify   |Linux 2.6.27 or later, Android\*|Supported [![Build Status](https://travis-ci.org/fsnotify/fsnotify.svg?branch=master)](https://travis-ci.org/fsnotify/fsnotify)|
-|kqueue    |BSD, macOS, iOS\*|Supported [![Build Status](https://travis-ci.org/fsnotify/fsnotify.svg?branch=master)](https://travis-ci.org/fsnotify/fsnotify)|
-|ReadDirectoryChangesW|Windows|Supported [![Build Status](https://travis-ci.org/fsnotify/fsnotify.svg?branch=master)](https://travis-ci.org/fsnotify/fsnotify)|
-|FSEvents  |macOS         |[Planned](https://github.com/fsnotify/fsnotify/issues/11)|
-|FEN       |Solaris 11    |[In Progress](https://github.com/fsnotify/fsnotify/issues/12)|
-|fanotify  |Linux 2.6.37+ | |
-|USN Journals |Windows    |[Maybe](https://github.com/fsnotify/fsnotify/issues/53)|
-|Polling   |*All*         |[Maybe](https://github.com/fsnotify/fsnotify/issues/9)|
+| Adapter               | OS                               | Status                                                    |
+| --------------------- | -------------------------------- | --------------------------------------------------------- |
+| inotify               | Linux 2.6.27 or later, Android\* | Supported [![Build Status](https://travis-ci.org/fsnotify/fsnotify.svg?branch=master)](https://travis-ci.org/fsnotify/fsnotify) |
+| kqueue                | BSD, macOS, iOS\*                | Supported [![Build Status](https://travis-ci.org/fsnotify/fsnotify.svg?branch=master)](https://travis-ci.org/fsnotify/fsnotify) |
+| ReadDirectoryChangesW | Windows                          | Supported [![Build Status](https://travis-ci.org/fsnotify/fsnotify.svg?branch=master)](https://travis-ci.org/fsnotify/fsnotify) |
+| FSEvents              | macOS                            | [Planned](https://github.com/fsnotify/fsnotify/issues/11) |
+| FEN                   | Solaris 11                       | [In Progress](https://github.com/fsnotify/fsnotify/issues/12) |
+| fanotify              | Linux 2.6.37+                    | [Planned](https://github.com/fsnotify/fsnotify/issues/114) |
+| USN Journals          | Windows                          | [Maybe](https://github.com/fsnotify/fsnotify/issues/53) |
+| Polling               | *All*                            | [Maybe](https://github.com/fsnotify/fsnotify/issues/9) |
 
 \* Android and iOS are untested.
 
