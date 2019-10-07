@@ -65,6 +65,11 @@ There are OS-specific limits as to how many watches can be created:
 * Linux: /proc/sys/fs/inotify/max_user_watches contains the limit, reaching this limit results in a "no space left on device" error.
 * BSD / OSX: sysctl variables "kern.maxfiles" and "kern.maxfilesperproc", reaching these limits results in a "too many open files" error.
 
+**Why notification does not work with NFS exported filesystems & filesystem in userspace (FUSE)?**
+
+fsnotify requires support from kernel to work.The current NFS kernel driver does not provide network level support for file notfication.
+The current linux fuse layer does not have functionality to forward notification events to underlying filesystem.
+
 [#62]: https://github.com/howeyc/fsnotify/issues/62
 [#18]: https://github.com/fsnotify/fsnotify/issues/18
 [#11]: https://github.com/fsnotify/fsnotify/issues/11
