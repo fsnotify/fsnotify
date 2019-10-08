@@ -67,8 +67,8 @@ There are OS-specific limits as to how many watches can be created:
 
 **Why notification does not work with NFS exported filesystems & filesystem in userspace (FUSE)?**
 
-fsnotify requires support from kernel to work.The current NFS kernel driver does not provide network level support for file notfication.
-The current linux fuse layer does not have functionality to forward notification events to underlying filesystem.
+fsnotify requires support from underlying OS to work.The current NFS protocol does not provide network level support for file notfication.
+hence notifications don't work with NFS exported filesystems.
 
 [#62]: https://github.com/howeyc/fsnotify/issues/62
 [#18]: https://github.com/fsnotify/fsnotify/issues/18
