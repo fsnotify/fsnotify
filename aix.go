@@ -20,6 +20,7 @@ const (
 )
 
 var (
+	// ErrWatchedFileDeleted ...
 	ErrWatchedFileDeleted = errors.New("error: watched file or folder deleted")
 )
 
