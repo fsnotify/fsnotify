@@ -17,7 +17,7 @@ import (
 )
 
 func TestInotifyCloseRightAway(t *testing.T) {
-	w, err := NewWatcher()
+	w, err := NewWatcher(DefaultFlags)
 	if err != nil {
 		t.Fatalf("Failed to create watcher")
 	}
@@ -31,7 +31,7 @@ func TestInotifyCloseRightAway(t *testing.T) {
 }
 
 func TestInotifyCloseSlightlyLater(t *testing.T) {
-	w, err := NewWatcher()
+	w, err := NewWatcher(DefaultFlags)
 	if err != nil {
 		t.Fatalf("Failed to create watcher")
 	}
@@ -49,7 +49,7 @@ func TestInotifyCloseSlightlyLaterWithWatch(t *testing.T) {
 	testDir := tempMkdir(t)
 	defer os.RemoveAll(testDir)
 
-	w, err := NewWatcher()
+	w, err := NewWatcher(DefaultFlags)
 	if err != nil {
 		t.Fatalf("Failed to create watcher")
 	}
@@ -68,7 +68,7 @@ func TestInotifyCloseAfterRead(t *testing.T) {
 	testDir := tempMkdir(t)
 	defer os.RemoveAll(testDir)
 
-	w, err := NewWatcher()
+	w, err := NewWatcher(DefaultFlags)
 	if err != nil {
 		t.Fatalf("Failed to create watcher")
 	}
@@ -114,7 +114,7 @@ func TestInotifyCloseCreate(t *testing.T) {
 	testDir := tempMkdir(t)
 	defer os.RemoveAll(testDir)
 
-	w, err := NewWatcher()
+	w, err := NewWatcher(DefaultFlags)
 	if err != nil {
 		t.Fatalf("Failed to create watcher: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestInotifyCloseCreate(t *testing.T) {
 	// It's also blocking on unix.Read.
 	// Now we try to swap the file descriptor under its nose.
 	w.Close()
-	w, err = NewWatcher()
+	w, err = NewWatcher(DefaultFlags)
 	defer w.Close()
 	if err != nil {
 		t.Fatalf("Failed to create second watcher: %v", err)
@@ -163,7 +163,7 @@ func TestInotifyStress(t *testing.T) {
 	defer os.RemoveAll(testDir)
 	testFilePrefix := filepath.Join(testDir, "testfile")
 
-	w, err := NewWatcher()
+	w, err := NewWatcher(DefaultFlags)
 	if err != nil {
 		t.Fatalf("Failed to create watcher: %v", err)
 	}
@@ -283,7 +283,7 @@ func TestInotifyRemoveTwice(t *testing.T) {
 	}
 	handle.Close()
 
-	w, err := NewWatcher()
+	w, err := NewWatcher(DefaultFlags)
 	if err != nil {
 		t.Fatalf("Failed to create watcher: %v", err)
 	}
@@ -325,7 +325,7 @@ func TestInotifyInnerMapLength(t *testing.T) {
 	}
 	handle.Close()
 
-	w, err := NewWatcher()
+	w, err := NewWatcher(DefaultFlags)
 	if err != nil {
 		t.Fatalf("Failed to create watcher: %v", err)
 	}
@@ -369,7 +369,7 @@ func TestInotifyOverflow(t *testing.T) {
 	testDir := tempMkdir(t)
 	defer os.RemoveAll(testDir)
 
-	w, err := NewWatcher()
+	w, err := NewWatcher(DefaultFlags)
 	if err != nil {
 		t.Fatalf("Failed to create watcher: %v", err)
 	}

@@ -19,6 +19,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+const DefaultFlags = unix.IN_MOVED_TO | unix.IN_MOVED_FROM |
+	unix.IN_CREATE | unix.IN_ATTRIB | unix.IN_MODIFY |
+	unix.IN_MOVE_SELF | unix.IN_DELETE | unix.IN_DELETE_SELF
+
 // Watcher watches a set of files, delivering events to a channel.
 type Watcher struct {
 	Events   chan Event
@@ -30,10 +34,11 @@ type Watcher struct {
 	paths    map[int]string    // Map of watched paths (key: watch descriptor)
 	done     chan struct{}     // Channel for sending a "quit message" to the reader goroutine
 	doneResp chan struct{}     // Channel to respond to Close
+	flags uint32
 }
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
-func NewWatcher() (*Watcher, error) {
+func NewWatcher(flags uint32) (*Watcher, error) {
 	// Create inotify fd
 	fd, errno := unix.InotifyInit1(unix.IN_CLOEXEC)
 	if fd == -1 {
@@ -54,6 +59,7 @@ func NewWatcher() (*Watcher, error) {
 		Errors:   make(chan error),
 		done:     make(chan struct{}),
 		doneResp: make(chan struct{}),
+		flags: flags | unix.IN_DELETE_SELF,
 	}
 
 	go w.readEvents()
@@ -94,11 +100,7 @@ func (w *Watcher) Add(name string) error {
 		return errors.New("inotify instance already closed")
 	}
 
-	const agnosticEvents = unix.IN_MOVED_TO | unix.IN_MOVED_FROM |
-		unix.IN_CREATE | unix.IN_ATTRIB | unix.IN_MODIFY |
-		unix.IN_MOVE_SELF | unix.IN_DELETE | unix.IN_DELETE_SELF
-
-	var flags uint32 = agnosticEvents
+	flags := w.flags | unix.IN_DELETE_SELF
 
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -317,7 +319,7 @@ func (e *Event) ignoreLinux(mask uint32) bool {
 
 // newEvent returns an platform-independent Event based on an inotify mask.
 func newEvent(name string, mask uint32) Event {
-	e := Event{Name: name}
+	e := Event{Name: name, File: nil}
 	if mask&unix.IN_CREATE == unix.IN_CREATE || mask&unix.IN_MOVED_TO == unix.IN_MOVED_TO {
 		e.Op |= Create
 	}
@@ -332,6 +334,9 @@ func newEvent(name string, mask uint32) Event {
 	}
 	if mask&unix.IN_ATTRIB == unix.IN_ATTRIB {
 		e.Op |= Chmod
+	}
+	if mask&unix.IN_ISDIR == unix.IN_ISDIR {
+		e.Op |= IsDir
 	}
 	return e
 }

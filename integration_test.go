@@ -56,7 +56,7 @@ func tempMkFile(t *testing.T, dir string) string {
 
 // newWatcher initializes an fsnotify Watcher instance.
 func newWatcher(t *testing.T) *Watcher {
-	watcher, err := NewWatcher()
+	watcher, err := NewWatcher(DefaultFlags)
 	if err != nil {
 		t.Fatalf("NewWatcher() failed: %s", err)
 	}

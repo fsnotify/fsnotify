@@ -11,12 +11,14 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
 )
 
 // Event represents a single file system notification.
 type Event struct {
 	Name string // Relative path to the file or directory.
 	Op   Op     // File operation that triggered the event.
+	File *os.File
 }
 
 // Op describes a set of file operations.
@@ -29,6 +31,7 @@ const (
 	Remove
 	Rename
 	Chmod
+	IsDir
 )
 
 func (op Op) String() string {
@@ -50,6 +53,10 @@ func (op Op) String() string {
 	if op&Chmod == Chmod {
 		buffer.WriteString("|CHMOD")
 	}
+	if op&IsDir == IsDir {
+		buffer.WriteString("|ISDIR")
+	}
+
 	if buffer.Len() == 0 {
 		return ""
 	}
@@ -64,5 +71,5 @@ func (e Event) String() string {
 
 // Common errors that can be reported by a watcher
 var (
-	ErrEventOverflow = errors.New("fsnotify queue overflow")
+	ErrEventOverflow = errors.New("queue overflow")
 )
