@@ -18,6 +18,22 @@ import (
 	"time"
 )
 
+var (
+	timeSleep    time.Duration
+	usingPolling bool
+)
+
+func init() {
+	if runtime.GOOS == "aix" {
+		// timeSleep must be greated or egal to the sleepTime between
+		// each polling.
+		timeSleep = 120 * time.Millisecond
+		usingPolling = true
+	} else {
+		timeSleep = 50 * time.Millisecond
+	}
+}
+
 // An atomic counter
 type counter struct {
 	val int32
@@ -130,12 +146,17 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	}
 	f.Sync()
 
-	time.Sleep(time.Millisecond)
+	if usingPolling {
+		// Poller won't be able to get the write if there is no sleep.
+		time.Sleep(timeSleep)
+	} else {
+		time.Sleep(time.Millisecond)
+	}
 	f.WriteString("data")
 	f.Sync()
 	f.Close()
 
-	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+	time.Sleep(timeSleep) // give system time to sync write change before delete
 
 	if err := testRename(testFile, testFileRenamed); err != nil {
 		t.Fatalf("rename failed: %s", err)
@@ -150,7 +171,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	f.Sync()
 	f.Close()
 
-	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+	time.Sleep(timeSleep) // give system time to sync write change before delete
 
 	// Recreate the file that was moved
 	f, err = os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
@@ -158,7 +179,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 		t.Fatalf("creating test file failed: %s", err)
 	}
 	f.Close()
-	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+	time.Sleep(timeSleep) // give system time to sync write change before delete
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500 * time.Millisecond)
@@ -240,16 +261,21 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	}
 	f.Sync()
 
-	time.Sleep(time.Millisecond)
+	if usingPolling {
+		// Poller won't be able to get the write if there is no sleep.
+		time.Sleep(timeSleep)
+	} else {
+		time.Sleep(time.Millisecond)
+	}
 	f.WriteString("data")
 	f.Sync()
 	f.Close()
 
-	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+	time.Sleep(timeSleep) // give system time to sync write change before delete
 
 	os.Remove(testFile)
 
-	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+	time.Sleep(timeSleep) // give system time to sync write change before delete
 
 	// Recreate the file
 	f, err = os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
@@ -257,7 +283,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 		t.Fatalf("creating test file failed: %s", err)
 	}
 	f.Close()
-	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+	time.Sleep(timeSleep) // give system time to sync write change before delete
 
 	// Modify
 	f, err = os.OpenFile(testFile, os.O_WRONLY, 0666)
@@ -271,7 +297,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	f.Sync()
 	f.Close()
 
-	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+	time.Sleep(timeSleep) // give system time to sync write change before delete
 
 	// Modify
 	f, err = os.OpenFile(testFile, os.O_WRONLY, 0666)
@@ -285,7 +311,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	f.Sync()
 	f.Close()
 
-	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+	time.Sleep(timeSleep) // give system time to sync write change before delete
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500 * time.Millisecond)
@@ -379,12 +405,17 @@ func TestFsnotifyDirOnly(t *testing.T) {
 	}
 	f.Sync()
 
-	time.Sleep(time.Millisecond)
+	if usingPolling {
+		// Poller won't be able to get the write if there is no sleep.
+		time.Sleep(timeSleep)
+	} else {
+		time.Sleep(time.Millisecond)
+	}
 	f.WriteString("data")
 	f.Sync()
 	f.Close()
 
-	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+	time.Sleep(timeSleep) // give system time to sync write change before delete
 
 	os.Remove(testFile)
 	os.Remove(testFileAlreadyExists)
@@ -1095,6 +1126,7 @@ func TestCyclicSymlink(t *testing.T) {
 	var createEventsReceived counter
 	go func() {
 		for ev := range watcher.Events {
+			t.Logf("event received: %s", ev)
 			if ev.Op&Create == Create {
 				createEventsReceived.increment()
 			}
@@ -1103,6 +1135,12 @@ func TestCyclicSymlink(t *testing.T) {
 
 	if err := os.Remove(link); err != nil {
 		t.Fatalf("Error removing link: %v", err)
+	}
+
+	if usingPolling {
+		// Poller won't be able to get the removal if there is no sleep,
+		// and will consider the create as a chmod.
+		time.Sleep(timeSleep)
 	}
 
 	// It would be nice to be able to expect a delete event here, but kqueue has
