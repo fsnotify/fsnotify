@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.5.0 / 2018-08-28
+
+* Solaris: add support for File Event Notifications (fen) [#12](https://github.com/fsnotify/fsnotify/issues/12)
+
 ## v1.4.7 / 2018-01-09
 
 * BSD/macOS: Fix possible deadlock on closing the watcher on kqueue (thanks @nhooyr and @glycerine)
