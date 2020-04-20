@@ -86,6 +86,7 @@ func (w *Watcher) Close() error {
 
 	// send a "quit" message to the reader goroutine
 	close(w.done)
+	unix.Close(w.kq)
 
 	return nil
 }
@@ -263,15 +264,12 @@ func (w *Watcher) readEvents() {
 
 loop:
 	for {
-		// See if there is a message on the "done" channel
-		select {
-		case <-w.done:
-			break loop
-		default:
-		}
-
 		// Get new events
 		kevents, err := read(w.kq, eventBuffer, &keventWaitTime)
+		// EBADF means the watcher was closed
+		if err != nil && err == unix.EBADF {
+			break
+		}
 		// EINTR is okay, the syscall was interrupted before timeout expired.
 		if err != nil && err != unix.EINTR {
 			select {
@@ -352,12 +350,17 @@ loop:
 	}
 
 	// cleanup
-	err := unix.Close(w.kq)
-	if err != nil {
-		// only way the previous loop breaks is if w.done was closed so we need to async send to w.Errors.
-		select {
-		case w.Errors <- err:
-		default:
+	select {
+	case <-w.done:
+		// file descriptor is already closed by w.Close()
+	default:
+		err := unix.Close(w.kq)
+		if err != nil && err != unix.EBADF {
+			// only way the previous loop breaks is if w.done was closed so we need to async send to w.Errors.
+			select {
+			case w.Errors <- err:
+			default:
+			}
 		}
 	}
 	close(w.Events)
