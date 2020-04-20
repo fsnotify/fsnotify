@@ -68,3 +68,19 @@ func TestWatcherClose(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestOpenCloseQuickly(t *testing.T) {
+	name := tempMkFile(t, "")
+
+	for i := 0; i < 1000; i++ {
+		w := newWatcher(t)
+		err := w.Add(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = w.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
