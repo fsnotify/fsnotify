@@ -84,10 +84,6 @@ func main() {
 
 Please refer to [CONTRIBUTING][] before opening an issue or pull request.
 
-## Example
-
-See [example_test.go](https://github.com/fsnotify/fsnotify/blob/master/example_test.go).
-
 ## FAQ
 
 **When a file is moved to another directory is it still being watched?**
