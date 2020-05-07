@@ -69,6 +69,13 @@ func (w *Watcher) isClosed() bool {
 	}
 }
 
+// SetRecursive makes future Add() calls watch directories recursively
+// if this file system supports that.
+// Must be called before Add/Remove.
+func (w *Watcher) SetRecursive() error {
+	return fmt.Errorf("Not supported")
+}
+
 // Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error {
 	if w.isClosed() {

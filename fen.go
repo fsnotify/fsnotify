@@ -8,6 +8,7 @@ package fsnotify
 
 import (
 	"errors"
+	"fmt"
 )
 
 // Watcher watches a set of files, delivering events to a channel.
@@ -19,6 +20,13 @@ type Watcher struct {
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
 func NewWatcher() (*Watcher, error) {
 	return nil, errors.New("FEN based watcher not yet supported for fsnotify\n")
+}
+
+// SetRecursive makes future Add() calls watch directories recursively
+// if this file system supports that.
+// Must be called before Add/Remove.
+func (w *Watcher) SetRecursive() error {
+	return fmt.Errorf("Not supported")
 }
 
 // Close removes all watches and closes the events channel.
