@@ -19,14 +19,15 @@ import (
 
 // Watcher watches a set of files, delivering events to a channel.
 type Watcher struct {
-	Events   chan Event
-	Errors   chan error
-	isClosed bool           // Set to true when Close() is first called
-	mu       sync.Mutex     // Map access
-	port     syscall.Handle // Handle to completion port
-	watches  watchMap       // Map of watches (key: i-number)
-	input    chan *input    // Inputs to the reader are sent on this channel
-	quit     chan chan<- error
+	Events    chan Event
+	Errors    chan error
+	isClosed  bool           // Set to true when Close() is first called
+	mu        sync.Mutex     // Map access
+	port      syscall.Handle // Handle to completion port
+	watches   watchMap       // Map of watches (key: i-number)
+	input     chan *input    // Inputs to the reader are sent on this channel
+	quit      chan chan<- error
+	recursive bool
 }
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
@@ -36,15 +37,27 @@ func NewWatcher() (*Watcher, error) {
 		return nil, os.NewSyscallError("CreateIoCompletionPort", e)
 	}
 	w := &Watcher{
-		port:    port,
-		watches: make(watchMap),
-		input:   make(chan *input, 1),
-		Events:  make(chan Event, 50),
-		Errors:  make(chan error),
-		quit:    make(chan chan<- error, 1),
+		port:      port,
+		watches:   make(watchMap),
+		input:     make(chan *input, 1),
+		Events:    make(chan Event, 50),
+		Errors:    make(chan error),
+		quit:      make(chan chan<- error, 1),
+		recursive: false,
 	}
 	go w.readEvents()
 	return w, nil
+}
+
+// Recursively watches directories if this file system supports that.
+// Must be called before Add/Remove.
+// Returns an error on failure.
+func (w *Watcher) SetRecursive() error {
+	if len(w.watches) > 0 {
+		return fmt.Errorf("Cannot call SetRecursive after watches are set")
+	}
+	w.recursive = true
+	return nil
 }
 
 // Close removes all watches and closes the events channel.
@@ -348,7 +361,7 @@ func (w *Watcher) startRead(watch *watch) error {
 		return nil
 	}
 	e := syscall.ReadDirectoryChanges(watch.ino.handle, &watch.buf[0],
-		uint32(unsafe.Sizeof(watch.buf)), false, mask, nil, &watch.ov, 0)
+		uint32(unsafe.Sizeof(watch.buf)), w.recursive, mask, nil, &watch.ov, 0)
 	if e != nil {
 		err := os.NewSyscallError("ReadDirectoryChanges", e)
 		if e == syscall.ERROR_ACCESS_DENIED && watch.mask&provisional == 0 {

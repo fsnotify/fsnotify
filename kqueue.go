@@ -65,6 +65,13 @@ func NewWatcher() (*Watcher, error) {
 	return w, nil
 }
 
+// Recursively watches directories if this file system supports that.
+// Must be called before Add/Remove.
+// Returns an error on failure.
+func (w *Watcher) SetRecursive() error {
+	return fmt.Error("Not supported")
+}
+
 // Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error {
 	w.mu.Lock()

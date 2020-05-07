@@ -21,6 +21,13 @@ func NewWatcher() (*Watcher, error) {
 	return nil, errors.New("FEN based watcher not yet supported for fsnotify\n")
 }
 
+// Recursively watches directories if this file system supports that.
+// Must be called before Add/Remove.
+// Returns an error on failure.
+func (w *Watcher) SetRecursive() error {
+	return fmt.Error("Not supported")
+}
+
 // Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error {
 	return nil
