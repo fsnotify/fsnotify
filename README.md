@@ -27,7 +27,7 @@ Please see [the documentation](https://godoc.org/github.com/fsnotify/fsnotify) a
 
 ## API stability
 
-fsnotify is a fork of [howeyc/fsnotify](https://godoc.org/github.com/howeyc/fsnotify) with a new API as of v1.0. The API is based on [this design document](http://goo.gl/MrYxyA). 
+fsnotify is a fork of [howeyc/fsnotify](https://godoc.org/github.com/howeyc/fsnotify) with a new API as of v1.0. The API is based on [this design document](http://goo.gl/MrYxyA).
 
 All [releases](https://github.com/fsnotify/fsnotify/releases) are tagged based on [Semantic Versioning](http://semver.org/). Further API changes are [planned](https://github.com/fsnotify/fsnotify/milestones), and will be tagged with a new major revision number.
 
@@ -109,7 +109,18 @@ Spotlight indexing on OS X can result in multiple events (see [howeyc #62][#62])
 **How many files can be watched at once?**
 
 There are OS-specific limits as to how many watches can be created:
-* Linux: /proc/sys/fs/inotify/max_user_watches contains the limit, reaching this limit results in a "no space left on device" error.
+* Linux: The following files have an influence on the overall limit:
+    * `/proc/sys/fs/inotify/max_user_watches`
+    * `/proc/sys/fs/inotify/max_user_instances`
+
+  To increase them either write the appropriate value to the file or modify
+  them permanently via `/etc/sysctl.conf`:
+  ```
+  fs.inotify.max_user_watches=100000
+  fs.inotify.max_user_instances=100000
+  ```
+  Reaching the limit will result in a "no space left on device" or "too many
+  open files" error.
 * BSD / OSX: sysctl variables "kern.maxfiles" and "kern.maxfilesperproc", reaching these limits results in a "too many open files" error.
 
 **Why don't notifications work with NFS filesystems or filesystem in userspace (FUSE)?**
@@ -127,4 +138,3 @@ fsnotify requires support from underlying OS to work. The current NFS protocol d
 
 * [notify](https://github.com/rjeczalik/notify)
 * [fsevents](https://github.com/fsnotify/fsevents)
-
