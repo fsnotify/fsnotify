@@ -65,8 +65,8 @@ func newWatcher(t *testing.T) *Watcher {
 
 // addWatch adds a watch for a directory
 func addWatch(t *testing.T, watcher *Watcher, dir string) {
-	if err := watcher.Add(dir); err != nil {
-		t.Fatalf("watcher.Add(%q) failed: %s", dir, err)
+	if err := watcher.AddRaw(dir); err != nil {
+		t.Fatalf("watcher.AddRaw(%q) failed: %s", dir, err)
 	}
 }
 
@@ -1007,9 +1007,72 @@ func TestFsnotifyClose(t *testing.T) {
 	testDir := tempMkdir(t)
 	defer os.RemoveAll(testDir)
 
-	if err := watcher.Add(testDir); err == nil {
+	if err := watcher.AddRaw(testDir); err == nil {
 		t.Fatal("expected error on Watch() after Close(), got nil")
 	}
+}
+
+func TestSymlinkNotResolved(t *testing.T) {
+	testDir := tempMkdir(t)
+	file1 := filepath.Join(testDir, "file1")
+	file2 := filepath.Join(testDir, "file2")
+	link := filepath.Join(testDir, "link")
+
+	f1, err := os.Create(file1)
+	if err != nil {
+		t.Fatalf("Failed to create file1: %s", err)
+	}
+	defer f1.Close()
+	if _, err := os.Create(file2); err != nil {
+		t.Fatalf("Failed to create file2: %s", err)
+	}
+
+	// symlink works for Windows too
+	if err := os.Symlink(file1, link); err != nil {
+		t.Fatalf("Failed to create symlink: %s", err)
+	}
+
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("Failed to create watcher")
+	}
+
+	err = w.AddRaw(link)
+	if err != nil {
+		t.Fatalf("Failed to add link: %s", err)
+	}
+
+	// change file 1 - no event
+	f1.Write([]byte("Hello"))
+	f1.Sync()
+	// XXX(Code0x58): doing a create here shows a CHMOD event on mac - is that an issue?
+
+	select {
+	case event := <-w.Events:
+		t.Fatalf("Event from watcher: %v", event)
+	case err := <-w.Errors:
+		t.Fatalf("Error from watcher: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// ~atomic link change event
+	tmpLink := filepath.Join(testDir, "tmp-link")
+	if err := os.Symlink(file2, tmpLink); err != nil {
+		t.Fatalf("Failed to create symlink: %s", err)
+	}
+
+	if err := os.Rename(tmpLink, link); err != nil {
+		t.Fatalf("Failed to replace symlink: %s", err)
+	}
+
+	select {
+	case _ = <-w.Events:
+	case err := <-w.Errors:
+		t.Fatalf("Error from watcher: %v", err)
+	case <-time.After(50 * time.Millisecond):
+		t.Fatalf("Took too long to wait for event")
+	}
+
 }
 
 func TestFsnotifyFakeSymlink(t *testing.T) {
@@ -1173,7 +1236,7 @@ func TestClose(t *testing.T) {
 	defer os.RemoveAll(testDir)
 
 	watcher := newWatcher(t)
-	if err := watcher.Add(testDir); err != nil {
+	if err := watcher.AddRaw(testDir); err != nil {
 		t.Fatalf("Expected no error on Add, got %v", err)
 	}
 	err := watcher.Close()
@@ -1194,7 +1257,7 @@ func TestRemoveWithClose(t *testing.T) {
 		tempFiles = append(tempFiles, tempMkFile(t, testDir))
 	}
 	watcher := newWatcher(t)
-	if err := watcher.Add(testDir); err != nil {
+	if err := watcher.AddRaw(testDir); err != nil {
 		t.Fatalf("Expected no error on Add, got %v", err)
 	}
 	startC, stopC := make(chan struct{}), make(chan struct{})
