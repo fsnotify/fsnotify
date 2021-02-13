@@ -12,6 +12,17 @@ import (
 	"time"
 )
 
+type watcher interface {
+	Close() error
+	Add(string) error
+	Remove(string) error
+	GetEvents() <-chan Event
+	GetErrors() <-chan error
+}
+
+// ensure that the Watcher meets the watcher interface.
+var _ watcher = &Watcher{}
+
 func TestEventStringWithValue(t *testing.T) {
 	for opMask, expectedString := range map[Op]string{
 		Chmod | Create: `"/usr/someFile": CREATE|CHMOD`,

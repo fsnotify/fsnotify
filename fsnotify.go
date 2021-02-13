@@ -13,6 +13,17 @@ import (
 	"fmt"
 )
 
+
+// GetEvents returns a channel of events.
+func (w *Watcher) GetEvents() <-chan Event {
+	return w.Events
+}
+
+// GetErrors returns a channel of errors.
+func (w *Watcher) GetErrors() <-chan error {
+	return w.Errors
+}
+
 // Event represents a single file system notification.
 type Event struct {
 	Name string // Relative path to the file or directory.
