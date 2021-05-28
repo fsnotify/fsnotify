@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## v1.6.0 / 2022-01-28
+
+* Solaris: add support for File Event Notifications (fen) [#12](https://github.com/fsnotify/fsnotify/issues/12)
+
 ## [1.5.1] - 2021-08-24
 
 * Revert Add AddRaw to not follow symlinks
