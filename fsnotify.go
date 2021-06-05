@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build !plan9
-
 // Package fsnotify provides a platform-independent interface for file system notifications.
 package fsnotify
 
