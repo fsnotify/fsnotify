@@ -1,5 +1,7 @@
 # Changelog
 
+* Windows: Fixed persistence of original path-name in watches within renamed directory (#259, #243)
+
 ## v1.4.7 / 2018-01-09
 
 * BSD/macOS: Fix possible deadlock on closing the watcher on kqueue (thanks @nhooyr and @glycerine)
