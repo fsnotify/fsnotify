@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1223,6 +1224,55 @@ func TestRemoveWithClose(t *testing.T) {
 	defer close(stopC)
 	if err := <-errC; err != nil {
 		t.Fatalf("Expected no error on Close, got %v.", err)
+	}
+}
+
+func TestMoveWatchedDirectory(t *testing.T) {
+
+	testDir := tempMkdir(t)
+	defer os.RemoveAll(testDir)
+
+	watcher := newWatcher(t)
+
+	// event recording
+	var events []Event
+	go func() {
+		for {
+			event, ok := <-watcher.Events
+			if !ok {
+				return
+			}
+			events = append(events, event)
+		}
+	}()
+
+	addWatch(t, watcher, testDir)
+
+	if err := os.Mkdir(testDir+"/dir", 0o775); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(10 * time.Millisecond)
+	addWatch(t, watcher, testDir+"/dir")
+	if err := os.Rename(testDir+"/dir", testDir+"/dir2"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(10 * time.Millisecond)
+	if err := ioutil.WriteFile(testDir+"/dir2/file.ext", []byte(""), 0o664); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := watcher.Close(); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	if len(events) != 4 {
+		t.Fatalf("Expected 4 events. Got: %d", len(events))
+	}
+
+	expectedSuffix := filepath.Join("dir2", "file.ext")
+	if !strings.HasSuffix(events[3].Name, expectedSuffix) {
+		t.Fatalf("Expected suffix %s, Got: %s", expectedSuffix, events[3].Name)
 	}
 }
 
