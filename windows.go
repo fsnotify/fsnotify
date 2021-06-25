@@ -468,9 +468,11 @@ func (w *Watcher) readEvents() {
 
 				// update saved path of all sub-watches
 				oldFullName := filepath.Join(watch.path, watch.rename)
-				for _, otherWatch := range w.watches {
-					if strings.HasPrefix(otherWatch.path, oldFullName) {
-						otherWatch.path = filepath.Join(watch.path, strings.TrimPrefix(otherWatch.path, oldFullName))
+				for _, watchMap := range w.watches {
+					for _, otherWatch := range watchMap {
+						if strings.HasPrefix(otherWatch.path, oldFullName) {
+							otherWatch.path = filepath.Join(fullname, strings.TrimPrefix(otherWatch.path, oldFullName))
+						}
 					}
 				}
 
