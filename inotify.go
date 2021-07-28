@@ -162,6 +162,20 @@ func (w *Watcher) Remove(name string) error {
 	return nil
 }
 
+// WatchList returns the directories and files that are being monitered.
+func (w *Watcher) WatchList() []string {
+	var dirs []string
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	for key := range w.watches {
+		dirs = append(dirs, key)
+	}
+
+	return dirs
+}
+
 type watch struct {
 	wd    uint32 // Watch descriptor (as returned by the inotify_add_watch() syscall)
 	flags uint32 // inotify flags of this watch (see inotify(7) for the list of valid flags)
