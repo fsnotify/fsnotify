@@ -4,3 +4,4 @@
 
 .vagrant
 *.sublime-project
+.idea
