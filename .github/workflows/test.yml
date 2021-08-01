@@ -15,15 +15,49 @@ jobs:
         go:
           - '1.16'
           - '1.15'
+          - '1.14'
+          - '1.13'
+          - '1.12'
+          - '1.11'
+        # omitting these as they fail on macos+ubuntu with "kqueue.go:18:2: cannot find package "golang.org/x/sys/unix" in any of:"
+        # - '1.10'
+        # - '1.9'
     runs-on: ${{ matrix.os }}
     steps:
       - name: setup Go
         uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go }}
+
       - name: checkout
         uses: actions/checkout@v2
 
       - name: test
         run: |
           go test --race ./...
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: setup Go
+        uses: actions/setup-go@v2
+
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: gofmt
+        run: |
+          test -z "$(gofmt -s -d . | tee /dev/stderr)"
+
+      - name: vet
+        run: |
+          go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v2
+        continue-on-error: true
+        with:
+          version: v1.41.1
+          # this is here as a workaround for https://github.com/golangci/golangci-lint-action/issues/244
+          skip-pkg-cache: true
+
