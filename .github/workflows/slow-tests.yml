@@ -1,0 +1,17 @@
+name: slow-tests
+on: [workflow_dispatch]
+jobs:
+  test-illumos:
+    runs-on: macos-10.15
+    name: Test in illumos VM
+    steps:
+    - uses: actions/checkout@v2
+    - name: Test on illumos
+      id: test
+      uses: papertigers/illumos-vm@main
+      with:
+        prepare: |
+          pkg set-publisher -r -O https://pkg.omnios.org/r151036/extra extra.omnios
+          pkg install go-117
+        run: |
+          /opt/ooce/go-1.17/bin/go test
