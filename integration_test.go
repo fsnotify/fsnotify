@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -149,7 +148,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
 
-	if err := testRename(testFile, testFileRenamed); err != nil {
+	if err := os.Rename(testFile, testFileRenamed); err != nil {
 		t.Fatalf("rename failed: %s", err)
 	}
 
@@ -680,7 +679,7 @@ func TestFsnotifyRename(t *testing.T) {
 	// Add a watch for testFile
 	addWatch(t, watcher, testFile)
 
-	if err := testRename(testFile, testFileRenamed); err != nil {
+	if err := os.Rename(testFile, testFileRenamed); err != nil {
 		t.Fatalf("rename failed: %s", err)
 	}
 
@@ -758,7 +757,7 @@ func TestFsnotifyRenameToCreate(t *testing.T) {
 	}
 	f.Close()
 
-	if err := testRename(testFile, testFileRenamed); err != nil {
+	if err := os.Rename(testFile, testFileRenamed); err != nil {
 		t.Fatalf("rename failed: %s", err)
 	}
 
@@ -850,7 +849,7 @@ func TestFsnotifyRenameToOverwrite(t *testing.T) {
 	}
 	f.Close()
 
-	if err := testRename(testFile, testFileRenamed); err != nil {
+	if err := os.Rename(testFile, testFileRenamed); err != nil {
 		t.Fatalf("rename failed: %s", err)
 	}
 
@@ -1324,15 +1323,5 @@ func TestRemoveWithClose(t *testing.T) {
 	defer close(stopC)
 	if err := <-errC; err != nil {
 		t.Fatalf("Expected no error on Close, got %v.", err)
-	}
-}
-
-func testRename(file1, file2 string) error {
-	switch runtime.GOOS {
-	case "windows", "plan9":
-		return os.Rename(file1, file2)
-	default:
-		cmd := exec.Command("mv", file1, file2)
-		return cmd.Run()
 	}
 }
