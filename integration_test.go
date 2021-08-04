@@ -128,7 +128,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	// Create a file
 	// This should add at least one event to the fsnotify event queue
 	var f *os.File
-	f, err := os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
+	f, err := os.Create(testFile)
 	if err != nil {
 		t.Fatalf("creating test file failed: %s", err)
 	}
@@ -154,7 +154,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	}
 
 	// Modify the file outside of the watched dir
-	f, err = os.Open(testFileRenamed)
+	f, err = os.OpenFile(testFileRenamed, os.O_RDWR, 0)
 	if err != nil {
 		t.Fatalf("open test renamed file failed: %s", err)
 	}
