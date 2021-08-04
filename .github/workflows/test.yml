@@ -13,6 +13,7 @@ jobs:
           - macos-latest
           - windows-latest
         go:
+          - '1.17.0-rc2'
           - '1.16'
           - '1.15'
           - '1.14'
@@ -24,6 +25,7 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go }}
+          stable: false # for Go 1.17.0-rc2, it's not stable now. (2021-08-03)
 
       - name: checkout
         uses: actions/checkout@v2
