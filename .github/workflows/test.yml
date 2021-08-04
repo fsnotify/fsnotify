@@ -19,10 +19,6 @@ jobs:
           - '1.14'
           - '1.13'
           - '1.12'
-          - '1.11'
-        # omitting these as they fail on macos+ubuntu with "kqueue.go:18:2: cannot find package "golang.org/x/sys/unix" in any of:"
-        # - '1.10'
-        # - '1.9'
     runs-on: ${{ matrix.os }}
     steps:
       - name: setup Go
