@@ -53,7 +53,6 @@ jobs:
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v2
-        continue-on-error: true
         with:
           version: v1.41.1
           # this is here as a workaround for https://github.com/golangci/golangci-lint-action/issues/244
