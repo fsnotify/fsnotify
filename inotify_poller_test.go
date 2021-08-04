@@ -173,16 +173,18 @@ func TestPollerConcurrent(t *testing.T) {
 
 	oks := make(chan bool)
 	live := make(chan bool)
+	errs := make(chan error)
 	defer close(live)
 	go func() {
 		defer close(oks)
 		for {
 			ok, err := poller.wait()
 			if err != nil {
-				t.Fatalf("poller failed: %v", err)
+				errs <- err
 			}
 			oks <- ok
 			if !<-live {
+				close(errs)
 				return
 			}
 		}
@@ -190,6 +192,8 @@ func TestPollerConcurrent(t *testing.T) {
 
 	// Try a write
 	select {
+	case err := <-errs:
+		t.Fatalf("write failed: %v", err)
 	case <-time.After(50 * time.Millisecond):
 	case <-oks:
 		t.Fatalf("poller did not wait")
@@ -203,6 +207,8 @@ func TestPollerConcurrent(t *testing.T) {
 
 	// Try a wakeup
 	select {
+	case err := <-errs:
+		t.Fatalf("wakeup failed: %v", err)
 	case <-time.After(50 * time.Millisecond):
 	case <-oks:
 		t.Fatalf("poller did not wait")
@@ -218,6 +224,8 @@ func TestPollerConcurrent(t *testing.T) {
 
 	// Try a close
 	select {
+	case err := <-errs:
+		t.Fatalf("wakeup failed: %v", err)
 	case <-time.After(50 * time.Millisecond):
 	case <-oks:
 		t.Fatalf("poller did not wait")

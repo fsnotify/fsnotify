@@ -8,6 +8,7 @@
 package fsnotify
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -74,12 +75,13 @@ func addWatch(t *testing.T, watcher *Watcher, dir string) {
 func TestFsnotifyMultipleOperations(t *testing.T) {
 	watcher := newWatcher(t)
 
-	// Receive errors on the error channel on a separate goroutine
-	go func() {
-		for err := range watcher.Errors {
-			t.Fatalf("error received: %s", err)
+	checkError := func(when string) {
+		select {
+		case err := <-watcher.Errors:
+			t.Fatalf("error: %s: %s", when, err)
+		default:
 		}
-	}()
+	}
 
 	// Create directory to watch
 	testDir := tempMkdir(t)
@@ -93,6 +95,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	testFileRenamed := filepath.Join(testDirToMoveFiles, "TestFsnotifySeqRename.testfile")
 
 	addWatch(t, watcher, testDir)
+	checkError("a")
 
 	// Receive events on the event channel on a separate goroutine
 	eventstream := watcher.Events
@@ -129,12 +132,20 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating test file failed: %s", err)
 	}
-	f.Sync()
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
+	checkError("b")
 
 	time.Sleep(time.Millisecond)
-	f.WriteString("data")
-	f.Sync()
+	if _, err := f.WriteString("data"); err != nil {
+		t.Fatalf("write failed: %s", err)
+	}
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 	f.Close()
+	checkError("c")
 
 	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
 
@@ -147,9 +158,14 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open test renamed file failed: %s", err)
 	}
-	f.WriteString("data")
-	f.Sync()
+	if _, err := f.WriteString("data"); err != nil {
+		t.Fatalf("write failed: %s", err)
+	}
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 	f.Close()
+	checkError("d")
 
 	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
 
@@ -161,6 +177,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	f.Close()
 	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
 
+	checkError("e")
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(500 * time.Millisecond)
 	cReceived := createReceived.value()
@@ -177,6 +194,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 		t.Fatalf("incorrect number of rename+delete events received after 500 ms (%d vs %d)", rReceived+dReceived, 1)
 	}
 
+	checkError("f")
 	// Try closing the fsnotify instance
 	t.Log("calling Close()")
 	watcher.Close()
@@ -239,11 +257,17 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating test file failed: %s", err)
 	}
-	f.Sync()
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 
 	time.Sleep(time.Millisecond)
-	f.WriteString("data")
-	f.Sync()
+	if _, err := f.WriteString("data"); err != nil {
+		t.Fatalf("write failed: %s", err)
+	}
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 	f.Close()
 
 	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
@@ -265,11 +289,17 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating test file failed: %s", err)
 	}
-	f.Sync()
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 
 	time.Sleep(time.Millisecond)
-	f.WriteString("data")
-	f.Sync()
+	if _, err := f.WriteString("data"); err != nil {
+		t.Fatalf("write failed: %s", err)
+	}
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 	f.Close()
 
 	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
@@ -279,11 +309,17 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating test file failed: %s", err)
 	}
-	f.Sync()
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 
 	time.Sleep(time.Millisecond)
-	f.WriteString("data")
-	f.Sync()
+	if _, err := f.WriteString("data"); err != nil {
+		t.Fatalf("write failed: %s", err)
+	}
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 	f.Close()
 
 	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
@@ -331,7 +367,9 @@ func TestFsnotifyDirOnly(t *testing.T) {
 		if err != nil {
 			t.Fatalf("creating test file failed: %s", err)
 		}
-		f.Sync()
+		if err := f.Sync(); err != nil {
+			t.Fatalf("sync failed: %s", err)
+		}
 		f.Close()
 	}
 
@@ -378,11 +416,17 @@ func TestFsnotifyDirOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating test file failed: %s", err)
 	}
-	f.Sync()
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 
 	time.Sleep(time.Millisecond)
-	f.WriteString("data")
-	f.Sync()
+	if _, err := f.WriteString("data"); err != nil {
+		t.Fatalf("write failed: %s", err)
+	}
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 	f.Close()
 
 	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
@@ -433,7 +477,9 @@ func TestFsnotifyDeleteWatchedDir(t *testing.T) {
 		if err != nil {
 			t.Fatalf("creating test file failed: %s", err)
 		}
-		f.Sync()
+		if err := f.Sync(); err != nil {
+			t.Fatalf("sync failed: %s", err)
+		}
 		f.Close()
 	}
 
@@ -529,7 +575,9 @@ func TestFsnotifySubDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating test file failed: %s", err)
 	}
-	f.Sync()
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 	f.Close()
 
 	// Create a file (Should not see this! we are not watching subdir)
@@ -538,7 +586,9 @@ func TestFsnotifySubDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating test file failed: %s", err)
 	}
-	fs.Sync()
+	if err := fs.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 	fs.Close()
 
 	time.Sleep(200 * time.Millisecond)
@@ -615,10 +665,16 @@ func TestFsnotifyRename(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating test file failed: %s", err)
 	}
-	f.Sync()
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 
-	f.WriteString("data")
-	f.Sync()
+	if _, err := f.WriteString("data"); err != nil {
+		t.Fatalf("write failed: %s", err)
+	}
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 	f.Close()
 
 	// Add a watch for testFile
@@ -697,7 +753,9 @@ func TestFsnotifyRenameToCreate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating test file failed: %s", err)
 	}
-	f.Sync()
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 	f.Close()
 
 	if err := testRename(testFile, testFileRenamed); err != nil {
@@ -749,7 +807,9 @@ func TestFsnotifyRenameToOverwrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating test file failed: %s", err)
 	}
-	fr.Sync()
+	if err := fr.Sync(); err != nil {
+		t.Fatalf("sync failed %s", err)
+	}
 	fr.Close()
 
 	addWatch(t, watcher, testDir)
@@ -785,7 +845,9 @@ func TestFsnotifyRenameToOverwrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating test file failed: %s", err)
 	}
-	f.Sync()
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 	f.Close()
 
 	if err := testRename(testFile, testFileRenamed); err != nil {
@@ -825,7 +887,9 @@ func TestRemovalOfWatch(t *testing.T) {
 		if err != nil {
 			t.Fatalf("creating test file failed: %s", err)
 		}
-		f.Sync()
+		if err := f.Sync(); err != nil {
+			t.Fatalf("sync failed: %s", err)
+		}
 		f.Close()
 	}
 
@@ -837,28 +901,37 @@ func TestRemovalOfWatch(t *testing.T) {
 		t.Fatalf("Could not remove the watch: %v\n", err)
 	}
 
+	errs := make(chan error)
 	go func() {
 		select {
 		case ev := <-watcher.Events:
-			t.Fatalf("We received event: %v\n", ev)
+			errs <- fmt.Errorf("Unexpected event: %v", ev)
 		case <-time.After(500 * time.Millisecond):
 			t.Log("No event received, as expected.")
 		}
+		close(errs)
 	}()
 
 	time.Sleep(200 * time.Millisecond)
 	// Modify the file outside of the watched dir
-	f, err := os.Open(testFileAlreadyExists)
+	f, err := os.OpenFile(testFileAlreadyExists, os.O_RDWR, 0)
 	if err != nil {
 		t.Fatalf("Open test file failed: %s", err)
 	}
-	f.WriteString("data")
-	f.Sync()
+	if _, err := f.WriteString("data"); err != nil {
+		t.Fatalf("write failed: %s", err)
+	}
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 	f.Close()
 	if err := os.Chmod(testFileAlreadyExists, 0700); err != nil {
 		t.Fatalf("chmod failed: %s", err)
 	}
 	time.Sleep(400 * time.Millisecond)
+	if err := <-errs; err != nil {
+		t.Fatalf("error: %s\n", err)
+	}
 }
 
 func TestFsnotifyAttrib(t *testing.T) {
@@ -914,10 +987,16 @@ func TestFsnotifyAttrib(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating test file failed: %s", err)
 	}
-	f.Sync()
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 
-	f.WriteString("data")
-	f.Sync()
+	if _, err := f.WriteString("data"); err != nil {
+		t.Fatalf("write failed: %s", err)
+	}
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 	f.Close()
 
 	// Add a watch for testFile
@@ -947,8 +1026,12 @@ func TestFsnotifyAttrib(t *testing.T) {
 		t.Fatalf("reopening test file failed: %s", err)
 	}
 
-	f.WriteString("more data")
-	f.Sync()
+	if _, err := f.WriteString("data"); err != nil {
+		t.Fatalf("write failed: %s", err)
+	}
+	if err := f.Sync(); err != nil {
+		t.Fatalf("sync failed: %s", err)
+	}
 	f.Close()
 
 	time.Sleep(500 * time.Millisecond)
@@ -1144,7 +1227,9 @@ func TestConcurrentRemovalOfWatch(t *testing.T) {
 		if err != nil {
 			t.Fatalf("creating test file failed: %s", err)
 		}
-		f.Sync()
+		if err := f.Sync(); err != nil {
+			t.Fatalf("sync failed: %s", err)
+		}
 		f.Close()
 	}
 
@@ -1153,19 +1238,34 @@ func TestConcurrentRemovalOfWatch(t *testing.T) {
 
 	addWatch(t, watcher, testDir)
 
+	errs := make(chan error)
 	// Test that RemoveWatch can be invoked concurrently, with no data races.
-	removed1 := make(chan struct{})
+	done := make(chan bool)
 	go func() {
-		defer close(removed1)
-		watcher.Remove(testDir)
+		if err := watcher.Remove(testDir); err != nil {
+			errs <- err
+		}
+		done <- true
 	}()
-	removed2 := make(chan struct{})
 	go func() {
-		close(removed2)
-		watcher.Remove(testDir)
+		if err := watcher.Remove(testDir); err != nil {
+			errs <- err
+		}
+		done <- true
 	}()
-	<-removed1
-	<-removed2
+
+	deadline := time.NewTimer(1 * time.Second)
+	for i := 0; i < 2; i++ {
+		select {
+		case <-done:
+			continue
+		case err := <-errs:
+			t.Fatalf("error: %s", err)
+		case <-deadline.C:
+			t.Fatal("deadline exceeded")
+		}
+	}
+	close(errs)
 }
 
 func TestClose(t *testing.T) {

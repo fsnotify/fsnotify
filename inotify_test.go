@@ -54,7 +54,9 @@ func TestInotifyCloseSlightlyLaterWithWatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create watcher")
 	}
-	w.Add(testDir)
+	if err := w.Add(testDir); err != nil {
+		t.Fatalf("Failed to add test directory")
+	}
 
 	// Wait until readEvents has reached unix.Read, and Close.
 	<-time.After(50 * time.Millisecond)
@@ -80,7 +82,9 @@ func TestInotifyCloseAfterRead(t *testing.T) {
 	}
 
 	// Generate an event.
-	os.Create(filepath.Join(testDir, "somethingSOMETHINGsomethingSOMETHING"))
+	if _, err := os.Create(filepath.Join(testDir, "somethingSOMETHINGsomethingSOMETHING")); err != nil {
+		t.Fatalf("failed to create")
+	}
 
 	// Wait for readEvents to read the event, then close the watcher.
 	<-time.After(50 * time.Millisecond)
@@ -119,7 +123,11 @@ func TestInotifyCloseCreate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create watcher: %v", err)
 	}
-	defer w.Close()
+	defer func() {
+		if err := w.Close(); err != nil {
+			t.Fatalf("Close failed: %v", err)
+		}
+	}()
 
 	err = w.Add(testDir)
 	if err != nil {
@@ -131,7 +139,7 @@ func TestInotifyCloseCreate(t *testing.T) {
 	}
 	h.Close()
 	select {
-	case _ = <-w.Events:
+	case <-w.Events:
 	case err := <-w.Errors:
 		t.Fatalf("Error from watcher: %v", err)
 	case <-time.After(50 * time.Millisecond):
@@ -143,7 +151,11 @@ func TestInotifyCloseCreate(t *testing.T) {
 	// Now we try to swap the file descriptor under its nose.
 	w.Close()
 	w, err = NewWatcher()
-	defer w.Close()
+	defer func() {
+		if err := w.Close(); err != nil {
+			t.Fatalf("Close failed: %v", err)
+		}
+	}()
 	if err != nil {
 		t.Fatalf("Failed to create second watcher: %v", err)
 	}
@@ -168,7 +180,11 @@ func TestInotifyStress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create watcher: %v", err)
 	}
-	defer w.Close()
+	defer func() {
+		if err := w.Close(); err != nil {
+			t.Fatalf("Close failed: %v", err)
+		}
+	}()
 
 	err = w.Add(testDir)
 	if err != nil {
@@ -288,7 +304,11 @@ func TestInotifyRemoveTwice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create watcher: %v", err)
 	}
-	defer w.Close()
+	defer func() {
+		if err := w.Close(); err != nil {
+			t.Fatalf("Close failed: %v", err)
+		}
+	}()
 
 	err = w.Add(testFile)
 	if err != nil {
@@ -330,23 +350,29 @@ func TestInotifyInnerMapLength(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create watcher: %v", err)
 	}
-	defer w.Close()
+	defer func() {
+		if err := w.Close(); err != nil {
+			t.Fatalf("Close failed: %v", err)
+		}
+	}()
 
 	err = w.Add(testFile)
 	if err != nil {
 		t.Fatalf("Failed to add testFile: %v", err)
 	}
+	errs := make(chan error, 1)
 	go func() {
 		for err := range w.Errors {
-			t.Fatalf("error received: %s", err)
+			errs <- err
 		}
+		close(errs)
 	}()
 
 	err = os.Remove(testFile)
 	if err != nil {
 		t.Fatalf("Failed to remove testFile: %v", err)
 	}
-	_ = <-w.Events                      // consume Remove event
+	<-w.Events                          // consume Remove event
 	<-time.After(50 * time.Millisecond) // wait IN_IGNORE propagated
 
 	w.mu.Lock()
@@ -356,6 +382,10 @@ func TestInotifyInnerMapLength(t *testing.T) {
 	}
 	if len(w.paths) != 0 {
 		t.Fatalf("Expected paths len is 0, but got: %d, %v", len(w.paths), w.paths)
+	}
+	w.Close()
+	if err := <-errs; err != nil {
+		t.Fatalf("error received: %s", err)
 	}
 }
 
@@ -374,7 +404,11 @@ func TestInotifyOverflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create watcher: %v", err)
 	}
-	defer w.Close()
+	defer func() {
+		if err := w.Close(); err != nil {
+			t.Fatalf("Close failed: %v", err)
+		}
+	}()
 
 	for dn := 0; dn < numDirs; dn++ {
 		testSubdir := fmt.Sprintf("%s/%d", testDir, dn)
