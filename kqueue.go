@@ -104,8 +104,8 @@ func (w *Watcher) Add(name string) error {
 func (w *Watcher) Remove(name string) error {
 	name = filepath.Clean(name)
 	w.mu.Lock()
+	defer w.mu.Unlock()
 	watchfd, ok := w.watches[name]
-	w.mu.Unlock()
 	if !ok {
 		return fmt.Errorf("can't remove non-existent kevent watch for: %s", name)
 	}
@@ -117,17 +117,14 @@ func (w *Watcher) Remove(name string) error {
 
 	unix.Close(watchfd)
 
-	w.mu.Lock()
 	isDir := w.paths[watchfd].isDir
 	delete(w.watches, name)
 	delete(w.paths, watchfd)
 	delete(w.dirFlags, name)
-	w.mu.Unlock()
 
 	// Find all watched paths that are in this directory that are not external.
 	if isDir {
 		var pathsToRemove []string
-		w.mu.Lock()
 		for _, path := range w.paths {
 			wdir, _ := filepath.Split(path.name)
 			if filepath.Clean(wdir) == name {
@@ -136,7 +133,6 @@ func (w *Watcher) Remove(name string) error {
 				}
 			}
 		}
-		w.mu.Unlock()
 		for _, name := range pathsToRemove {
 			// Since these are internal, not much sense in propagating error
 			// to the user, as that will just confuse them with an error about
