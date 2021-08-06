@@ -454,18 +454,17 @@ func TestInotifyOverflow(t *testing.T) {
 	wg.Wait()
 
 	creates := 0
-	overflows := 0
-
-	after := time.After(10 * time.Second)
-	for overflows == 0 && creates < numDirs*numFiles {
+	deadline := time.After(10 * time.Second)
+	for {
 		select {
-		case <-after:
-			t.Fatalf("Not done")
+		case <-deadline:
+			t.Fatalf("Deadline exceeded")
 		case err := <-errChan:
 			t.Fatalf("Got an error from file creator goroutine: %v", err)
 		case err := <-w.Errors:
 			if err == ErrEventOverflow {
-				overflows++
+				// expected final outcome
+				return
 			} else {
 				t.Fatalf("Got an error from watcher: %v", err)
 			}
@@ -474,17 +473,10 @@ func TestInotifyOverflow(t *testing.T) {
 				t.Fatalf("Got an event for an unknown file: %s", evt.Name)
 			}
 			if evt.Op == Create {
-				creates++
+				if creates++; creates == numDirs*numFiles {
+					t.Fatalf("Could not trigger overflow")
+				}
 			}
 		}
-	}
-
-	if creates == numDirs*numFiles {
-		t.Fatalf("Could not trigger overflow")
-	}
-
-	if overflows == 0 {
-		t.Fatalf("No overflow and not enough creates (expected %d, got %d)",
-			numDirs*numFiles, creates)
 	}
 }

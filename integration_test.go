@@ -1254,14 +1254,14 @@ func TestConcurrentRemovalOfWatch(t *testing.T) {
 		done <- true
 	}()
 
-	deadline := time.NewTimer(1 * time.Second)
+	deadline := time.After(1 * time.Second)
 	for i := 0; i < 2; i++ {
 		select {
 		case <-done:
 			continue
 		case err := <-errs:
 			t.Fatalf("error: %s", err)
-		case <-deadline.C:
+		case <-deadline:
 			t.Fatal("deadline exceeded")
 		}
 	}
