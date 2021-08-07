@@ -67,8 +67,9 @@ func NewWatcher() (*Watcher, error) {
 // Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error {
 	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	if w.isClosed {
-		w.mu.Unlock()
 		return nil
 	}
 	w.isClosed = true
@@ -78,11 +79,9 @@ func (w *Watcher) Close() error {
 	for name := range w.watches {
 		pathsToRemove = append(pathsToRemove, name)
 	}
-	w.mu.Unlock()
-	// unlock before calling Remove, which also locks
 
 	for _, name := range pathsToRemove {
-		w.Remove(name)
+		w.remove(name)
 	}
 
 	// send a "quit" message to the reader goroutine
@@ -100,44 +99,50 @@ func (w *Watcher) Add(name string) error {
 	return err
 }
 
-// Remove stops watching the the named file or directory (non-recursively).
+// Remove stops watching the the named file or directory recursively.
 func (w *Watcher) Remove(name string) error {
-	name = filepath.Clean(name)
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	watchfd, ok := w.watches[name]
-	if !ok {
-		return fmt.Errorf("can't remove non-existent kevent watch for: %s", name)
-	}
+	return w.remove(name)
+}
 
-	const registerRemove = unix.EV_DELETE
-	if err := register(w.kq, []int{watchfd}, registerRemove, 0); err != nil {
-		return err
-	}
+func (w *Watcher) remove(name string) error {
 
-	unix.Close(watchfd)
+	pathsToRemove := []string{name}
 
-	isDir := w.paths[watchfd].isDir
-	delete(w.watches, name)
-	delete(w.paths, watchfd)
-	delete(w.dirFlags, name)
+	for len(pathsToRemove) != 0 {
+		name = filepath.Clean(pathsToRemove[0])
+		pathsToRemove = pathsToRemove[1:]
 
-	// Find all watched paths that are in this directory that are not external.
-	if isDir {
-		var pathsToRemove []string
-		for _, path := range w.paths {
-			wdir, _ := filepath.Split(path.name)
-			if filepath.Clean(wdir) == name {
-				if !w.externalWatches[path.name] {
-					pathsToRemove = append(pathsToRemove, path.name)
+		watchfd, ok := w.watches[name]
+		if !ok {
+			return fmt.Errorf("can't remove watch: %w: %s", ErrWatchDoesNotExist, name)
+		}
+
+		const registerRemove = unix.EV_DELETE
+		if err := register(w.kq, []int{watchfd}, registerRemove, 0); err != nil {
+			return err
+		}
+
+		// TODO: propagate errors with proper names
+		unix.Close(watchfd)
+
+		isDir := w.paths[watchfd].isDir
+		delete(w.watches, name)
+		delete(w.paths, watchfd)
+		delete(w.dirFlags, name)
+
+		// Find all watched paths that are in this directory that are not external.
+		if isDir {
+			dirname := name
+			for _, path := range w.paths {
+				wdir, _ := filepath.Split(path.name)
+				if filepath.Clean(wdir) == dirname {
+					if !w.externalWatches[path.name] {
+						pathsToRemove = append(pathsToRemove, path.name)
+					}
 				}
 			}
-		}
-		for _, name := range pathsToRemove {
-			// Since these are internal, not much sense in propagating error
-			// to the user, as that will just confuse them with an error about
-			// a path they did not explicitly watch themselves.
-			w.Remove(name)
 		}
 	}
 

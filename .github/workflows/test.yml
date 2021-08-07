@@ -18,7 +18,6 @@ jobs:
           - '1.15'
           - '1.14'
           - '1.13'
-          - '1.12'
     runs-on: ${{ matrix.os }}
     steps:
       - name: setup Go

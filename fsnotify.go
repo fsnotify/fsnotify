@@ -14,6 +14,9 @@ import (
 	"fmt"
 )
 
+// ErrWatchDoesNotExist is returned by `Watcher.Remove(name)` when the given name is not monitored by the watcher
+var ErrWatchDoesNotExist = errors.New("Watch does not exist")
+
 // Event represents a single file system notification.
 type Event struct {
 	Name string // Relative path to the file or directory.

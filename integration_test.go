@@ -8,6 +8,7 @@
 package fsnotify
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -1206,14 +1207,9 @@ func TestCyclicSymlink(t *testing.T) {
 	watcher.Close()
 }
 
-// TestConcurrentRemovalOfWatch tests that concurrent calls to RemoveWatch do not race.
+// Only one of the concurrent removes succeeds, the others fail with ErrWatchDoesNotExist
 // See https://codereview.appspot.com/103300045/
-// go test -test.run=TestConcurrentRemovalOfWatch -test.cpu=1,1,1,1,1 -race
 func TestConcurrentRemovalOfWatch(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("regression test for race only present on darwin")
-	}
-
 	// Create directory to watch
 	testDir := tempMkdir(t)
 	defer os.RemoveAll(testDir)
@@ -1237,34 +1233,47 @@ func TestConcurrentRemovalOfWatch(t *testing.T) {
 
 	addWatch(t, watcher, testDir)
 
-	errs := make(chan error)
 	// Test that RemoveWatch can be invoked concurrently, with no data races.
+	limit := 4
+	errs := make(chan error, limit)
+	start := make(chan struct{})
 	done := make(chan bool)
-	go func() {
-		if err := watcher.Remove(testDir); err != nil {
-			errs <- err
-		}
-		done <- true
-	}()
-	go func() {
-		if err := watcher.Remove(testDir); err != nil {
-			errs <- err
-		}
-		done <- true
-	}()
 
+	for i := 0; i < limit; i++ {
+		go func() {
+			<-start
+			if err := watcher.Remove(testDir); err != nil {
+				errs <- err
+			}
+			done <- true
+		}()
+	}
+
+	close(start)
 	deadline := time.After(1 * time.Second)
-	for i := 0; i < 2; i++ {
+	for i := 0; i < limit; i++ {
 		select {
 		case <-done:
 			continue
-		case err := <-errs:
-			t.Fatalf("error: %s", err)
 		case <-deadline:
 			t.Fatal("deadline exceeded")
 		}
 	}
 	close(errs)
+
+	// expect all but the first to fail with ErrWatchDoesNotExist
+	expectedFails := 0
+	for err := range errs {
+		// requires go 1.13+
+		if !errors.Is(err, ErrWatchDoesNotExist) {
+			t.Fatalf("error: %s", err)
+		}
+		expectedFails++
+	}
+
+	if expectedFails != limit-1 {
+		t.Fatalf("found %d instead of %d ErrWatchDoesNotExist errors", expectedFails, limit-1)
+	}
 }
 
 func TestClose(t *testing.T) {
