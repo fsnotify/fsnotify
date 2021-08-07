@@ -71,6 +71,8 @@ func (w *Watcher) isClosed() bool {
 }
 
 // Close removes all watches and closes the events channel.
+// XXX: this can fail on inotify with "broken pipe" and "bad file descriptor", it will show up in test runs fairly
+// frequently, e.g. `go test -run=TestRemoveWithClose -count=100`
 func (w *Watcher) Close() error {
 	if w.isClosed() {
 		return nil
