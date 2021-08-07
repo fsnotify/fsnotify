@@ -22,15 +22,16 @@ import (
 
 // Watcher watches a set of files, delivering events to a channel.
 type Watcher struct {
-	Events   chan Event
-	Errors   chan error
-	mu       sync.Mutex // Map access
-	fd       int
-	poller   *fdPoller
-	watches  map[string]*watch // Map of inotify watches (key: path)
-	paths    map[int]string    // Map of watched paths (key: watch descriptor)
-	done     chan struct{}     // Channel for sending a "quit message" to the reader goroutine
-	doneResp chan struct{}     // Channel to respond to Close
+	Events     chan Event
+	Errors     chan error
+	fd         int
+	poller     *fdPoller
+	mu         sync.Mutex        // Used for consistent state updates and access
+	muInternal sync.Mutex        // Used for private access to state
+	watches    map[string]*watch // Map of inotify watches (key: path)
+	paths      map[int]string    // Map of watched paths (key: watch descriptor)
+	done       chan struct{}     // Channel for sending a "quit message" to the reader goroutine
+	doneResp   chan struct{}     // Channel to respond to Close
 }
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
@@ -71,20 +72,20 @@ func (w *Watcher) isClosed() bool {
 }
 
 // Close removes all watches and closes the events channel.
-// XXX: this can fail on inotify with "broken pipe" and "bad file descriptor", it will show up in test runs fairly
-// frequently, e.g. `go test -run=TestRemoveWithClose -count=100`
 func (w *Watcher) Close() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if w.isClosed() {
 		return nil
 	}
 
-	// Send 'close' signal to goroutine, and set the Watcher to closed.
-	close(w.done)
-
 	// Wake up goroutine
 	if err := w.poller.wake(); err != nil {
-		return err
+		return fmt.Errorf("error from poller: %w", err)
 	}
+
+	// Send 'close' signal to goroutine, and set the Watcher to closed.
+	close(w.done)
 
 	// Wait for goroutine to close
 	<-w.doneResp
@@ -94,19 +95,19 @@ func (w *Watcher) Close() error {
 
 // Add starts watching the named file or directory (non-recursively).
 func (w *Watcher) Add(name string) error {
-	name = filepath.Clean(name)
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if w.isClosed() {
-		return errors.New("inotify instance already closed")
+		return ErrWatcherClosed
 	}
 
+	name = filepath.Clean(name)
 	const agnosticEvents = unix.IN_MOVED_TO | unix.IN_MOVED_FROM |
 		unix.IN_CREATE | unix.IN_ATTRIB | unix.IN_MODIFY |
 		unix.IN_MOVE_SELF | unix.IN_DELETE | unix.IN_DELETE_SELF
 
 	var flags uint32 = agnosticEvents
 
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	watchEntry := w.watches[name]
 	if watchEntry != nil {
 		flags |= watchEntry.flags | unix.IN_MASK_ADD
@@ -118,7 +119,9 @@ func (w *Watcher) Add(name string) error {
 
 	if watchEntry == nil {
 		w.watches[name] = &watch{wd: uint32(wd), flags: flags}
+		w.muInternal.Lock()
 		w.paths[wd] = name
+		w.muInternal.Unlock()
 	} else {
 		watchEntry.wd = uint32(wd)
 		watchEntry.flags = flags
@@ -129,11 +132,15 @@ func (w *Watcher) Add(name string) error {
 
 // Remove stops watching the named file or directory (non-recursively).
 func (w *Watcher) Remove(name string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.isClosed() {
+		return ErrWatcherClosed
+	}
+
 	name = filepath.Clean(name)
 
 	// Fetch the watch.
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	watch, ok := w.watches[name]
 
 	// Remove it from inotify.
@@ -144,8 +151,11 @@ func (w *Watcher) Remove(name string) error {
 	// We successfully removed the watch if InotifyRmWatch doesn't return an
 	// error, we need to clean up our internal state to ensure it matches
 	// inotify's kernel state.
+
+	w.muInternal.Lock()
 	delete(w.paths, int(watch.wd))
 	delete(w.watches, name)
+	w.muInternal.Unlock()
 
 	// inotify_rm_watch will return EINVAL if the file has been deleted;
 	// the inotify will already have been removed.
@@ -263,7 +273,7 @@ func (w *Watcher) readEvents() {
 			// doesn't append the filename to the event, but we would like to always fill the
 			// the "Name" field with a valid filename. We retrieve the path of the watch from
 			// the "paths" map.
-			w.mu.Lock()
+			w.muInternal.Lock()
 			name, ok := w.paths[int(raw.Wd)]
 			// IN_DELETE_SELF occurs when the file/directory being watched is removed.
 			// This is a sign to clean up the maps, otherwise we are no longer in sync
@@ -273,7 +283,7 @@ func (w *Watcher) readEvents() {
 				delete(w.paths, int(raw.Wd))
 				delete(w.watches, name)
 			}
-			w.mu.Unlock()
+			w.muInternal.Unlock()
 
 			if nameLen > 0 {
 				// Point "bytes" at the first byte of the filename

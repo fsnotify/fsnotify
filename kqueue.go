@@ -27,7 +27,8 @@ type Watcher struct {
 
 	kq int // File descriptor (as returned by the kqueue() syscall).
 
-	mu              sync.Mutex        // Protects access to watcher data
+	mu              sync.Mutex        // Used for consistent state updates and access
+	muInternal      sync.Mutex        // Used for private access to state
 	watches         map[string]int    // Map of watched file descriptors (key: path).
 	externalWatches map[string]bool   // Map of watches added by user of the library.
 	dirFlags        map[string]uint32 // Map of watched directories to fflags used in kqueue.
@@ -68,10 +69,10 @@ func NewWatcher() (*Watcher, error) {
 func (w *Watcher) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-
 	if w.isClosed {
 		return nil
 	}
+
 	w.isClosed = true
 
 	// copy paths to remove while locked
@@ -93,8 +94,12 @@ func (w *Watcher) Close() error {
 // Add starts watching the named file or directory (non-recursively).
 func (w *Watcher) Add(name string) error {
 	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.isClosed {
+		return ErrWatcherClosed
+	}
+
 	w.externalWatches[name] = true
-	w.mu.Unlock()
 	_, err := w.addWatch(name, noteAllEvents)
 	return err
 }
@@ -103,6 +108,10 @@ func (w *Watcher) Add(name string) error {
 func (w *Watcher) Remove(name string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if w.isClosed {
+		return ErrWatcherClosed
+	}
+
 	return w.remove(name)
 }
 
@@ -114,35 +123,41 @@ func (w *Watcher) remove(name string) error {
 		name = filepath.Clean(pathsToRemove[0])
 		pathsToRemove = pathsToRemove[1:]
 
-		watchfd, ok := w.watches[name]
-		if !ok {
-			return fmt.Errorf("can't remove watch: %w: %s", ErrWatchDoesNotExist, name)
-		}
+		if err := func() error {
+			w.muInternal.Lock()
+			defer w.muInternal.Unlock()
+			watchfd, ok := w.watches[name]
+			if !ok {
+				return fmt.Errorf("can't remove watch: %w: %s", ErrWatchDoesNotExist, name)
+			}
 
-		const registerRemove = unix.EV_DELETE
-		if err := register(w.kq, []int{watchfd}, registerRemove, 0); err != nil {
-			return err
-		}
+			const registerRemove = unix.EV_DELETE
+			if err := register(w.kq, []int{watchfd}, registerRemove, 0); err != nil {
+				return fmt.Errorf("can't remove watch: %w: %s", err, name)
+			}
 
-		// TODO: propagate errors with proper names
-		unix.Close(watchfd)
+			unix.Close(watchfd)
 
-		isDir := w.paths[watchfd].isDir
-		delete(w.watches, name)
-		delete(w.paths, watchfd)
-		delete(w.dirFlags, name)
+			isDir := w.paths[watchfd].isDir
+			delete(w.watches, name)
+			delete(w.paths, watchfd)
+			delete(w.dirFlags, name)
 
-		// Find all watched paths that are in this directory that are not external.
-		if isDir {
-			dirname := name
-			for _, path := range w.paths {
-				wdir, _ := filepath.Split(path.name)
-				if filepath.Clean(wdir) == dirname {
-					if !w.externalWatches[path.name] {
-						pathsToRemove = append(pathsToRemove, path.name)
+			// Find all watched paths that are in this directory that are not external.
+			if isDir {
+				dirname := name
+				for _, path := range w.paths {
+					wdir, _ := filepath.Split(path.name)
+					if filepath.Clean(wdir) == dirname {
+						if !w.externalWatches[path.name] {
+							pathsToRemove = append(pathsToRemove, path.name)
+						}
 					}
 				}
 			}
+			return nil
+		}(); err != nil {
+			return err
 		}
 	}
 
@@ -159,13 +174,13 @@ var keventWaitTime = durationToTimespec(100 * time.Millisecond)
 // The flags are interpreted as described in kevent(2).
 // Returns the real path to the file which was added, if any, which may be different from the one passed in the case of symlinks.
 func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
+	w.muInternal.Lock()
+	defer w.muInternal.Unlock()
 	var isDir bool
 	// Make ./name and name equivalent
 	name = filepath.Clean(name)
 
-	w.mu.Lock()
 	if w.isClosed {
-		w.mu.Unlock()
 		return "", errors.New("kevent instance already closed")
 	}
 	watchfd, alreadyWatching := w.watches[name]
@@ -173,7 +188,6 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 	if alreadyWatching {
 		isDir = w.paths[watchfd].isDir
 	}
-	w.mu.Unlock()
 
 	if !alreadyWatching {
 		fi, err := os.Lstat(name)
@@ -203,9 +217,7 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 				return "", nil
 			}
 
-			w.mu.Lock()
 			_, alreadyWatching = w.watches[name]
-			w.mu.Unlock()
 
 			if alreadyWatching {
 				return name, nil
@@ -232,22 +244,18 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 	}
 
 	if !alreadyWatching {
-		w.mu.Lock()
 		w.watches[name] = watchfd
 		w.paths[watchfd] = pathInfo{name: name, isDir: isDir}
-		w.mu.Unlock()
 	}
 
 	if isDir {
 		// Watch the directory if it has not been watched before,
 		// or if it was watched before, but perhaps only a NOTE_DELETE (watchDirectoryFiles)
-		w.mu.Lock()
 
 		watchDir := (flags&unix.NOTE_WRITE) == unix.NOTE_WRITE &&
 			(!alreadyWatching || (w.dirFlags[name]&unix.NOTE_WRITE) != unix.NOTE_WRITE)
 		// Store flags so this watch can be updated later
 		w.dirFlags[name] = flags
-		w.mu.Unlock()
 
 		if watchDir {
 			if err := w.watchDirectoryFiles(name); err != nil {
@@ -289,63 +297,64 @@ loop:
 			kevent := &kevents[0]
 			watchfd := int(kevent.Ident)
 			mask := uint32(kevent.Fflags)
-			w.mu.Lock()
-			path := w.paths[watchfd]
-			w.mu.Unlock()
-			event := newEvent(path.name, mask)
+			if done := func() bool {
+				w.muInternal.Lock()
+				defer w.muInternal.Unlock()
+				path := w.paths[watchfd]
+				event := newEvent(path.name, mask)
 
-			if path.isDir && !(event.Op&Remove == Remove) {
-				// Double check to make sure the directory exists. This can happen when
-				// we do a rm -fr on a recursively watched folders and we receive a
-				// modification event first but the folder has been deleted and later
-				// receive the delete event
-				if _, err := os.Lstat(event.Name); os.IsNotExist(err) {
-					// mark is as delete event
-					event.Op |= Remove
+				if path.isDir && !(event.Op&Remove == Remove) {
+					// Double check to make sure the directory exists. This can happen when
+					// we do a rm -fr on a recursively watched folders and we receive a
+					// modification event first but the folder has been deleted and later
+					// receive the delete event
+					if _, err := os.Lstat(event.Name); os.IsNotExist(err) {
+						// mark is as delete event
+						event.Op |= Remove
+					}
 				}
-			}
 
-			if event.Op&Rename == Rename || event.Op&Remove == Remove {
-				w.Remove(event.Name)
-				w.mu.Lock()
-				delete(w.fileExists, event.Name)
-				w.mu.Unlock()
-			}
-
-			if path.isDir && event.Op&Write == Write && !(event.Op&Remove == Remove) {
-				w.sendDirectoryChangeEvents(event.Name)
-			} else {
-				// Send the event on the Events channel.
-				select {
-				case w.Events <- event:
-				case <-w.done:
-					break loop
+				if event.Op&Rename == Rename || event.Op&Remove == Remove {
+					w.Remove(event.Name)
+					delete(w.fileExists, event.Name)
 				}
-			}
 
-			if event.Op&Remove == Remove {
-				// Look for a file that may have overwritten this.
-				// For example, mv f1 f2 will delete f2, then create f2.
-				if path.isDir {
-					fileDir := filepath.Clean(event.Name)
-					w.mu.Lock()
-					_, found := w.watches[fileDir]
-					w.mu.Unlock()
-					if found {
-						// make sure the directory exists before we watch for changes. When we
-						// do a recursive watch and perform rm -fr, the parent directory might
-						// have gone missing, ignore the missing directory and let the
-						// upcoming delete event remove the watch from the parent directory.
-						if _, err := os.Lstat(fileDir); err == nil {
-							w.sendDirectoryChangeEvents(fileDir)
+				if path.isDir && event.Op&Write == Write && !(event.Op&Remove == Remove) {
+					w.sendDirectoryChangeEvents(event.Name)
+				} else {
+					// Send the event on the Events channel.
+					select {
+					case w.Events <- event:
+					case <-w.done:
+						return true
+					}
+				}
+
+				if event.Op&Remove == Remove {
+					// Look for a file that may have overwritten this.
+					// For example, mv f1 f2 will delete f2, then create f2.
+					if path.isDir {
+						fileDir := filepath.Clean(event.Name)
+						_, found := w.watches[fileDir]
+						if found {
+							// make sure the directory exists before we watch for changes. When we
+							// do a recursive watch and perform rm -fr, the parent directory might
+							// have gone missing, ignore the missing directory and let the
+							// upcoming delete event remove the watch from the parent directory.
+							if _, err := os.Lstat(fileDir); err == nil {
+								w.sendDirectoryChangeEvents(fileDir)
+							}
+						}
+					} else {
+						filePath := filepath.Clean(event.Name)
+						if fileInfo, err := os.Lstat(filePath); err == nil {
+							w.sendFileCreatedEventIfNew(filePath, fileInfo)
 						}
 					}
-				} else {
-					filePath := filepath.Clean(event.Name)
-					if fileInfo, err := os.Lstat(filePath); err == nil {
-						w.sendFileCreatedEventIfNew(filePath, fileInfo)
-					}
 				}
+				return false
+			}(); done {
+				break loop
 			}
 
 			// Move to next event
@@ -403,9 +412,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 			return err
 		}
 
-		w.mu.Lock()
 		w.fileExists[filePath] = true
-		w.mu.Unlock()
 	}
 
 	return nil
@@ -439,9 +446,7 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 
 // sendFileCreatedEvent sends a create event if the file isn't already being tracked.
 func (w *Watcher) sendFileCreatedEventIfNew(filePath string, fileInfo os.FileInfo) (err error) {
-	w.mu.Lock()
 	_, doesExist := w.fileExists[filePath]
-	w.mu.Unlock()
 	if !doesExist {
 		// Send create event
 		select {
@@ -457,9 +462,7 @@ func (w *Watcher) sendFileCreatedEventIfNew(filePath string, fileInfo os.FileInf
 		return err
 	}
 
-	w.mu.Lock()
 	w.fileExists[filePath] = true
-	w.mu.Unlock()
 
 	return nil
 }
@@ -468,9 +471,7 @@ func (w *Watcher) internalWatch(name string, fileInfo os.FileInfo) (string, erro
 	if fileInfo.IsDir() {
 		// mimic Linux providing delete events for subdirectories
 		// but preserve the flags used if currently watching subdirectory
-		w.mu.Lock()
 		flags := w.dirFlags[name]
-		w.mu.Unlock()
 
 		flags |= unix.NOTE_DELETE | unix.NOTE_RENAME
 		return w.addWatch(name, flags)

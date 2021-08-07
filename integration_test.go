@@ -1306,6 +1306,7 @@ func TestRemoveWithClose(t *testing.T) {
 	if err := watcher.Add(testDir); err != nil {
 		t.Fatalf("Expected no error on Add, got %v", err)
 	}
+
 	startC, stopC := make(chan struct{}), make(chan struct{})
 	errC := make(chan error)
 	go func() {

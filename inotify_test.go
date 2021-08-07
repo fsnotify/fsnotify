@@ -8,6 +8,7 @@
 package fsnotify
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -325,14 +326,42 @@ func TestInotifyRemoveTwice(t *testing.T) {
 		t.Fatalf("no error on removing invalid file")
 	}
 
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if len(w.watches) != 0 {
-		t.Fatalf("Expected watches len is 0, but got: %d, %v", len(w.watches), w.watches)
+	func() {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		if len(w.watches) != 0 {
+			t.Fatalf("Expected watches len is 0, but got: %d, %v", len(w.watches), w.watches)
+		}
+		if len(w.paths) != 0 {
+			t.Fatalf("Expected paths len is 0, but got: %d, %v", len(w.paths), w.paths)
+		}
+	}()
+}
+
+/// Closing a watcher is idempotent and causes subsequent Add() and Remove() to fail
+func TestInotifyClose(t *testing.T) {
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("Failed to create watcher: %v", err)
 	}
-	if len(w.paths) != 0 {
-		t.Fatalf("Expected paths len is 0, but got: %d, %v", len(w.paths), w.paths)
+	// the first close shuts down the Watcher
+	if err := w.Close(); err != nil {
+		t.Fatalf("Failed to close watcher: %v", err)
 	}
+	// the second just returns nil
+	if err := w.Close(); err != nil {
+		t.Fatalf("Failed to close watcher: %v", err)
+	}
+
+	err = w.Add("junk")
+	if !errors.Is(err, ErrWatcherClosed) {
+		t.Fatalf("Add did not error as expected: %v", err)
+	}
+	err = w.Remove("junk")
+	if !errors.Is(err, ErrWatcherClosed) {
+		t.Fatalf("Remove did not error as expected: %v", err)
+	}
+
 }
 
 func TestInotifyInnerMapLength(t *testing.T) {
@@ -375,14 +404,16 @@ func TestInotifyInnerMapLength(t *testing.T) {
 	<-w.Events                          // consume Remove event
 	<-time.After(50 * time.Millisecond) // wait IN_IGNORE propagated
 
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if len(w.watches) != 0 {
-		t.Fatalf("Expected watches len is 0, but got: %d, %v", len(w.watches), w.watches)
-	}
-	if len(w.paths) != 0 {
-		t.Fatalf("Expected paths len is 0, but got: %d, %v", len(w.paths), w.paths)
-	}
+	func() {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		if len(w.watches) != 0 {
+			t.Fatalf("Expected watches len is 0, but got: %d, %v", len(w.watches), w.watches)
+		}
+		if len(w.paths) != 0 {
+			t.Fatalf("Expected paths len is 0, but got: %d, %v", len(w.paths), w.paths)
+		}
+	}()
 	w.Close()
 	if err := <-errs; err != nil {
 		t.Fatalf("error received: %s", err)

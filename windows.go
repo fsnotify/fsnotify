@@ -50,9 +50,12 @@ func NewWatcher() (*Watcher, error) {
 
 // Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if w.isClosed {
 		return nil
 	}
+
 	w.isClosed = true
 
 	// Send "quit" message to the reader goroutine
@@ -66,9 +69,12 @@ func (w *Watcher) Close() error {
 
 // Add starts watching the named file or directory (non-recursively).
 func (w *Watcher) Add(name string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if w.isClosed {
-		return errors.New("watcher already closed")
+		return ErrWatcherClosed
 	}
+
 	in := &input{
 		op:    opAddWatch,
 		path:  filepath.Clean(name),
@@ -84,6 +90,12 @@ func (w *Watcher) Add(name string) error {
 
 // Remove stops watching the the named file or directory (non-recursively).
 func (w *Watcher) Remove(name string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.isClosed {
+		return ErrWatcherClosed
+	}
+
 	in := &input{
 		op:    opRemoveWatch,
 		path:  filepath.Clean(name),
@@ -250,9 +262,7 @@ func (w *Watcher) addWatch(pathname string, flags uint64) error {
 	if err != nil {
 		return err
 	}
-	w.mu.Lock()
 	watchEntry := w.watches.get(ino)
-	w.mu.Unlock()
 	if watchEntry == nil {
 		if _, e := syscall.CreateIoCompletionPort(ino.handle, w.port, 0, 0); e != nil {
 			syscall.CloseHandle(ino.handle)
