@@ -88,18 +88,21 @@ func (w *Watcher) Close() error {
 	return nil
 }
 
+const agnosticEvents = unix.IN_MOVED_TO | unix.IN_MOVED_FROM |
+	unix.IN_CREATE | unix.IN_ATTRIB | unix.IN_MODIFY |
+	unix.IN_MOVE_SELF | unix.IN_DELETE | unix.IN_DELETE_SELF | unix.IN_DONT_FOLLOW
+
 // AddRaw starts watching the named file or directory (non-recursively). Symlinks are not implicitly resolved.
 func (w *Watcher) AddRaw(name string) error {
+	return w.AddWatch(name, agnosticEvents)
+}
+
+// AddWatch starts watching the named file or directory (non-recursively) for given flags. Symlinks are not implicitly resolved.
+func (w *Watcher) AddWatch(name string, flags uint32) (string, error) {
 	name = filepath.Clean(name)
 	if w.isClosed() {
 		return errors.New("inotify instance already closed")
 	}
-
-	const agnosticEvents = unix.IN_MOVED_TO | unix.IN_MOVED_FROM |
-		unix.IN_CREATE | unix.IN_ATTRIB | unix.IN_MODIFY |
-		unix.IN_MOVE_SELF | unix.IN_DELETE | unix.IN_DELETE_SELF | unix.IN_DONT_FOLLOW
-
-	var flags uint32 = agnosticEvents
 
 	w.mu.Lock()
 	defer w.mu.Unlock()
