@@ -1076,6 +1076,53 @@ func TestSymlinkNotResolved(t *testing.T) {
 
 }
 
+func TestSymlinkWatchRemoval(t *testing.T) {
+	testDir := tempMkdir(t)
+	file1 := filepath.Join(testDir, "file1")
+	link := filepath.Join(testDir, "link")
+
+	f1, err := os.Create(file1)
+	if err != nil {
+		t.Fatalf("Failed to create file1: %s", err)
+	}
+	defer f1.Close()
+
+	// symlink works for Windows too
+	if err := os.Symlink(file1, link); err != nil {
+		t.Fatalf("Failed to create symlink: %s", err)
+	}
+
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("Failed to create watcher")
+	}
+
+	// if we AddRaw a symlink
+	err = w.AddRaw(link)
+	if err != nil {
+		t.Fatalf("Failed to add raw symlink: %s", err)
+	}
+
+	// that path name will be watched and can be unwatched
+	err = w.Remove(link)
+	if err != nil {
+		t.Fatalf("Failed to remove link: %s", err)
+	}
+
+	// but if we Add a symlink
+	err = w.Add(link)
+	if err != nil {
+		t.Fatalf("Failed to add link: %s", err)
+	}
+
+	// what should we do if a user tries to Remove it?
+	err = w.Remove(link)
+	if err != nil {
+		t.Fatalf("Failed to remove link: %s", err)
+	}
+
+}
+
 func TestFsnotifyFakeSymlink(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlinks don't work on Windows.")
