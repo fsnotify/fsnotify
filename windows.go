@@ -66,11 +66,11 @@ func (w *Watcher) Close() error {
 
 // AddRaw starts watching the named file or directory (non-recursively). Symlinks are not implicitly resolved.
 func (w *Watcher) AddRaw(name string) error {
-	return w.AddWatch(name, sysFSALLEVENTS)
+	return w.AddOSWatch(name, sysFSALLEVENTS)
 }
 
-// AddWatch starts watching the named file or directory (non-recursively) for given flags. Symlinks are not implicitly resolved.
-func (w *Watcher) AddWatch(name string, flags uint32) error {
+// AddOSWatch starts watching the named file or directory (non-recursively) for special OS flags. Symlinks are not implicitly resolved.
+func (w *Watcher) AddOSWatch(name string, flags uint32) error {
 	if w.isClosed {
 		return errors.New("watcher already closed")
 	}

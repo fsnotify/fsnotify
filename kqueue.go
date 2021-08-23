@@ -154,10 +154,16 @@ const noteAllEvents = unix.NOTE_DELETE | unix.NOTE_WRITE | unix.NOTE_ATTRIB | un
 // keventWaitTime to block on each read from kevent
 var keventWaitTime = durationToTimespec(100 * time.Millisecond)
 
-// AddWatch adds name to the watched file set.
+// AddOSWatch adds name to the watched file for special OS flags.
+func (w *Watcher) AddOSWatch(name string, flags uint32) error {
+	_, err := w.addWatch(name, flags)
+	return err
+}
+
+// addWatch adds name to the watched file.
 // The flags are interpreted as described in kevent(2).
 // Returns the real path to the file which was added, if any, which may be different from the one passed in the case of symlinks.
-func (w *Watcher) AddWatch(name string, flags uint32) (string, error) {
+func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 	var isDir bool
 	// Make ./name and name equivalent
 	name = filepath.Clean(name)
