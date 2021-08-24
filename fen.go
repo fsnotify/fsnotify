@@ -27,8 +27,8 @@ func (w *Watcher) Close() error {
 	return nil
 }
 
-// AddRaw starts watching the named file or directory (non-recursively). Symlinks are not implicitly resolved.
-func (w *Watcher) AddRaw(name string) error {
+// Add starts watching the named file or directory (non-recursively).
+func (w *Watcher) Add(name string) error {
 	return nil
 }
 

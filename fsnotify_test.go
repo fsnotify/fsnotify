@@ -52,7 +52,7 @@ func TestWatcherClose(t *testing.T) {
 
 	name := tempMkFile(t, "")
 	w := newWatcher(t)
-	err := w.AddRaw(name)
+	err := w.Add(name)
 	if err != nil {
 		t.Fatal(err)
 	}
