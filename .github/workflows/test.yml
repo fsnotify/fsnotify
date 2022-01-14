@@ -33,6 +33,8 @@ jobs:
     steps:
       - name: setup Go
         uses: actions/setup-go@v2
+        with: 
+          go-version: '1.17'
 
       - name: checkout
         uses: actions/checkout@v2
@@ -49,7 +51,7 @@ jobs:
         uses: golangci/golangci-lint-action@v2
         continue-on-error: true
         with:
-          version: v2.5.2
-          # this is here as a workaround for https://github.com/golangci/golangci-lint-action/issues/244
-          skip-pkg-cache: true
+          version: latest
+          skip-go-installation: true
+          
 
