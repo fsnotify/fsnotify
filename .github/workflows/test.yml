@@ -1,8 +1,5 @@
 name: test
-on:
-  push:
-  pull_request:
-
+on: [push]
 jobs:
   test:
     strategy:
@@ -13,17 +10,15 @@ jobs:
           - macos-latest
           - windows-latest
         go:
+          - '1.18.0-beta1'
           - '1.17'
           - '1.16'
-          - '1.15'
-          - '1.14'
-          - '1.13'
-          - '1.12'
     runs-on: ${{ matrix.os }}
     steps:
       - name: setup Go
         uses: actions/setup-go@v2
         with:
+          stable: 'false'
           go-version: ${{ matrix.go }}
 
       - name: checkout
@@ -38,6 +33,8 @@ jobs:
     steps:
       - name: setup Go
         uses: actions/setup-go@v2
+        with: 
+          go-version: '1.17'
 
       - name: checkout
         uses: actions/checkout@v2
@@ -54,7 +51,7 @@ jobs:
         uses: golangci/golangci-lint-action@v2
         continue-on-error: true
         with:
-          version: v1.41.1
-          # this is here as a workaround for https://github.com/golangci/golangci-lint-action/issues/244
-          skip-pkg-cache: true
+          version: latest
+          skip-go-installation: true
+          
 
