@@ -174,19 +174,19 @@ func TestPollerConcurrent(t *testing.T) {
 	oks := make(chan bool)
 	live := make(chan bool)
 	defer close(live)
-	go func() {
+	go func(tb testing.TB) {
 		defer close(oks)
 		for {
 			ok, err := poller.wait()
 			if err != nil {
-				t.Fatalf("poller failed: %v", err)
+				tb.Fatalf("poller failed: %v", err)
 			}
 			oks <- ok
 			if !<-live {
 				return
 			}
 		}
-	}()
+	}(t)
 
 	// Try a write
 	select {

@@ -75,11 +75,11 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	watcher := newWatcher(t)
 
 	// Receive errors on the error channel on a separate goroutine
-	go func() {
+	go func(tb testing.TB) {
 		for err := range watcher.Errors {
-			t.Fatalf("error received: %s", err)
+			tb.Fatalf("error received: %s", err)
 		}
-	}()
+	}(t)
 
 	// Create directory to watch
 	testDir := tempMkdir(t)
@@ -837,14 +837,14 @@ func TestRemovalOfWatch(t *testing.T) {
 		t.Fatalf("Could not remove the watch: %v\n", err)
 	}
 
-	go func() {
+	go func(tb testing.TB) {
 		select {
 		case ev := <-watcher.Events:
-			t.Fatalf("We received event: %v\n", ev)
+			tb.Fatalf("We received event: %v\n", ev)
 		case <-time.After(500 * time.Millisecond):
-			t.Log("No event received, as expected.")
+			tb.Log("No event received, as expected.")
 		}
-	}()
+	}(t)
 
 	time.Sleep(200 * time.Millisecond)
 	// Modify the file outside of the watched dir

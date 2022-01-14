@@ -336,11 +336,11 @@ func TestInotifyInnerMapLength(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to add testFile: %v", err)
 	}
-	go func() {
+	go func(tb testing.TB) {
 		for err := range w.Errors {
-			t.Fatalf("error received: %s", err)
+			tb.Fatalf("error received: %s", err)
 		}
-	}()
+	}(t)
 
 	err = os.Remove(testFile)
 	if err != nil {
