@@ -1,6 +1,8 @@
 # File system notifications for Go
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/fsnotify/fsnotify.svg)](https://pkg.go.dev/github.com/fsnotify/fsnotify) [![Go Report Card](https://goreportcard.com/badge/github.com/fsnotify/fsnotify)](https://goreportcard.com/report/github.com/fsnotify/fsnotify)
+[![Go Reference](https://pkg.go.dev/badge/github.com/fsnotify/fsnotify.svg)](https://pkg.go.dev/github.com/fsnotify/fsnotify) [![Go Report Card](https://goreportcard.com/badge/github.com/fsnotify/fsnotify)](https://goreportcard.com/report/github.com/fsnotify/fsnotify) [![Maintainers Wanted](https://img.shields.io/badge/maintainers-wanted-red.svg)](https://github.com/fsnotify/fsnotify/issues/183)
+
+
 
 fsnotify utilizes [golang.org/x/sys](https://godoc.org/golang.org/x/sys) rather than `syscall` from the standard library. 
 
