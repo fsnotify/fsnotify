@@ -904,7 +904,7 @@ func TestRemovalOfWatchTwice(t *testing.T) {
 		t.Fatalf("Removal of already removed watcher should have failed: %v\n", err)
 	}
 	if !strings.HasPrefix(err.Error(), "can't remove non-existent ") {
-		t.Fatalf("Should be fail with removing non-existence watcher: %v\n", err)
+		t.Fatalf(`Expected error to start with "can't remove non-existent ": %v`, err)
 	}
 }
 
