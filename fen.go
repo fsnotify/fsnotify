@@ -23,8 +23,7 @@ type Watcher struct {
 
 	port *unix.EventPort
 
-	done     chan struct{} // Channel for sending a "quit message" to the reader goroutine
-	doneResp chan struct{} // Channel to respond to Close
+	done chan struct{} // Channel for sending a "quit message" to the reader goroutine
 }
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
@@ -39,7 +38,6 @@ func NewWatcher() (*Watcher, error) {
 		return nil, err
 	}
 	w.done = make(chan struct{})
-	w.doneResp = make(chan struct{})
 
 	go w.readEvents()
 	return w, nil
@@ -83,7 +81,6 @@ func (w *Watcher) Close() error {
 	}
 	close(w.done)
 	w.port.Close()
-	<-w.doneResp
 	return nil
 }
 
@@ -129,7 +126,6 @@ func (w *Watcher) Remove(name string) error {
 func (w *Watcher) readEvents() {
 	// If this function returns, the watcher has been closed and we can
 	// close these channels
-	defer close(w.doneResp)
 	defer close(w.Errors)
 	defer close(w.Events)
 
