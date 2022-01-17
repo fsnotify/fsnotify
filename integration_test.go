@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -871,6 +872,40 @@ func TestRemovalOfWatch(t *testing.T) {
 
 	// wait for all groutines to finish.
 	wg.Wait()
+}
+
+func TestRemovalOfWatchTwice(t *testing.T) {
+	// Create directory to watch
+	testDir := tempMkdir(t)
+	defer os.RemoveAll(testDir)
+
+	// Create a file before watching directory
+	testFileAlreadyExists := filepath.Join(testDir, "TestFsnotifyEventsExisting.testfile")
+	{
+		var f *os.File
+		f, err := os.OpenFile(testFileAlreadyExists, os.O_WRONLY|os.O_CREATE, 0666)
+		if err != nil {
+			t.Fatalf("creating test file failed: %s", err)
+		}
+		f.Sync()
+		f.Close()
+	}
+
+	watcher := newWatcher(t)
+	defer watcher.Close()
+
+	addWatch(t, watcher, testDir)
+
+	var err error
+	if err = watcher.Remove(testDir); err != nil {
+		t.Fatalf("Could not remove the watch: %v\n", err)
+	}
+	if err = watcher.Remove(testDir); err == nil {
+		t.Fatalf("Shold: %v\n", err)
+	}
+	if !strings.HasPrefix(err.Error(), "can't remove non-existent watch for:") {
+		t.Fatalf("Should be fail with removing non-existence watcher: %v\n", err)
+	}
 }
 
 func TestFsnotifyAttrib(t *testing.T) {
