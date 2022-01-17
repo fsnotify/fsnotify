@@ -30,6 +30,7 @@ jobs:
 
   testFreeBSD:
     runs-on: macos-10.15
+    name: test (freebsd, 1.17)
     steps:
       - uses: actions/checkout@v2
       - name: test (freebsd, 1.17)
