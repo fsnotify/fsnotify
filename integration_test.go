@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -75,9 +76,12 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	watcher := newWatcher(t)
 
 	// Receive errors on the error channel on a separate goroutine
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for err := range watcher.Errors {
-			t.Fatalf("error received: %s", err)
+			t.Errorf("error received: %s", err)
 		}
 	}()
 
@@ -187,6 +191,9 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("event stream was not closed after 2 seconds")
 	}
+
+	// wait for all groutines to finish.
+	wg.Wait()
 }
 
 func TestFsnotifyMultipleCreates(t *testing.T) {
@@ -837,10 +844,13 @@ func TestRemovalOfWatch(t *testing.T) {
 		t.Fatalf("Could not remove the watch: %v\n", err)
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		select {
 		case ev := <-watcher.Events:
-			t.Fatalf("We received event: %v\n", ev)
+			t.Errorf("We received event: %v\n", ev)
 		case <-time.After(500 * time.Millisecond):
 			t.Log("No event received, as expected.")
 		}
@@ -858,7 +868,9 @@ func TestRemovalOfWatch(t *testing.T) {
 	if err := os.Chmod(testFileAlreadyExists, 0700); err != nil {
 		t.Fatalf("chmod failed: %s", err)
 	}
-	time.Sleep(400 * time.Millisecond)
+
+	// wait for all groutines to finish.
+	wg.Wait()
 }
 
 func TestFsnotifyAttrib(t *testing.T) {
