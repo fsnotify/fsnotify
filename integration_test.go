@@ -1274,6 +1274,64 @@ func TestRemoveWithClose(t *testing.T) {
 	}
 }
 
+// testRemoveChildCleanly tests to see if file handles are correctly released
+// regression test for #42 see https://gist.github.com/timshannon/603f92824c5294269797
+func TestRemoveChildCleanly(t *testing.T) {
+	watcher := newWatcher(t)
+	defer watcher.Close()
+
+	// consume the events
+	go func() {
+		for {
+			select {
+			case <-watcher.Errors:
+			case <-watcher.Events:
+			}
+		}
+	}()
+
+	// create dir
+	testDir := tempMkdir(t)
+	defer os.RemoveAll(testDir)
+
+	// start watching dir
+	if err := watcher.Add(testDir); err != nil {
+		t.Errorf("Expected no error on Add, got %v", err)
+	}
+
+	// create child dir
+	testSubDir := filepath.Join(testDir, "child")
+	// Create sub-directory
+	if err := os.Mkdir(testSubDir, 0777); err != nil {
+		t.Errorf("failed to create test sub-directory: %s", err)
+	}
+
+	// start watching child
+	if err := watcher.Add(testSubDir); err != nil {
+		t.Errorf("Expected no error on Add, got %v", err)
+	}
+
+	// stop watching child
+	if err := watcher.Remove(testSubDir); err != nil {
+		t.Errorf("Expected no error on Remove, got %v", err)
+	}
+
+	// delete child dir
+	if err := os.RemoveAll(testSubDir); err != nil {
+		t.Errorf("failed to remove test sub-directory: %s", err)
+	}
+
+	// Child dir should no longer exist
+	if _, err := os.Stat(testSubDir); err != nil {
+		if _, ok := err.(*os.PathError); !ok {
+			t.Errorf("Expected a PathError, got %v", err)
+		}
+	} else {
+		t.Errorf("testSubDir (%v) should no longer exist!", testSubDir)
+	}
+
+}
+
 func testRename(file1, file2 string) error {
 	switch runtime.GOOS {
 	case "windows", "plan9":
