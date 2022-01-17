@@ -903,7 +903,7 @@ func TestRemovalOfWatchTwice(t *testing.T) {
 	if err = watcher.Remove(testDir); err == nil {
 		t.Fatalf("Shold: %v\n", err)
 	}
-	if !strings.HasPrefix(err.Error(), "can't remove non-existent watch for:") {
+	if !strings.HasPrefix(err.Error(), "can't remove non-existent ") {
 		t.Fatalf("Should be fail with removing non-existence watcher: %v\n", err)
 	}
 }
