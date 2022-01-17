@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-func TestRemovalOfWatchTwice(t *testing.T) {
+func TestWindowsRemWatch(t *testing.T) {
 	// Create directory to watch
 	testDir := tempMkdir(t)
 	defer os.RemoveAll(testDir)
@@ -38,6 +38,6 @@ func TestRemovalOfWatchTwice(t *testing.T) {
 		t.Fatalf("Could not remove the watch: %v\n", err)
 	}
 	if err := watcher.remWatch(testDir); err == nil {
-		t.Fatalf("Should be fail with removing non-existence watcher\n")
+		t.Fatal("Should be fail with closed handle\n")
 	}
 }
