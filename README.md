@@ -6,7 +6,7 @@
 
 fsnotify utilizes [golang.org/x/sys](https://godoc.org/golang.org/x/sys) rather than `syscall` from the standard library. 
 
-Cross platform: Windows, Linux, BSD and macOS.
+Cross platform: Windows, Linux, BSD, macOS, and Solaris/illumos.
 
 | Adapter               | OS                               | Status                                                                                                                          |
 | --------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -14,7 +14,7 @@ Cross platform: Windows, Linux, BSD and macOS.
 | kqueue                | BSD, macOS, iOS\*                | Supported |
 | ReadDirectoryChangesW | Windows                          | Supported |
 | FSEvents              | macOS                            | [Planned](https://github.com/fsnotify/fsnotify/issues/11)                                                                       |
-| FEN                   | Solaris 11                       | [In Progress](https://github.com/fsnotify/fsnotify/pull/371)                                                                   |
+| FEN                   | Solaris 11, illumos              | Supported |
 | fanotify              | Linux 2.6.37+                    | [Maybe](https://github.com/fsnotify/fsnotify/issues/114)                                                                      |
 | USN Journals          | Windows                          | [Maybe](https://github.com/fsnotify/fsnotify/issues/53)                                                                         |
 | Polling               | *All*                            | [Maybe](https://github.com/fsnotify/fsnotify/issues/9)                                                                          |
