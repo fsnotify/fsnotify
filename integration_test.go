@@ -897,7 +897,7 @@ func TestRemovalOfWatchTwice(t *testing.T) {
 	if err := watcher.Remove(testDir); err != nil {
 		t.Fatalf("Could not remove the watch: %v\n", err)
 	}
-	if err := watcher.Remove(testDir); err == nil {
+	if err := watcher.remWatch(testDir); err == nil {
 		t.Fatalf("Should be fail with removing non-existence watcher\n")
 	}
 }
