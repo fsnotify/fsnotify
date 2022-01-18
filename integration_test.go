@@ -1281,10 +1281,16 @@ func TestRemoveChildCleanly(t *testing.T) {
 	defer watcher.Close()
 
 	// consume the events
+	var werr error
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+	loop:
 		for {
 			select {
-			case <-watcher.Errors:
+			case werr = <-watcher.Errors:
+				break loop
 			case <-watcher.Events:
 			}
 		}
@@ -1303,7 +1309,7 @@ func TestRemoveChildCleanly(t *testing.T) {
 	testSubDir := filepath.Join(testDir, "child")
 	// Create sub-directory
 	if err := os.Mkdir(testSubDir, 0777); err != nil {
-		t.Errorf("failed to create test sub-directory: %s", err)
+		t.Errorf("Failed to create test sub-directory: %v", err)
 	}
 
 	// start watching child
@@ -1318,7 +1324,7 @@ func TestRemoveChildCleanly(t *testing.T) {
 
 	// delete child dir
 	if err := os.RemoveAll(testSubDir); err != nil {
-		t.Errorf("failed to remove test sub-directory: %s", err)
+		t.Errorf("failed to remove test sub-directory: %v", err)
 	}
 
 	// Child dir should no longer exist
@@ -1330,6 +1336,12 @@ func TestRemoveChildCleanly(t *testing.T) {
 		t.Errorf("testSubDir (%v) should no longer exist!", testSubDir)
 	}
 
+	watcher.Close()
+	wg.Wait()
+
+	if werr != nil {
+		t.Fatal(werr)
+	}
 }
 
 func testRename(file1, file2 string) error {
