@@ -200,8 +200,9 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 	var toSend *Event
 	reRegister := true
 
-	switch {
-	case events&unix.FILE_MODIFIED == unix.FILE_MODIFIED:
+	fmt.Printf("NAHUM: %b\n", events)
+
+	if events&unix.FILE_MODIFIED == unix.FILE_MODIFIED{
 		if fmode.IsDir() {
 			if err := w.updateDirectory(path); err != nil {
 				return err
@@ -212,25 +213,29 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 				return nil
 			}
 		}
-	case events&unix.FILE_ATTRIB == unix.FILE_ATTRIB:
+	}
+	if events&unix.FILE_ATTRIB == unix.FILE_ATTRIB{
 		toSend = &Event{path, Chmod}
 		if !w.sendEvent(*toSend) {
 			return nil
 		}
-	case events&unix.FILE_DELETE == unix.FILE_DELETE:
+	}
+	if events&unix.FILE_DELETE == unix.FILE_DELETE{
 		toSend = &Event{path, Remove}
 		if !w.sendEvent(*toSend) {
 			return nil
 		}
 		reRegister = false
-	case events&unix.FILE_RENAME_FROM == unix.FILE_RENAME_FROM:
+	}
+	if events&unix.FILE_RENAME_FROM == unix.FILE_RENAME_FROM{
 		toSend = &Event{path, Rename}
 		if !w.sendEvent(*toSend) {
 			return nil
 		}
 		// Don't keep watching the new file name
 		reRegister = false
-	case events&unix.FILE_RENAME_TO == unix.FILE_RENAME_TO:
+	}
+	if events&unix.FILE_RENAME_TO == unix.FILE_RENAME_TO{
 		// We don't report a Rename event for this case, because
 		// Rename events are interpreted as referring to the _old_ name
 		// of the file, and in this case the event would refer to the
@@ -245,8 +250,6 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 		}
 		// Don't keep watching the file that was removed
 		reRegister = false
-	default:
-		return errors.New("unknown event received")
 	}
 
 	if !reRegister {
