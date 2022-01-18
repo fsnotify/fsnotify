@@ -187,6 +187,11 @@ func (w *Watcher) handleDirectory(path string, stat os.FileInfo, handler func(st
 	return handler(path, stat)
 }
 
+// handleEvent might need to emit more than one fsnotify event
+// if the events bitmap matches more than one event type
+// (e.g. the file was both modified and had the
+// attributes changed between when the association
+// was created and the when event was returned)
 func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 	events := event.Events
 	path := event.Path
@@ -203,14 +208,26 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 			}
 		} else {
 			toSend = &Event{path, Write}
+			if !w.sendEvent(*toSend) {
+				return nil
+			}
 		}
 	case events&unix.FILE_ATTRIB == unix.FILE_ATTRIB:
 		toSend = &Event{path, Chmod}
+		if !w.sendEvent(*toSend) {
+			return nil
+		}
 	case events&unix.FILE_DELETE == unix.FILE_DELETE:
 		toSend = &Event{path, Remove}
+		if !w.sendEvent(*toSend) {
+			return nil
+		}
 		reRegister = false
 	case events&unix.FILE_RENAME_FROM == unix.FILE_RENAME_FROM:
 		toSend = &Event{path, Rename}
+		if !w.sendEvent(*toSend) {
+			return nil
+		}
 		// Don't keep watching the new file name
 		reRegister = false
 	case events&unix.FILE_RENAME_TO == unix.FILE_RENAME_TO:
@@ -223,17 +240,15 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 		// inotify reports a Remove event in this case, so we simulate
 		// this here.
 		toSend = &Event{path, Remove}
+		if !w.sendEvent(*toSend) {
+			return nil
+		}
 		// Don't keep watching the file that was removed
 		reRegister = false
 	default:
 		return errors.New("unknown event received")
 	}
 
-	if toSend != nil {
-		if !w.sendEvent(*toSend) {
-			return nil
-		}
-	}
 	if !reRegister {
 		return nil
 	}
