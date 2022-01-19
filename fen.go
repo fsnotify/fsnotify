@@ -130,9 +130,12 @@ func (w *Watcher) readEvents() {
 	defer close(w.Events)
 
 	pevents := make([]unix.PortEvent, 8, 8)
+	timeout := new(unix.Timespec)
+	timeout.Nsec = 500
 	for {
 		count, err := w.port.Get(pevents, 1, nil)
-		if err != nil {
+		//count, err := w.port.Get(pevents, 8, timeout)
+		if err != nil && err != unix.ETIME {
 			// Interrupted system call (count should be 0) ignore and continue
 			if err == unix.EINTR && count == 0 {
 				continue
@@ -200,34 +203,14 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 	var toSend *Event
 	reRegister := true
 
-	fmt.Printf("NAHUM: %b\n", events)
-
-	if events&unix.FILE_MODIFIED == unix.FILE_MODIFIED{
-		if fmode.IsDir() {
-			if err := w.updateDirectory(path); err != nil {
-				return err
-			}
-		} else {
-			toSend = &Event{path, Write}
-			if !w.sendEvent(*toSend) {
-				return nil
-			}
-		}
-	}
-	if events&unix.FILE_ATTRIB == unix.FILE_ATTRIB{
-		toSend = &Event{path, Chmod}
-		if !w.sendEvent(*toSend) {
-			return nil
-		}
-	}
-	if events&unix.FILE_DELETE == unix.FILE_DELETE{
+	if events&unix.FILE_DELETE == unix.FILE_DELETE {
 		toSend = &Event{path, Remove}
 		if !w.sendEvent(*toSend) {
 			return nil
 		}
 		reRegister = false
 	}
-	if events&unix.FILE_RENAME_FROM == unix.FILE_RENAME_FROM{
+	if events&unix.FILE_RENAME_FROM == unix.FILE_RENAME_FROM {
 		toSend = &Event{path, Rename}
 		if !w.sendEvent(*toSend) {
 			return nil
@@ -235,7 +218,7 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 		// Don't keep watching the new file name
 		reRegister = false
 	}
-	if events&unix.FILE_RENAME_TO == unix.FILE_RENAME_TO{
+	if events&unix.FILE_RENAME_TO == unix.FILE_RENAME_TO {
 		// We don't report a Rename event for this case, because
 		// Rename events are interpreted as referring to the _old_ name
 		// of the file, and in this case the event would refer to the
@@ -252,16 +235,44 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 		reRegister = false
 	}
 
+	// The file is gone, nothing left to do.
 	if !reRegister {
 		return nil
 	}
 
-	// If we get here, it means we've hit an event above that requires us to
-	// continue watching the file or directory
+	// If we didn't get a deletion the file still exists and we're going to have to watch it again.
+	// Let's Stat it now so that we can compare permissions and have what we need
+	// to continue watching the file
+
 	stat, err := os.Stat(path)
 	if err != nil {
 		return err
 	}
+
+	if events&unix.FILE_MODIFIED == unix.FILE_MODIFIED {
+		if fmode.IsDir() {
+			if err := w.updateDirectory(path); err != nil {
+				return err
+			}
+		} else {
+			toSend = &Event{path, Write}
+			if !w.sendEvent(*toSend) {
+				return nil
+			}
+		}
+	}
+	if events&unix.FILE_ATTRIB == unix.FILE_ATTRIB {
+		// Only send Chmod if perms changed
+		if stat.Mode().Perm() != fmode.Perm() {
+			toSend = &Event{path, Chmod}
+			if !w.sendEvent(*toSend) {
+				return nil
+			}
+		}
+	}
+
+	// If we get here, it means we've hit an event above that requires us to
+	// continue watching the file or directory
 	return w.associateFile(path, stat)
 }
 
