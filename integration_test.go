@@ -41,7 +41,7 @@ func (c *counter) reset() {
 func tempMkdir(t *testing.T) string {
 	dir, err := ioutil.TempDir("", "fsnotify")
 	if err != nil {
-		t.Fatalf("failed to create test directory: %s", err)
+		t.Fatalf("failed to create test directory: %v", err)
 	}
 	return dir
 }
@@ -60,7 +60,7 @@ func tempMkFile(t *testing.T, dir string) string {
 func newWatcher(t *testing.T) *Watcher {
 	watcher, err := NewWatcher()
 	if err != nil {
-		t.Fatalf("NewWatcher() failed: %s", err)
+		t.Fatalf("NewWatcher() failed: %v", err)
 	}
 	return watcher
 }
@@ -68,7 +68,7 @@ func newWatcher(t *testing.T) *Watcher {
 // addWatch adds a watch for a directory
 func addWatch(t *testing.T, watcher *Watcher, dir string) {
 	if err := watcher.Add(dir); err != nil {
-		t.Fatalf("watcher.Add(%q) failed: %s", dir, err)
+		t.Fatalf("watcher.Add(%q) failed: %v", dir, err)
 	}
 }
 
@@ -81,7 +81,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for err := range watcher.Errors {
-			t.Errorf("error received: %s", err)
+			t.Errorf("error received: %v", err)
 		}
 	}()
 
@@ -106,7 +106,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 		for event := range eventstream {
 			// Only count relevant events
 			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFile) {
-				t.Logf("event received: %s", event)
+				t.Logf("event received: %v", event)
 				if event.Op&Remove == Remove {
 					deleteReceived.increment()
 				}
@@ -120,7 +120,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 					renameReceived.increment()
 				}
 			} else {
-				t.Logf("unexpected event received: %s", event)
+				t.Logf("unexpected event received: %v", event)
 			}
 		}
 		done <- true
@@ -131,7 +131,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	var f *os.File
 	f, err := os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		t.Fatalf("creating test file failed: %s", err)
+		t.Fatalf("creating test file failed: %v", err)
 	}
 	f.Sync()
 
@@ -143,13 +143,13 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
 
 	if err := testRename(testFile, testFileRenamed); err != nil {
-		t.Fatalf("rename failed: %s", err)
+		t.Fatalf("rename failed: %v", err)
 	}
 
 	// Modify the file outside of the watched dir
 	f, err = os.Open(testFileRenamed)
 	if err != nil {
-		t.Fatalf("open test renamed file failed: %s", err)
+		t.Fatalf("open test renamed file failed: %v", err)
 	}
 	f.WriteString("data")
 	f.Sync()
@@ -160,7 +160,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	// Recreate the file that was moved
 	f, err = os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		t.Fatalf("creating test file failed: %s", err)
+		t.Fatalf("creating test file failed: %v", err)
 	}
 	f.Close()
 	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
@@ -202,7 +202,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Errorf("error received: %s", err)
+			t.Errorf("error received: %v", err)
 		}
 	}()
 
@@ -222,7 +222,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 		for event := range eventstream {
 			// Only count relevant events
 			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFile) {
-				t.Logf("event received: %s", event)
+				t.Logf("event received: %v", event)
 				if event.Op&Remove == Remove {
 					deleteReceived.increment()
 				}
@@ -233,7 +233,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 					modifyReceived.increment()
 				}
 			} else {
-				t.Logf("unexpected event received: %s", event)
+				t.Logf("unexpected event received: %v", event)
 			}
 		}
 		done <- true
@@ -244,7 +244,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	var f *os.File
 	f, err := os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		t.Fatalf("creating test file failed: %s", err)
+		t.Fatalf("creating test file failed: %v", err)
 	}
 	f.Sync()
 
@@ -262,7 +262,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	// Recreate the file
 	f, err = os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		t.Fatalf("creating test file failed: %s", err)
+		t.Fatalf("creating test file failed: %v", err)
 	}
 	f.Close()
 	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
@@ -270,7 +270,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	// Modify
 	f, err = os.OpenFile(testFile, os.O_WRONLY, 0666)
 	if err != nil {
-		t.Fatalf("creating test file failed: %s", err)
+		t.Fatalf("creating test file failed: %v", err)
 	}
 	f.Sync()
 
@@ -284,7 +284,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	// Modify
 	f, err = os.OpenFile(testFile, os.O_WRONLY, 0666)
 	if err != nil {
-		t.Fatalf("creating test file failed: %s", err)
+		t.Fatalf("creating test file failed: %v", err)
 	}
 	f.Sync()
 
@@ -336,7 +336,7 @@ func TestFsnotifyDirOnly(t *testing.T) {
 		var f *os.File
 		f, err := os.OpenFile(testFileAlreadyExists, os.O_WRONLY|os.O_CREATE, 0666)
 		if err != nil {
-			t.Fatalf("creating test file failed: %s", err)
+			t.Fatalf("creating test file failed: %v", err)
 		}
 		f.Sync()
 		f.Close()
@@ -347,7 +347,7 @@ func TestFsnotifyDirOnly(t *testing.T) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Errorf("error received: %s", err)
+			t.Errorf("error received: %v", err)
 		}
 	}()
 
@@ -361,7 +361,7 @@ func TestFsnotifyDirOnly(t *testing.T) {
 		for event := range eventstream {
 			// Only count relevant events
 			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFile) || event.Name == filepath.Clean(testFileAlreadyExists) {
-				t.Logf("event received: %s", event)
+				t.Logf("event received: %v", event)
 				if event.Op&Remove == Remove {
 					deleteReceived.increment()
 				}
@@ -372,7 +372,7 @@ func TestFsnotifyDirOnly(t *testing.T) {
 					createReceived.increment()
 				}
 			} else {
-				t.Logf("unexpected event received: %s", event)
+				t.Logf("unexpected event received: %v", event)
 			}
 		}
 		done <- true
@@ -383,7 +383,7 @@ func TestFsnotifyDirOnly(t *testing.T) {
 	var f *os.File
 	f, err := os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		t.Fatalf("creating test file failed: %s", err)
+		t.Fatalf("creating test file failed: %v", err)
 	}
 	f.Sync()
 
@@ -438,7 +438,7 @@ func TestFsnotifyDeleteWatchedDir(t *testing.T) {
 		var f *os.File
 		f, err := os.OpenFile(testFileAlreadyExists, os.O_WRONLY|os.O_CREATE, 0666)
 		if err != nil {
-			t.Fatalf("creating test file failed: %s", err)
+			t.Fatalf("creating test file failed: %v", err)
 		}
 		f.Sync()
 		f.Close()
@@ -452,7 +452,7 @@ func TestFsnotifyDeleteWatchedDir(t *testing.T) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Errorf("error received: %s", err)
+			t.Errorf("error received: %v", err)
 		}
 	}()
 
@@ -463,12 +463,12 @@ func TestFsnotifyDeleteWatchedDir(t *testing.T) {
 		for event := range eventstream {
 			// Only count relevant events
 			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testFileAlreadyExists) {
-				t.Logf("event received: %s", event)
+				t.Logf("event received: %v", event)
 				if event.Op&Remove == Remove {
 					deleteReceived.increment()
 				}
 			} else {
-				t.Logf("unexpected event received: %s", event)
+				t.Logf("unexpected event received: %v", event)
 			}
 		}
 	}()
@@ -492,12 +492,12 @@ func TestFsnotifySubDir(t *testing.T) {
 
 	testFile1 := filepath.Join(testDir, "TestFsnotifyFile1.testfile")
 	testSubDir := filepath.Join(testDir, "sub")
-	testSubDirFile := filepath.Join(testDir, "sub/TestFsnotifyFile1.testfile")
+	testSubDirFile := filepath.Join(testDir, "sub", "TestFsnotifyFile1.testfile")
 
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Errorf("error received: %s", err)
+			t.Errorf("error received: %v", err)
 		}
 	}()
 
@@ -509,7 +509,7 @@ func TestFsnotifySubDir(t *testing.T) {
 		for event := range eventstream {
 			// Only count relevant events
 			if event.Name == filepath.Clean(testDir) || event.Name == filepath.Clean(testSubDir) || event.Name == filepath.Clean(testFile1) {
-				t.Logf("event received: %s", event)
+				t.Logf("event received: %v", event)
 				if event.Op&Create == Create {
 					createReceived.increment()
 				}
@@ -517,7 +517,7 @@ func TestFsnotifySubDir(t *testing.T) {
 					deleteReceived.increment()
 				}
 			} else {
-				t.Logf("unexpected event received: %s", event)
+				t.Logf("unexpected event received: %v", event)
 			}
 		}
 		done <- true
@@ -527,14 +527,14 @@ func TestFsnotifySubDir(t *testing.T) {
 
 	// Create sub-directory
 	if err := os.Mkdir(testSubDir, 0777); err != nil {
-		t.Fatalf("failed to create test sub-directory: %s", err)
+		t.Fatalf("failed to create test sub-directory: %v", err)
 	}
 
 	// Create a file
 	var f *os.File
 	f, err := os.OpenFile(testFile1, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		t.Fatalf("creating test file failed: %s", err)
+		t.Fatalf("creating test file failed: %v", err)
 	}
 	f.Sync()
 	f.Close()
@@ -543,7 +543,7 @@ func TestFsnotifySubDir(t *testing.T) {
 	var fs *os.File
 	fs, err = os.OpenFile(testSubDirFile, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		t.Fatalf("creating test file failed: %s", err)
+		t.Fatalf("creating test file failed: %v", err)
 	}
 	fs.Sync()
 	fs.Close()
@@ -589,7 +589,7 @@ func TestFsnotifyRename(t *testing.T) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Errorf("error received: %s", err)
+			t.Errorf("error received: %v", err)
 		}
 	}()
 
@@ -607,9 +607,9 @@ func TestFsnotifyRename(t *testing.T) {
 				if event.Op&Rename == Rename {
 					renameReceived.increment()
 				}
-				t.Logf("event received: %s", event)
+				t.Logf("event received: %v", event)
 			} else {
-				t.Logf("unexpected event received: %s", event)
+				t.Logf("unexpected event received: %v", event)
 			}
 		}
 		done <- true
@@ -620,7 +620,7 @@ func TestFsnotifyRename(t *testing.T) {
 	var f *os.File
 	f, err := os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		t.Fatalf("creating test file failed: %s", err)
+		t.Fatalf("creating test file failed: %v", err)
 	}
 	f.Sync()
 
@@ -632,7 +632,7 @@ func TestFsnotifyRename(t *testing.T) {
 	addWatch(t, watcher, testFile)
 
 	if err := testRename(testFile, testFileRenamed); err != nil {
-		t.Fatalf("rename failed: %s", err)
+		t.Fatalf("rename failed: %v", err)
 	}
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
@@ -671,7 +671,7 @@ func TestFsnotifyRenameToCreate(t *testing.T) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Errorf("error received: %s", err)
+			t.Errorf("error received: %v", err)
 		}
 	}()
 
@@ -689,9 +689,9 @@ func TestFsnotifyRenameToCreate(t *testing.T) {
 				if event.Op&Create == Create {
 					createReceived.increment()
 				}
-				t.Logf("event received: %s", event)
+				t.Logf("event received: %v", event)
 			} else {
-				t.Logf("unexpected event received: %s", event)
+				t.Logf("unexpected event received: %v", event)
 			}
 		}
 		done <- true
@@ -702,13 +702,13 @@ func TestFsnotifyRenameToCreate(t *testing.T) {
 	var f *os.File
 	f, err := os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		t.Fatalf("creating test file failed: %s", err)
+		t.Fatalf("creating test file failed: %v", err)
 	}
 	f.Sync()
 	f.Close()
 
 	if err := testRename(testFile, testFileRenamed); err != nil {
-		t.Fatalf("rename failed: %s", err)
+		t.Fatalf("rename failed: %v", err)
 	}
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
@@ -754,7 +754,7 @@ func TestFsnotifyRenameToOverwrite(t *testing.T) {
 	var fr *os.File
 	fr, err := os.OpenFile(testFileRenamed, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		t.Fatalf("creating test file failed: %s", err)
+		t.Fatalf("creating test file failed: %v", err)
 	}
 	fr.Sync()
 	fr.Close()
@@ -764,7 +764,7 @@ func TestFsnotifyRenameToOverwrite(t *testing.T) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Errorf("error received: %s", err)
+			t.Errorf("error received: %v", err)
 		}
 	}()
 
@@ -777,9 +777,9 @@ func TestFsnotifyRenameToOverwrite(t *testing.T) {
 			// Only count relevant events
 			if event.Name == filepath.Clean(testFileRenamed) {
 				eventReceived.increment()
-				t.Logf("event received: %s", event)
+				t.Logf("event received: %v", event)
 			} else {
-				t.Logf("unexpected event received: %s", event)
+				t.Logf("unexpected event received: %v", event)
 			}
 		}
 		done <- true
@@ -790,13 +790,13 @@ func TestFsnotifyRenameToOverwrite(t *testing.T) {
 	var f *os.File
 	f, err = os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		t.Fatalf("creating test file failed: %s", err)
+		t.Fatalf("creating test file failed: %v", err)
 	}
 	f.Sync()
 	f.Close()
 
 	if err := testRename(testFile, testFileRenamed); err != nil {
-		t.Fatalf("rename failed: %s", err)
+		t.Fatalf("rename failed: %v", err)
 	}
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
@@ -830,7 +830,7 @@ func TestRemovalOfWatch(t *testing.T) {
 		var f *os.File
 		f, err := os.OpenFile(testFileAlreadyExists, os.O_WRONLY|os.O_CREATE, 0666)
 		if err != nil {
-			t.Fatalf("creating test file failed: %s", err)
+			t.Fatalf("creating test file failed: %v", err)
 		}
 		f.Sync()
 		f.Close()
@@ -860,13 +860,13 @@ func TestRemovalOfWatch(t *testing.T) {
 	// Modify the file outside of the watched dir
 	f, err := os.Open(testFileAlreadyExists)
 	if err != nil {
-		t.Fatalf("Open test file failed: %s", err)
+		t.Fatalf("Open test file failed: %v", err)
 	}
 	f.WriteString("data")
 	f.Sync()
 	f.Close()
 	if err := os.Chmod(testFileAlreadyExists, 0700); err != nil {
-		t.Fatalf("chmod failed: %s", err)
+		t.Fatalf("chmod failed: %v", err)
 	}
 
 	// wait for all groutines to finish.
@@ -887,7 +887,7 @@ func TestFsnotifyAttrib(t *testing.T) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Errorf("error received: %s", err)
+			t.Errorf("error received: %v", err)
 		}
 	}()
 
@@ -911,9 +911,9 @@ func TestFsnotifyAttrib(t *testing.T) {
 				if event.Op&Chmod == Chmod {
 					attribReceived.increment()
 				}
-				t.Logf("event received: %s", event)
+				t.Logf("event received: %v", event)
 			} else {
-				t.Logf("unexpected event received: %s", event)
+				t.Logf("unexpected event received: %v", event)
 			}
 		}
 		done <- true
@@ -924,7 +924,7 @@ func TestFsnotifyAttrib(t *testing.T) {
 	var f *os.File
 	f, err := os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		t.Fatalf("creating test file failed: %s", err)
+		t.Fatalf("creating test file failed: %v", err)
 	}
 	f.Sync()
 
@@ -936,7 +936,7 @@ func TestFsnotifyAttrib(t *testing.T) {
 	addWatch(t, watcher, testFile)
 
 	if err := os.Chmod(testFile, 0700); err != nil {
-		t.Fatalf("chmod failed: %s", err)
+		t.Fatalf("chmod failed: %v", err)
 	}
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
@@ -956,7 +956,7 @@ func TestFsnotifyAttrib(t *testing.T) {
 
 	f, err = os.OpenFile(testFile, os.O_WRONLY, 0)
 	if err != nil {
-		t.Fatalf("reopening test file failed: %s", err)
+		t.Fatalf("reopening test file failed: %v", err)
 	}
 
 	f.WriteString("more data")
@@ -979,7 +979,7 @@ func TestFsnotifyAttrib(t *testing.T) {
 	// Doing a chmod on the file should trigger an event with the "attrib" flag set (the contents
 	// of the file are not changed though)
 	if err := os.Chmod(testFile, 0600); err != nil {
-		t.Fatalf("chmod failed: %s", err)
+		t.Fatalf("chmod failed: %v", err)
 	}
 
 	time.Sleep(500 * time.Millisecond)
@@ -1040,7 +1040,7 @@ func TestFsnotifyFakeSymlink(t *testing.T) {
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for errors := range watcher.Errors {
-			t.Logf("Received error: %s", errors)
+			t.Logf("Received error: %v", errors)
 			errorsReceived.increment()
 		}
 	}()
@@ -1049,7 +1049,7 @@ func TestFsnotifyFakeSymlink(t *testing.T) {
 	var createEventsReceived, otherEventsReceived counter
 	go func() {
 		for ev := range watcher.Events {
-			t.Logf("event received: %s", ev)
+			t.Logf("event received: %v", ev)
 			if ev.Op&Create == Create {
 				createEventsReceived.increment()
 			} else {
@@ -1061,7 +1061,7 @@ func TestFsnotifyFakeSymlink(t *testing.T) {
 	addWatch(t, watcher, testDir)
 
 	if err := os.Symlink(filepath.Join(testDir, "zzz"), filepath.Join(testDir, "zzznew")); err != nil {
-		t.Fatalf("Failed to create bogus symlink: %s", err)
+		t.Fatalf("Failed to create bogus symlink: %v", err)
 	}
 	t.Logf("Created bogus symlink")
 
@@ -1154,7 +1154,7 @@ func TestConcurrentRemovalOfWatch(t *testing.T) {
 		var f *os.File
 		f, err := os.OpenFile(testFileAlreadyExists, os.O_WRONLY|os.O_CREATE, 0666)
 		if err != nil {
-			t.Fatalf("creating test file failed: %s", err)
+			t.Fatalf("creating test file failed: %v", err)
 		}
 		f.Sync()
 		f.Close()
@@ -1253,12 +1253,12 @@ func TestSetRecursive(t *testing.T) {
 	defer os.RemoveAll(testDir)
 
 	testSubDir := filepath.Join(testDir, "sub")
-	testSubDirFile := filepath.Join(testDir, "sub/TestFsnotifyFile1.testfile")
+	testSubDirFile := filepath.Join(testDir, "sub", "TestFsnotifyFile1.testfile")
 
 	// Receive errors on the error channel on a separate goroutine
 	go func() {
 		for err := range watcher.Errors {
-			t.Fatalf("error received: %s", err)
+			t.Errorf("error received: %v", err)
 		}
 	}()
 
@@ -1274,7 +1274,7 @@ func TestSetRecursive(t *testing.T) {
 				expected = expected || event.Name == filepath.Clean(testSubDirFile)
 			}
 			if expected {
-				t.Logf("event received: %s", event)
+				t.Logf("event received: %v", event)
 				if event.Op&Create == Create {
 					createReceived.increment()
 				}
@@ -1282,7 +1282,7 @@ func TestSetRecursive(t *testing.T) {
 					deleteReceived.increment()
 				}
 			} else {
-				t.Logf("unexpected event received: %s", event)
+				t.Logf("unexpected event received: %v", event)
 			}
 		}
 		done <- true
@@ -1292,14 +1292,14 @@ func TestSetRecursive(t *testing.T) {
 
 	// Create sub-directory
 	if err := os.Mkdir(testSubDir, 0777); err != nil {
-		t.Fatalf("failed to create test sub-directory: %s", err)
+		t.Fatalf("failed to create test sub-directory: %v", err)
 	}
 
 	// Create a file (Should not see this! we are not watching subdir)
 	var fs *os.File
 	fs, err = os.OpenFile(testSubDirFile, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		t.Fatalf("creating test file failed: %s", err)
+		t.Fatalf("creating test file failed: %v", err)
 	}
 	fs.Sync()
 	fs.Close()

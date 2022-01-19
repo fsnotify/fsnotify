@@ -68,7 +68,7 @@ func NewWatcher() (*Watcher, error) {
 // if this file system supports that.
 // Must be called before Add/Remove.
 func (w *Watcher) SetRecursive() error {
-	return fmt.Errorf("Not supported")
+	return errors.New("Not supported")
 }
 
 // Close removes all watches and closes the events channel.
