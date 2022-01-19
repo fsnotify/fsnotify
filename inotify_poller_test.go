@@ -179,7 +179,7 @@ func TestPollerConcurrent(t *testing.T) {
 		for {
 			ok, err := poller.wait()
 			if err != nil {
-				t.Fatalf("poller failed: %v", err)
+				t.Errorf("poller failed: %v", err)
 			}
 			oks <- ok
 			if !<-live {
@@ -227,4 +227,8 @@ func TestPollerConcurrent(t *testing.T) {
 		t.Fatalf("expected true")
 	}
 	tfd.get(t)
+
+	// wait for all goroutines for finish.
+	live <- false
+	<-oks
 }
