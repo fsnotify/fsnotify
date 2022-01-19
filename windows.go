@@ -453,7 +453,7 @@ func (w *Watcher) readEvents() {
 
 			// Point "raw" to the event in the buffer
 			raw := (*syscall.FileNotifyInformation)(unsafe.Pointer(&watch.buf[offset]))
-			// TODO: Consider using unsafe.Slice
+			// TODO: Consider using unsafe.Slice that is available from go1.17
 			// https://stackoverflow.com/questions/51187973/how-to-create-an-array-or-a-slice-from-an-array-unsafe-pointer-in-golang
 			// instead of using a fixed syscall.MAX_PATH buf, we create a buf that is the size of the path name
 			size := int(raw.FileNameLength / 2)
