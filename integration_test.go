@@ -135,7 +135,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	}
 	f.Sync()
 
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(time.Millisecond)
 	f.WriteString("data")
 	f.Sync()
 	f.Close()
@@ -248,7 +248,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	}
 	f.Sync()
 
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(time.Millisecond)
 	f.WriteString("data")
 	f.Sync()
 	f.Close()
@@ -274,7 +274,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	}
 	f.Sync()
 
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(time.Millisecond)
 	f.WriteString("data")
 	f.Sync()
 	f.Close()
@@ -288,7 +288,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	}
 	f.Sync()
 
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(time.Millisecond)
 	f.WriteString("data")
 	f.Sync()
 	f.Close()
@@ -387,7 +387,7 @@ func TestFsnotifyDirOnly(t *testing.T) {
 	}
 	f.Sync()
 
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(time.Millisecond)
 	f.WriteString("data")
 	f.Sync()
 	f.Close()
