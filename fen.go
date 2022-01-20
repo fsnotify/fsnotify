@@ -17,9 +17,7 @@ import (
 	"sync"
 )
 
-var (
-	eventBits = unix.FILE_MODIFIED | unix.FILE_ATTRIB | unix.FILE_NOFOLLOW
-)
+const eventBits = unix.FILE_MODIFIED | unix.FILE_ATTRIB | unix.FILE_NOFOLLOW
 
 // Watcher watches a set of files, delivering events to a channel.
 type Watcher struct {
