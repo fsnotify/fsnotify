@@ -20,6 +20,11 @@ import (
 	"time"
 )
 
+const (
+	eventSeparator = 50 * time.Millisecond
+	waitForEvents  = 500 * time.Millisecond
+)
+
 // An atomic counter
 type counter struct {
 	val int32
@@ -135,12 +140,12 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	}
 	f.Sync()
 
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(eventSeparator)
 	f.WriteString("data")
 	f.Sync()
 	f.Close()
 
-	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+	time.Sleep(eventSeparator) // give system time to sync write change before delete
 
 	if err := testRename(testFile, testFileRenamed); err != nil {
 		t.Fatalf("rename failed: %s", err)
@@ -155,7 +160,7 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 	f.Sync()
 	f.Close()
 
-	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+	time.Sleep(eventSeparator) // give system time to sync write change before delete
 
 	// Recreate the file that was moved
 	f, err = os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
@@ -163,10 +168,10 @@ func TestFsnotifyMultipleOperations(t *testing.T) {
 		t.Fatalf("creating test file failed: %s", err)
 	}
 	f.Close()
-	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+	time.Sleep(eventSeparator) // give system time to sync write change before delete
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(waitForEvents)
 	cReceived := createReceived.value()
 	if cReceived != 2 {
 		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", cReceived, 2)
@@ -248,16 +253,16 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	}
 	f.Sync()
 
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(eventSeparator)
 	f.WriteString("data")
 	f.Sync()
 	f.Close()
 
-	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+	time.Sleep(eventSeparator) // give system time to sync write change before delete
 
 	os.Remove(testFile)
 
-	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+	time.Sleep(eventSeparator) // give system time to sync write change before delete
 
 	// Recreate the file
 	f, err = os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
@@ -265,7 +270,7 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 		t.Fatalf("creating test file failed: %s", err)
 	}
 	f.Close()
-	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+	time.Sleep(eventSeparator) // give system time to sync write change before delete
 
 	// Modify
 	f, err = os.OpenFile(testFile, os.O_WRONLY, 0666)
@@ -274,12 +279,12 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	}
 	f.Sync()
 
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(eventSeparator)
 	f.WriteString("data")
 	f.Sync()
 	f.Close()
 
-	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+	time.Sleep(eventSeparator) // give system time to sync write change before delete
 
 	// Modify
 	f, err = os.OpenFile(testFile, os.O_WRONLY, 0666)
@@ -288,15 +293,15 @@ func TestFsnotifyMultipleCreates(t *testing.T) {
 	}
 	f.Sync()
 
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(eventSeparator)
 	f.WriteString("data")
 	f.Sync()
 	f.Close()
 
-	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+	time.Sleep(eventSeparator) // give system time to sync write change before delete
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(waitForEvents)
 	cReceived := createReceived.value()
 	if cReceived != 2 {
 		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", cReceived, 2)
@@ -387,18 +392,18 @@ func TestFsnotifyDirOnly(t *testing.T) {
 	}
 	f.Sync()
 
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(eventSeparator)
 	f.WriteString("data")
 	f.Sync()
 	f.Close()
 
-	time.Sleep(50 * time.Millisecond) // give system time to sync write change before delete
+	time.Sleep(eventSeparator) // give system time to sync write change before delete
 
 	os.Remove(testFile)
 	os.Remove(testFileAlreadyExists)
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(waitForEvents)
 	cReceived := createReceived.value()
 	if cReceived != 1 {
 		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", cReceived, 1)
@@ -476,7 +481,7 @@ func TestFsnotifyDeleteWatchedDir(t *testing.T) {
 	os.RemoveAll(testDir)
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(waitForEvents)
 	dReceived := deleteReceived.value()
 	if dReceived < 2 {
 		t.Fatalf("did not receive at least %d delete events, received %d after 500 ms", 2, dReceived)
@@ -555,7 +560,7 @@ func TestFsnotifySubDir(t *testing.T) {
 	os.Remove(testFile1)
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(waitForEvents)
 	cReceived := createReceived.value()
 	if cReceived != 2 {
 		t.Fatalf("incorrect number of create events received after 500 ms (%d vs %d)", cReceived, 2)
@@ -636,7 +641,7 @@ func TestFsnotifyRename(t *testing.T) {
 	}
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(waitForEvents)
 	if renameReceived.value() == 0 {
 		t.Fatal("fsnotify rename events have not been received after 500 ms")
 	}
@@ -712,7 +717,7 @@ func TestFsnotifyRenameToCreate(t *testing.T) {
 	}
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(waitForEvents)
 	if createReceived.value() == 0 {
 		t.Fatal("fsnotify create events have not been received after 500 ms")
 	}
@@ -800,7 +805,7 @@ func TestFsnotifyRenameToOverwrite(t *testing.T) {
 	}
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(waitForEvents)
 	if eventReceived.value() == 0 {
 		t.Fatal("fsnotify events have not been received after 500 ms")
 	}
@@ -941,7 +946,7 @@ func TestFsnotifyAttrib(t *testing.T) {
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	// Creating/writing a file changes also the mtime, so IsAttrib should be set to true here
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(waitForEvents)
 	if modifyReceived.value() != 0 {
 		t.Fatal("received an unexpected modify event when creating a test file")
 	}
@@ -963,7 +968,7 @@ func TestFsnotifyAttrib(t *testing.T) {
 	f.Sync()
 	f.Close()
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(waitForEvents)
 
 	if modifyReceived.value() != 1 {
 		t.Fatal("didn't receive a modify event after changing test file contents")
@@ -982,7 +987,7 @@ func TestFsnotifyAttrib(t *testing.T) {
 		t.Fatalf("chmod failed: %s", err)
 	}
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(waitForEvents)
 
 	if attribReceived.value() != 1 {
 		t.Fatal("didn't receive an attribute change after 500ms")
@@ -1012,7 +1017,7 @@ func TestFsnotifyClose(t *testing.T) {
 		atomic.StoreInt32(&done, 1)
 	}()
 
-	time.Sleep(50e6) // 50 ms
+	time.Sleep(eventSeparator)
 	if atomic.LoadInt32(&done) == 0 {
 		t.Fatal("double Close() test failed: second Close() call didn't return")
 	}
@@ -1066,7 +1071,7 @@ func TestFsnotifyFakeSymlink(t *testing.T) {
 	t.Logf("Created bogus symlink")
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(waitForEvents)
 
 	// Should not be error, just no events for broken links (watching nothing)
 	if errorsReceived.value() > 0 {
@@ -1127,7 +1132,7 @@ func TestCyclicSymlink(t *testing.T) {
 	}
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(waitForEvents)
 
 	if got := createEventsReceived.value(); got == 0 {
 		t.Errorf("want at least 1 create event got %v", got)
