@@ -14,6 +14,11 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sync"
+)
+
+var (
+	eventBits = unix.FILE_MODIFIED | unix.FILE_ATTRIB | unix.FILE_NOFOLLOW
 )
 
 // Watcher watches a set of files, delivering events to a channel.
@@ -21,9 +26,10 @@ type Watcher struct {
 	Events chan Event
 	Errors chan error
 
-	port *unix.EventPort
-
 	done chan struct{} // Channel for sending a "quit message" to the reader goroutine
+
+	mu   sync.Mutex
+	port *unix.EventPort
 }
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
@@ -130,11 +136,8 @@ func (w *Watcher) readEvents() {
 	defer close(w.Events)
 
 	pevents := make([]unix.PortEvent, 8, 8)
-	timeout := new(unix.Timespec)
-	timeout.Nsec = 500
 	for {
 		count, err := w.port.Get(pevents, 1, nil)
-		//count, err := w.port.Get(pevents, 8, timeout)
 		if err != nil && err != unix.ETIME {
 			// Interrupted system call (count should be 0) ignore and continue
 			if err == unix.EINTR && count == 0 {
@@ -305,9 +308,22 @@ func (w *Watcher) updateDirectory(path string) error {
 }
 
 func (w *Watcher) associateFile(path string, stat os.FileInfo) error {
-	mode := unix.FILE_MODIFIED | unix.FILE_ATTRIB | unix.FILE_NOFOLLOW
+	// This is primarily protecting the call to AssociatePath
+	// but it is important and intentional that the call to
+	// PathIsWatched is also protected by this mutex.
+	// Without this mutex, AssociatePath has been seen
+	// to error out that the path is already associated.
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.port.PathIsWatched(path) {
+		// Remove the old association in favor of this one
+		if err := w.port.DissociatePath(path); err != nil {
+			return err
+		}
+	}
 	fmode := stat.Mode()
-	return w.port.AssociatePath(path, stat, mode, fmode)
+	return w.port.AssociatePath(path, stat, eventBits, fmode)
 }
 
 func (w *Watcher) dissociateFile(path string, stat os.FileInfo) error {
