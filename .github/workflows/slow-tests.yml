@@ -1,5 +1,10 @@
 name: slow-tests
-on: [workflow_dispatch]
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
 jobs:
   test-illumos:
     runs-on: macos-10.15
