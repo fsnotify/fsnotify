@@ -30,12 +30,26 @@ jobs:
         run: |
           go test --race ./...
 
+  testFreeBSD:
+    runs-on: macos-10.15
+    name: test (freebsd, 1.17)
+    steps:
+      - uses: actions/checkout@v2
+      - name: test (freebsd, 1.17)
+        id: test
+        uses: vmactions/freebsd-vm@v0.1.5
+        with:
+          usesh: true
+          prepare: pkg install -y go
+          run: |
+            go test
+
   lint:
     runs-on: ubuntu-latest
     steps:
       - name: setup Go
         uses: actions/setup-go@v2
-        with: 
+        with:
           go-version: '1.17'
 
       - name: checkout
@@ -55,5 +69,3 @@ jobs:
         with:
           version: latest
           skip-go-installation: true
-          
-
