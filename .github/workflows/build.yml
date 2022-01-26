@@ -1,0 +1,32 @@
+name: build
+on:
+  push:
+  pull_request:
+jobs:
+  cross-compile-supported:
+    strategy:
+      fail-fast: false
+      matrix:
+        goos:
+          - android
+          - darwin
+          - freebsd
+          - ios
+          - linux
+          - windows
+        goarch:
+          - amd64
+          - arm64
+    runs-on: ubuntu-latest
+    steps:
+      - name: setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.17'
+
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: build-${{ matrix.goos }}-${{ matrix.goarch }}
+        run: |
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build
