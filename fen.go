@@ -84,8 +84,11 @@ func (w *Watcher) Close() error {
 		return nil
 	}
 	close(w.done)
-	w.port.Close()
-	return nil
+	// Take the lock used by associateFile to prevent
+	// lingering events from being processed after the close
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.port.Close()
 }
 
 // Add starts watching the named file or directory (non-recursively).
@@ -306,6 +309,9 @@ func (w *Watcher) updateDirectory(path string) error {
 }
 
 func (w *Watcher) associateFile(path string, stat os.FileInfo) error {
+	if w.isClosed() {
+		return errors.New("FEN watcher already closed")
+	}
 	// This is primarily protecting the call to AssociatePath
 	// but it is important and intentional that the call to
 	// PathIsWatched is also protected by this mutex.
@@ -316,7 +322,13 @@ func (w *Watcher) associateFile(path string, stat os.FileInfo) error {
 
 	if w.port.PathIsWatched(path) {
 		// Remove the old association in favor of this one
-		if err := w.port.DissociatePath(path); err != nil {
+		// If we get ENOENT, then while the x/sys/unix wrapper
+		// still thought that this path was associated,
+		// the underlying event port did not. This call will
+		// have cleared up that discrepancy. The most likely
+		// cause is that the event has fired but we haven't
+		// processed it yet.
+		if err := w.port.DissociatePath(path); err != nil && err != unix.ENOENT {
 			return err
 		}
 	}
