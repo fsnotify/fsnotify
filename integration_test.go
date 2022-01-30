@@ -400,6 +400,7 @@ func TestFsnotifyDirOnly(t *testing.T) {
 	time.Sleep(eventSeparator) // give system time to sync write change before delete
 
 	os.Remove(testFile)
+	time.Sleep(eventSeparator)
 	os.Remove(testFileAlreadyExists)
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
@@ -553,10 +554,11 @@ func TestFsnotifySubDir(t *testing.T) {
 	fs.Sync()
 	fs.Close()
 
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(eventSeparator)
 
 	// Make sure receive deletes for both file and sub-directory
 	os.RemoveAll(testSubDir)
+	time.Sleep(eventSeparator)
 	os.Remove(testFile1)
 
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
