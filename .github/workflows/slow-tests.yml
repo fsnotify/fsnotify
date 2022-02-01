@@ -13,10 +13,9 @@ jobs:
     - uses: actions/checkout@v2
     - name: Test on illumos
       id: test
-      uses: papertigers/illumos-vm@main
+      uses: papertigers/illumos-vm@r38
       with:
         prepare: |
-          pkg set-publisher -r -O https://pkg.omnios.org/r151036/extra extra.omnios
           pkg install go-117
         run: |
           /opt/ooce/go-1.17/bin/go test -count=10
