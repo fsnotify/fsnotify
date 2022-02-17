@@ -119,10 +119,6 @@ func (poller *fdPoller) wait() (bool, error) {
 				}
 			}
 			if event.Fd == int32(poller.pipe[0]) {
-				if event.Events&unix.EPOLLHUP != 0 {
-					// Write pipe descriptor was closed, by us. This means we're closing down the
-					// watcher, and we should wake up.
-				}
 				if event.Events&unix.EPOLLERR != 0 {
 					// If an error is waiting on the pipe file descriptor.
 					// This is an absolute mystery, and should never ever happen.
