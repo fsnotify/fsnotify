@@ -52,20 +52,15 @@ func TestWatcherClose(t *testing.T) {
 
 	name := tempMkFile(t, "")
 	w := newWatcher(t)
-	err := w.Add(name)
-	if err != nil {
-		t.Fatal(err)
-	}
+	addWatch(t, w, name)
 
-	err = os.Remove(name)
-	if err != nil {
+	if err := os.Remove(name); err != nil {
 		t.Fatal(err)
 	}
 	// Allow the watcher to receive the event.
 	time.Sleep(time.Millisecond * 100)
 
-	err = w.Close()
-	if err != nil {
+	if err := w.Close(); err != nil {
 		t.Fatal(err)
 	}
 }

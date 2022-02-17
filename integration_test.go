@@ -63,6 +63,7 @@ func tempMkFile(t *testing.T, dir string) string {
 
 // newWatcher initializes an fsnotify Watcher instance.
 func newWatcher(t *testing.T) *Watcher {
+	t.Helper()
 	watcher, err := NewWatcher()
 	if err != nil {
 		t.Fatalf("NewWatcher() failed: %s", err)
@@ -70,10 +71,11 @@ func newWatcher(t *testing.T) *Watcher {
 	return watcher
 }
 
-// addWatch adds a watch for a directory
-func addWatch(t *testing.T, watcher *Watcher, dir string) {
-	if err := watcher.Add(dir); err != nil {
-		t.Fatalf("watcher.Add(%q) failed: %s", dir, err)
+// addWatch adds watch for a path.
+func addWatch(t *testing.T, watcher *Watcher, path string) {
+	t.Helper()
+	if err := watcher.Add(path); err != nil {
+		t.Fatalf("watcher.Add(%q) failed: %s", path, err)
 	}
 }
 
@@ -1174,12 +1176,12 @@ func TestConcurrentRemovalOfWatch(t *testing.T) {
 	removed1 := make(chan struct{})
 	go func() {
 		defer close(removed1)
-		watcher.Remove(testDir)
+		_ = watcher.Remove(testDir)
 	}()
 	removed2 := make(chan struct{})
 	go func() {
 		close(removed2)
-		watcher.Remove(testDir)
+		_ = watcher.Remove(testDir)
 	}()
 	<-removed1
 	<-removed2
@@ -1190,12 +1192,10 @@ func TestClose(t *testing.T) {
 	testDir := tempMkdir(t)
 	defer os.RemoveAll(testDir)
 
-	watcher := newWatcher(t)
-	if err := watcher.Add(testDir); err != nil {
-		t.Fatalf("Expected no error on Add, got %v", err)
-	}
-	err := watcher.Close()
-	if err != nil {
+	w := newWatcher(t)
+	addWatch(t, w, testDir)
+
+	if err := w.Close(); err != nil {
 		t.Fatalf("Expected no error on Close, got %v.", err)
 	}
 }
@@ -1211,17 +1211,15 @@ func TestRemoveWithClose(t *testing.T) {
 	for i := 0; i < fileN; i++ {
 		tempFiles = append(tempFiles, tempMkFile(t, testDir))
 	}
-	watcher := newWatcher(t)
-	if err := watcher.Add(testDir); err != nil {
-		t.Fatalf("Expected no error on Add, got %v", err)
-	}
+	w := newWatcher(t)
+	addWatch(t, w, testDir)
 	startC, stopC := make(chan struct{}), make(chan struct{})
 	errC := make(chan error)
 	go func() {
 		for {
 			select {
-			case <-watcher.Errors:
-			case <-watcher.Events:
+			case <-w.Errors:
+			case <-w.Events:
 			case <-stopC:
 				return
 			}
@@ -1235,7 +1233,7 @@ func TestRemoveWithClose(t *testing.T) {
 	}()
 	go func() {
 		<-startC
-		errC <- watcher.Close()
+		errC <- w.Close()
 	}()
 	close(startC)
 	defer close(stopC)

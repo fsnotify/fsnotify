@@ -18,10 +18,7 @@ import (
 )
 
 func TestInotifyCloseRightAway(t *testing.T) {
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher")
-	}
+	w := newWatcher(t)
 
 	// Close immediately; it won't even reach the first unix.Read.
 	w.Close()
@@ -32,10 +29,7 @@ func TestInotifyCloseRightAway(t *testing.T) {
 }
 
 func TestInotifyCloseSlightlyLater(t *testing.T) {
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher")
-	}
+	w := newWatcher(t)
 
 	// Wait until readEvents has reached unix.Read, and Close.
 	<-time.After(50 * time.Millisecond)
@@ -50,11 +44,8 @@ func TestInotifyCloseSlightlyLaterWithWatch(t *testing.T) {
 	testDir := tempMkdir(t)
 	defer os.RemoveAll(testDir)
 
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher")
-	}
-	w.Add(testDir)
+	w := newWatcher(t)
+	addWatch(t, w, testDir)
 
 	// Wait until readEvents has reached unix.Read, and Close.
 	<-time.After(50 * time.Millisecond)
@@ -69,18 +60,15 @@ func TestInotifyCloseAfterRead(t *testing.T) {
 	testDir := tempMkdir(t)
 	defer os.RemoveAll(testDir)
 
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher")
-	}
-
-	err = w.Add(testDir)
-	if err != nil {
-		t.Fatalf("Failed to add .")
-	}
+	w := newWatcher(t)
+	addWatch(t, w, testDir)
 
 	// Generate an event.
-	os.Create(filepath.Join(testDir, "somethingSOMETHINGsomethingSOMETHING"))
+	fd, err := os.Create(filepath.Join(testDir, "somethingSOMETHINGsomethingSOMETHING"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fd.Close()
 
 	// Wait for readEvents to read the event, then close the watcher.
 	<-time.After(50 * time.Millisecond)
@@ -115,19 +103,13 @@ func TestInotifyCloseCreate(t *testing.T) {
 	testDir := tempMkdir(t)
 	defer os.RemoveAll(testDir)
 
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher: %v", err)
-	}
+	w := newWatcher(t)
 	defer w.Close()
+	addWatch(t, w, testDir)
 
-	err = w.Add(testDir)
-	if err != nil {
-		t.Fatalf("Failed to add testDir: %v", err)
-	}
 	h, err := os.Create(filepath.Join(testDir, "testfile"))
 	if err != nil {
-		t.Fatalf("Failed to create file in testdir: %v", err)
+		t.Fatal(err)
 	}
 	h.Close()
 	select {
@@ -142,16 +124,10 @@ func TestInotifyCloseCreate(t *testing.T) {
 	// It's also blocking on unix.Read.
 	// Now we try to swap the file descriptor under its nose.
 	w.Close()
-	w, err = NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create second watcher: %v", err)
-	}
+	w = newWatcher(t)
 
 	<-time.After(50 * time.Millisecond)
-	err = w.Add(testDir)
-	if err != nil {
-		t.Fatalf("Error adding testDir again: %v", err)
-	}
+	addWatch(t, w, testDir)
 }
 
 // This test verifies the watcher can keep up with file creations/deletions
@@ -163,16 +139,9 @@ func TestInotifyStress(t *testing.T) {
 	defer os.RemoveAll(testDir)
 	testFilePrefix := filepath.Join(testDir, "testfile")
 
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher: %v", err)
-	}
+	w := newWatcher(t)
 	defer w.Close()
-
-	err = w.Add(testDir)
-	if err != nil {
-		t.Fatalf("Failed to add testDir: %v", err)
-	}
+	addWatch(t, w, testDir)
 
 	doneChan := make(chan struct{})
 	// The buffer ensures that the file generation goroutine is never blocked.
@@ -201,8 +170,7 @@ func TestInotifyStress(t *testing.T) {
 
 		for i := 0; i < maxNumToCreate; i++ {
 			testFile := fmt.Sprintf("%s%d", testFilePrefix, i)
-			err = os.Remove(testFile)
-			if err != nil {
+			if err := os.Remove(testFile); err != nil {
 				errChan <- fmt.Errorf("Remove failed: %v", err)
 			}
 		}
@@ -283,16 +251,9 @@ func TestInotifyRemoveTwice(t *testing.T) {
 	}
 	handle.Close()
 
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher: %v", err)
-	}
+	w := newWatcher(t)
 	defer w.Close()
-
-	err = w.Add(testFile)
-	if err != nil {
-		t.Fatalf("Failed to add testFile: %v", err)
-	}
+	addWatch(t, w, testFile)
 
 	err = w.Remove(testFile)
 	if err != nil {
@@ -325,15 +286,9 @@ func TestInotifyInnerMapLength(t *testing.T) {
 	}
 	handle.Close()
 
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher: %v", err)
-	}
+	w := newWatcher(t)
+	addWatch(t, w, testFile)
 
-	err = w.Add(testFile)
-	if err != nil {
-		t.Fatalf("Failed to add testFile: %v", err)
-	}
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -374,10 +329,7 @@ func TestInotifyOverflow(t *testing.T) {
 	testDir := tempMkdir(t)
 	defer os.RemoveAll(testDir)
 
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher: %v", err)
-	}
+	w := newWatcher(t)
 	defer w.Close()
 
 	for dn := 0; dn < numDirs; dn++ {
@@ -388,10 +340,7 @@ func TestInotifyOverflow(t *testing.T) {
 			t.Fatalf("Cannot create subdir: %v", err)
 		}
 
-		err = w.Add(testSubdir)
-		if err != nil {
-			t.Fatalf("Failed to add subdir: %v", err)
-		}
+		addWatch(t, w, testSubdir)
 	}
 
 	errChan := make(chan error, numDirs*numFiles)
