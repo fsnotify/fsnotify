@@ -131,7 +131,7 @@ func TestInotifyCloseCreate(t *testing.T) {
 	}
 	h.Close()
 	select {
-	case _ = <-w.Events:
+	case <-w.Events:
 	case err := <-w.Errors:
 		t.Fatalf("Error from watcher: %v", err)
 	case <-time.After(50 * time.Millisecond):
@@ -348,7 +348,7 @@ func TestInotifyInnerMapLength(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to remove testFile: %v", err)
 	}
-	_ = <-w.Events                      // consume Remove event
+	<-w.Events                          // consume Remove event
 	<-time.After(50 * time.Millisecond) // wait IN_IGNORE propagated
 
 	w.mu.Lock()
