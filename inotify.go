@@ -80,7 +80,9 @@ func (w *Watcher) Close() error {
 	close(w.done)
 
 	// Wake up goroutine
-	w.poller.wake()
+	if err := w.poller.wake(); err != nil {
+		return fmt.Errorf("poller.wake failed: %w", err)
+	}
 
 	// Wait for goroutine to close
 	<-w.doneResp
