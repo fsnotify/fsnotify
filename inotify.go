@@ -22,15 +22,15 @@ import (
 
 // Watcher watches a set of files, delivering events to a channel.
 type Watcher struct {
-	Events   chan Event
-	Errors   chan error
-	mu       sync.Mutex // Map access
-	fd       int
-	poller   *fdPoller
-	watches  map[string]*watch // Map of inotify watches (key: path)
-	paths    map[int]string    // Map of watched paths (key: watch descriptor)
-	done     chan struct{}     // Channel for sending a "quit message" to the reader goroutine
-	doneResp chan struct{}     // Channel to respond to Close
+	fd          int // https://github.com/golang/go/issues/26439 can't call .Fd() on os.FIle or Read will no longer return on Close()
+	Events      chan Event
+	Errors      chan error
+	mu          sync.Mutex // Map access
+	inotifyFile *os.File
+	watches     map[string]*watch // Map of inotify watches (key: path)
+	paths       map[int]string    // Map of watched paths (key: watch descriptor)
+	done        chan struct{}     // Channel for sending a "quit message" to the reader goroutine
+	doneResp    chan struct{}     // Channel to respond to Close
 }
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
@@ -40,21 +40,23 @@ func NewWatcher() (*Watcher, error) {
 	if fd == -1 {
 		return nil, errno
 	}
-	// Create epoll
-	poller, err := newFdPoller(fd)
-	if err != nil {
-		unix.Close(fd)
-		return nil, err
+
+	// Need to set the FD to nonblocking mode in order for SetDeadline methods to work
+	// Otherwise, blocking i/o operations won't terminate on close
+	errno = unix.SetNonblock(fd, true)
+	if errno != nil {
+		return nil, errno
 	}
+
 	w := &Watcher{
-		fd:       fd,
-		poller:   poller,
-		watches:  make(map[string]*watch),
-		paths:    make(map[int]string),
-		Events:   make(chan Event),
-		Errors:   make(chan error),
-		done:     make(chan struct{}),
-		doneResp: make(chan struct{}),
+		fd:          fd,
+		inotifyFile: os.NewFile(uintptr(fd), ""),
+		watches:     make(map[string]*watch),
+		paths:       make(map[int]string),
+		Events:      make(chan Event),
+		Errors:      make(chan error),
+		done:        make(chan struct{}),
+		doneResp:    make(chan struct{}),
 	}
 
 	go w.readEvents()
@@ -79,8 +81,11 @@ func (w *Watcher) Close() error {
 	// Send 'close' signal to goroutine, and set the Watcher to closed.
 	close(w.done)
 
-	// Wake up goroutine
-	w.poller.wake()
+	// Causes any blocking reads to return with an error, provided the file still supports deadline operations
+	err := w.inotifyFile.Close()
+	if err != nil {
+		return err
+	}
 
 	// Wait for goroutine to close
 	<-w.doneResp
@@ -173,16 +178,12 @@ type watch struct {
 func (w *Watcher) readEvents() {
 	var (
 		buf   [unix.SizeofInotifyEvent * 4096]byte // Buffer for a maximum of 4096 raw events
-		n     int                                  // Number of bytes read with read()
 		errno error                                // Syscall errno
-		ok    bool                                 // For poller.wait
 	)
 
 	defer close(w.doneResp)
 	defer close(w.Errors)
 	defer close(w.Events)
-	defer unix.Close(w.fd)
-	defer w.poller.close()
 
 	for {
 		// See if we have been closed.
@@ -190,31 +191,17 @@ func (w *Watcher) readEvents() {
 			return
 		}
 
-		ok, errno = w.poller.wait()
-		if errno != nil {
+		n, err := w.inotifyFile.Read(buf[:])
+		switch {
+		case errors.Unwrap(err) == os.ErrClosed:
+			return
+		case err != nil:
 			select {
-			case w.Errors <- errno:
+			case w.Errors <- err:
 			case <-w.done:
 				return
 			}
 			continue
-		}
-
-		if !ok {
-			continue
-		}
-
-		n, errno = unix.Read(w.fd, buf[:])
-		// If a signal interrupted execution, see if we've been asked to close, and try again.
-		// http://man7.org/linux/man-pages/man7/signal.7.html :
-		// "Before Linux 3.8, reads from an inotify(7) file descriptor were not restartable"
-		if errno == unix.EINTR {
-			continue
-		}
-
-		// unix.Read might have been woken up by Close. If so, we're done.
-		if w.isClosed() {
-			return
 		}
 
 		if n < unix.SizeofInotifyEvent {
@@ -300,20 +287,7 @@ func (w *Watcher) readEvents() {
 // against files that do not exist.
 func (e *Event) ignoreLinux(mask uint32) bool {
 	// Ignore anything the inotify API says to ignore
-	if mask&unix.IN_IGNORED == unix.IN_IGNORED {
-		return true
-	}
-
-	// If the event is not a DELETE or RENAME, the file must exist.
-	// Otherwise the event is ignored.
-	// *Note*: this was put in place because it was seen that a MODIFY
-	// event was sent after the DELETE. This ignores that MODIFY and
-	// assumes a DELETE will come or has come if the file doesn't exist.
-	if !(e.Op&Remove == Remove || e.Op&Rename == Rename) {
-		_, statErr := os.Lstat(e.Name)
-		return os.IsNotExist(statErr)
-	}
-	return false
+	return mask&unix.IN_IGNORED == unix.IN_IGNORED
 }
 
 // newEvent returns an platform-independent Event based on an inotify mask.
