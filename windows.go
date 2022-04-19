@@ -99,12 +99,14 @@ func (w *Watcher) Remove(name string) error {
 
 // WatchList returns the directories and files that are being monitered.
 func (w *Watcher) WatchList() []string {
-	var entries []string
-
 	w.mu.Lock()
 	w.mu.Unlock()
+
+	entries := make([]string, 0, len(w.watches))
 	for _, entry := range w.watches {
-		entries = append(entries, entry.path)
+		for _, watchEntry := range entry {
+			entries = append(entries, watchEntry.path)
+		}
 	}
 
 	return entries
