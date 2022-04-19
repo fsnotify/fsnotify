@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build linux
 // +build linux
 
 package fsnotify
@@ -329,15 +330,17 @@ func TestInotifyInnerMapLength(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create watcher: %v", err)
 	}
-	defer w.Close()
 
 	err = w.Add(testFile)
 	if err != nil {
 		t.Fatalf("Failed to add testFile: %v", err)
 	}
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for err := range w.Errors {
-			t.Fatalf("error received: %s", err)
+			t.Errorf("error received: %s", err)
 		}
 	}()
 
@@ -356,6 +359,9 @@ func TestInotifyInnerMapLength(t *testing.T) {
 	if len(w.paths) != 0 {
 		t.Fatalf("Expected paths len is 0, but got: %d, %v", len(w.paths), w.paths)
 	}
+
+	w.Close()
+	wg.Wait()
 }
 
 func TestInotifyOverflow(t *testing.T) {

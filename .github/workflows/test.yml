@@ -1,0 +1,71 @@
+name: test
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        go:
+          - '1.18.0-beta1'
+          - '1.17'
+          - '1.16'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: setup Go
+        uses: actions/setup-go@v2
+        with:
+          stable: 'false'
+          go-version: ${{ matrix.go }}
+
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: test
+        run: |
+          go test --race ./...
+
+  testFreeBSD:
+    runs-on: macos-10.15
+    name: test (freebsd, 1.17)
+    steps:
+      - uses: actions/checkout@v2
+      - name: test (freebsd, 1.17)
+        id: test
+        uses: vmactions/freebsd-vm@v0.1.5
+        with:
+          usesh: true
+          prepare: pkg install -y go
+          run: |
+            go test
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.17'
+
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: gofmt
+        run: |
+          test -z "$(gofmt -s -d . | tee /dev/stderr)"
+
+      - name: vet
+        run: |
+          go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v2
+        continue-on-error: true
+        with:
+          version: latest
+          skip-go-installation: true

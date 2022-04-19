@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build linux
 // +build linux
 
 package fsnotify
@@ -178,7 +179,7 @@ func TestPollerConcurrent(t *testing.T) {
 		for {
 			ok, err := poller.wait()
 			if err != nil {
-				t.Fatalf("poller failed: %v", err)
+				t.Errorf("poller failed: %v", err)
 			}
 			oks <- ok
 			if !<-live {
@@ -226,4 +227,8 @@ func TestPollerConcurrent(t *testing.T) {
 		t.Fatalf("expected true")
 	}
 	tfd.get(t)
+
+	// wait for all goroutines for finish.
+	live <- false
+	<-oks
 }
