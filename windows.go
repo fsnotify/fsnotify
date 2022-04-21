@@ -97,6 +97,21 @@ func (w *Watcher) Remove(name string) error {
 	return <-in.reply
 }
 
+// WatchList returns the directories and files that are being monitered.
+func (w *Watcher) WatchList() []string {
+	w.mu.Lock()
+	w.mu.Unlock()
+
+	entries := make([]string, 0, len(w.watches))
+	for _, entry := range w.watches {
+		for _, watchEntry := range entry {
+			entries = append(entries, watchEntry.path)
+		}
+	}
+
+	return entries
+}
+
 const (
 	// Options for AddWatch
 	sysFSONESHOT = 0x80000000

@@ -459,3 +459,40 @@ func TestInotifyOverflow(t *testing.T) {
 			numDirs*numFiles, creates)
 	}
 }
+
+func TestInotifyWatchList(t *testing.T) {
+	testDir := tempMkdir(t)
+	defer os.RemoveAll(testDir)
+	testFile := filepath.Join(testDir, "testfile")
+
+	handle, err := os.Create(testFile)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	handle.Close()
+
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("Failed to create watcher: %v", err)
+	}
+	defer w.Close()
+
+	err = w.Add(testFile)
+	if err != nil {
+		t.Fatalf("Failed to add testFile: %v", err)
+	}
+	err = w.Add(testDir)
+	if err != nil {
+		t.Fatalf("Failed to add testDir: %v", err)
+	}
+
+	value := w.WatchList()
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, entry := range value {
+		if _, ok := w.watches[entry]; !ok {
+			t.Fatal("return value of WatchList is not same as the expected")
+		}
+	}
+}
