@@ -2,7 +2,7 @@
 
 ## Issues
 
-* Request features and report bugs using the [GitHub Issue Tracker](https://github.com/fsnotify/fsnotify/issues).
+* Request features and report bugs using the [GitHub Issue Tracker](https://github.com/burakgulbay/fsnotifier/issues).
 * Please indicate the platform you are using fsnotify on.
 * A code example to reproduce the problem is appreciated.
 
@@ -10,7 +10,7 @@
 
 ### Contributor License Agreement
 
-fsnotify is derived from code in the [golang.org/x/exp](https://godoc.org/golang.org/x/exp) package and it may be included [in the standard library](https://github.com/fsnotify/fsnotify/issues/1) in the future. Therefore fsnotify carries the same [LICENSE](https://github.com/fsnotify/fsnotify/blob/master/LICENSE) as Go. Contributors retain their copyright, so you need to fill out a short form before we can accept your contribution: [Google Individual Contributor License Agreement](https://developers.google.com/open-source/cla/individual).
+fsnotify is derived from code in the [golang.org/x/exp](https://godoc.org/golang.org/x/exp) package and it may be included [in the standard library](https://github.com/burakgulbay/fsnotifier/issues/1) in the future. Therefore fsnotify carries the same [LICENSE](https://github.com/burakgulbay/fsnotifier/blob/master/LICENSE) as Go. Contributors retain their copyright, so you need to fill out a short form before we can accept your contribution: [Google Individual Contributor License Agreement](https://developers.google.com/open-source/cla/individual).
 
 Please indicate that you have signed the CLA in your pull request.
 
@@ -28,7 +28,7 @@ Please indicate that you have signed the CLA in your pull request.
 
 For smooth sailing, always use the original import path. Installing with `go get` makes this easy. 
 
-1. Install from GitHub (`go get -u github.com/fsnotify/fsnotify`)
+1. Install from GitHub (`go get -u github.com/burakgulbay/fsnotifier`)
 2. Create your feature branch (`git checkout -b my-new-feature`)
 3. Ensure everything works and the tests pass (see below)
 4. Commit your changes (`git commit -am 'Add some feature'`)

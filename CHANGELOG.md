@@ -9,36 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.5.4] - 2022-04-25
 
-* Windows: add missing defer to `Watcher.WatchList` [#447](https://github.com/fsnotify/fsnotify/pull/447)
-* go.mod: use latest x/sys [#444](https://github.com/fsnotify/fsnotify/pull/444)
-* Fix compilation for OpenBSD [#443](https://github.com/fsnotify/fsnotify/pull/443)
+* Windows: add missing defer to `Watcher.WatchList` [#447](https://github.com/burakgulbay/fsnotifier/pull/447)
+* go.mod: use latest x/sys [#444](https://github.com/burakgulbay/fsnotifier/pull/444)
+* Fix compilation for OpenBSD [#443](https://github.com/burakgulbay/fsnotifier/pull/443)
 
 ## [1.5.3] - 2022-04-22
 
-* This version is retracted. An incorrect branch is published accidentally [#445](https://github.com/fsnotify/fsnotify/issues/445)
+* This version is retracted. An incorrect branch is published accidentally [#445](https://github.com/burakgulbay/fsnotifier/issues/445)
 
 ## [1.5.2] - 2022-04-21
 
-* Add a feature to return the directories and files that are being monitored [#374](https://github.com/fsnotify/fsnotify/pull/374)
-* Fix potential crash on windows if `raw.FileNameLength` exceeds `syscall.MAX_PATH` [#361](https://github.com/fsnotify/fsnotify/pull/361)
-* Allow build on unsupported GOOS [#424](https://github.com/fsnotify/fsnotify/pull/424)
-* Don't set `poller.fd` twice in `newFdPoller` [#406](https://github.com/fsnotify/fsnotify/pull/406)
-* fix go vet warnings: call to `(*T).Fatalf` from a non-test goroutine [#416](https://github.com/fsnotify/fsnotify/pull/416)
+* Add a feature to return the directories and files that are being monitored [#374](https://github.com/burakgulbay/fsnotifier/pull/374)
+* Fix potential crash on windows if `raw.FileNameLength` exceeds `syscall.MAX_PATH` [#361](https://github.com/burakgulbay/fsnotifier/pull/361)
+* Allow build on unsupported GOOS [#424](https://github.com/burakgulbay/fsnotifier/pull/424)
+* Don't set `poller.fd` twice in `newFdPoller` [#406](https://github.com/burakgulbay/fsnotifier/pull/406)
+* fix go vet warnings: call to `(*T).Fatalf` from a non-test goroutine [#416](https://github.com/burakgulbay/fsnotifier/pull/416)
 
 ## [1.5.1] - 2021-08-24
 
-* Revert Add AddRaw to not follow symlinks [#394](https://github.com/fsnotify/fsnotify/pull/394)
+* Revert Add AddRaw to not follow symlinks [#394](https://github.com/burakgulbay/fsnotifier/pull/394)
 
 ## [1.5.0] - 2021-08-20
 
-* Go: Increase minimum required version to Go 1.12 [#381](https://github.com/fsnotify/fsnotify/pull/381)
-* Feature: Add AddRaw method which does not follow symlinks when adding a watch [#289](https://github.com/fsnotify/fsnotify/pull/298)
-* Windows: Follow symlinks by default like on all other systems [#289](https://github.com/fsnotify/fsnotify/pull/289)
+* Go: Increase minimum required version to Go 1.12 [#381](https://github.com/burakgulbay/fsnotifier/pull/381)
+* Feature: Add AddRaw method which does not follow symlinks when adding a watch [#289](https://github.com/burakgulbay/fsnotifier/pull/298)
+* Windows: Follow symlinks by default like on all other systems [#289](https://github.com/burakgulbay/fsnotifier/pull/289)
 * CI: Use GitHub Actions for CI and cover go 1.12-1.17
-   [#378](https://github.com/fsnotify/fsnotify/pull/378)
-   [#381](https://github.com/fsnotify/fsnotify/pull/381)
-   [#385](https://github.com/fsnotify/fsnotify/pull/385)
-* Go 1.14+: Fix unsafe pointer conversion [#325](https://github.com/fsnotify/fsnotify/pull/325)
+   [#378](https://github.com/burakgulbay/fsnotifier/pull/378)
+   [#381](https://github.com/burakgulbay/fsnotifier/pull/381)
+   [#385](https://github.com/burakgulbay/fsnotifier/pull/385)
+* Go 1.14+: Fix unsafe pointer conversion [#325](https://github.com/burakgulbay/fsnotifier/pull/325)
 
 ## [1.4.7] - 2018-01-09
 
@@ -52,95 +52,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.4.2] - 2016-10-10
 
-* Linux: use InotifyInit1 with IN_CLOEXEC to stop leaking a file descriptor to a child process when using fork/exec [#178](https://github.com/fsnotify/fsnotify/pull/178) (thanks @pattyshack)
+* Linux: use InotifyInit1 with IN_CLOEXEC to stop leaking a file descriptor to a child process when using fork/exec [#178](https://github.com/burakgulbay/fsnotifier/pull/178) (thanks @pattyshack)
 
 ## [1.4.1] - 2016-10-04
 
-* Fix flaky inotify stress test on Linux [#177](https://github.com/fsnotify/fsnotify/pull/177) (thanks @pattyshack)
+* Fix flaky inotify stress test on Linux [#177](https://github.com/burakgulbay/fsnotifier/pull/177) (thanks @pattyshack)
 
 ## [1.4.0] - 2016-10-01
 
-* add a String() method to Event.Op [#165](https://github.com/fsnotify/fsnotify/pull/165) (thanks @oozie)
+* add a String() method to Event.Op [#165](https://github.com/burakgulbay/fsnotifier/pull/165) (thanks @oozie)
 
 ## [1.3.1] - 2016-06-28
 
-* Windows: fix for double backslash when watching the root of a drive [#151](https://github.com/fsnotify/fsnotify/issues/151) (thanks @brunoqc)
+* Windows: fix for double backslash when watching the root of a drive [#151](https://github.com/burakgulbay/fsnotifier/issues/151) (thanks @brunoqc)
 
 ## [1.3.0] - 2016-04-19
 
-* Support linux/arm64 by [patching](https://go-review.googlesource.com/#/c/21971/) x/sys/unix and switching to to it from syscall (thanks @suihkulokki) [#135](https://github.com/fsnotify/fsnotify/pull/135)
+* Support linux/arm64 by [patching](https://go-review.googlesource.com/#/c/21971/) x/sys/unix and switching to to it from syscall (thanks @suihkulokki) [#135](https://github.com/burakgulbay/fsnotifier/pull/135)
 
 ## [1.2.10] - 2016-03-02
 
-* Fix golint errors in windows.go [#121](https://github.com/fsnotify/fsnotify/pull/121) (thanks @tiffanyfj)
+* Fix golint errors in windows.go [#121](https://github.com/burakgulbay/fsnotifier/pull/121) (thanks @tiffanyfj)
 
 ## [1.2.9] - 2016-01-13
 
-kqueue: Fix logic for CREATE after REMOVE [#111](https://github.com/fsnotify/fsnotify/pull/111) (thanks @bep)
+kqueue: Fix logic for CREATE after REMOVE [#111](https://github.com/burakgulbay/fsnotifier/pull/111) (thanks @bep)
 
 ## [1.2.8] - 2015-12-17
 
-* kqueue: fix race condition in Close [#105](https://github.com/fsnotify/fsnotify/pull/105) (thanks @djui for reporting the issue and @ppknap for writing a failing test)
+* kqueue: fix race condition in Close [#105](https://github.com/burakgulbay/fsnotifier/pull/105) (thanks @djui for reporting the issue and @ppknap for writing a failing test)
 * inotify: fix race in test
 * enable race detection for continuous integration (Linux, Mac, Windows)
 
 ## [1.2.5] - 2015-10-17
 
-* inotify: use epoll_create1 for arm64 support (requires Linux 2.6.27 or later) [#100](https://github.com/fsnotify/fsnotify/pull/100) (thanks @suihkulokki)
-* inotify: fix path leaks [#73](https://github.com/fsnotify/fsnotify/pull/73) (thanks @chamaken)
-* kqueue: watch for rename events on subdirectories [#83](https://github.com/fsnotify/fsnotify/pull/83) (thanks @guotie)
-* kqueue: avoid infinite loops from symlinks cycles [#101](https://github.com/fsnotify/fsnotify/pull/101) (thanks @illicitonion)
+* inotify: use epoll_create1 for arm64 support (requires Linux 2.6.27 or later) [#100](https://github.com/burakgulbay/fsnotifier/pull/100) (thanks @suihkulokki)
+* inotify: fix path leaks [#73](https://github.com/burakgulbay/fsnotifier/pull/73) (thanks @chamaken)
+* kqueue: watch for rename events on subdirectories [#83](https://github.com/burakgulbay/fsnotifier/pull/83) (thanks @guotie)
+* kqueue: avoid infinite loops from symlinks cycles [#101](https://github.com/burakgulbay/fsnotifier/pull/101) (thanks @illicitonion)
 
 ## [1.2.1] - 2015-10-14
 
-* kqueue: don't watch named pipes [#98](https://github.com/fsnotify/fsnotify/pull/98) (thanks @evanphx)
+* kqueue: don't watch named pipes [#98](https://github.com/burakgulbay/fsnotifier/pull/98) (thanks @evanphx)
 
 ## [1.2.0] - 2015-02-08
 
-* inotify: use epoll to wake up readEvents [#66](https://github.com/fsnotify/fsnotify/pull/66) (thanks @PieterD)
-* inotify: closing watcher should now always shut down goroutine [#63](https://github.com/fsnotify/fsnotify/pull/63) (thanks @PieterD)
-* kqueue: close kqueue after removing watches, fixes [#59](https://github.com/fsnotify/fsnotify/issues/59)
+* inotify: use epoll to wake up readEvents [#66](https://github.com/burakgulbay/fsnotifier/pull/66) (thanks @PieterD)
+* inotify: closing watcher should now always shut down goroutine [#63](https://github.com/burakgulbay/fsnotifier/pull/63) (thanks @PieterD)
+* kqueue: close kqueue after removing watches, fixes [#59](https://github.com/burakgulbay/fsnotifier/issues/59)
 
 ## [1.1.1] - 2015-02-05
 
-* inotify: Retry read on EINTR [#61](https://github.com/fsnotify/fsnotify/issues/61) (thanks @PieterD)
+* inotify: Retry read on EINTR [#61](https://github.com/burakgulbay/fsnotifier/issues/61) (thanks @PieterD)
 
 ## [1.1.0] - 2014-12-12
 
-* kqueue: rework internals [#43](https://github.com/fsnotify/fsnotify/pull/43)
+* kqueue: rework internals [#43](https://github.com/burakgulbay/fsnotifier/pull/43)
     * add low-level functions
     * only need to store flags on directories
-    * less mutexes [#13](https://github.com/fsnotify/fsnotify/issues/13)
+    * less mutexes [#13](https://github.com/burakgulbay/fsnotifier/issues/13)
     * done can be an unbuffered channel
     * remove calls to os.NewSyscallError
-* More efficient string concatenation for Event.String() [#52](https://github.com/fsnotify/fsnotify/pull/52) (thanks @mdlayher)
-* kqueue: fix regression in  rework causing subdirectories to be watched [#48](https://github.com/fsnotify/fsnotify/issues/48)
-* kqueue: cleanup internal watch before sending remove event [#51](https://github.com/fsnotify/fsnotify/issues/51)
+* More efficient string concatenation for Event.String() [#52](https://github.com/burakgulbay/fsnotifier/pull/52) (thanks @mdlayher)
+* kqueue: fix regression in  rework causing subdirectories to be watched [#48](https://github.com/burakgulbay/fsnotifier/issues/48)
+* kqueue: cleanup internal watch before sending remove event [#51](https://github.com/burakgulbay/fsnotifier/issues/51)
 
 ## [1.0.4] - 2014-09-07
 
 * kqueue: add dragonfly to the build tags.
 * Rename source code files, rearrange code so exported APIs are at the top.
-* Add done channel to example code. [#37](https://github.com/fsnotify/fsnotify/pull/37) (thanks @chenyukang)
+* Add done channel to example code. [#37](https://github.com/burakgulbay/fsnotifier/pull/37) (thanks @chenyukang)
 
 ## [1.0.3] - 2014-08-19
 
-* [Fix] Windows MOVED_TO now translates to Create like on BSD and Linux. [#36](https://github.com/fsnotify/fsnotify/issues/36)
+* [Fix] Windows MOVED_TO now translates to Create like on BSD and Linux. [#36](https://github.com/burakgulbay/fsnotifier/issues/36)
 
 ## [1.0.2] - 2014-08-17
 
-* [Fix] Missing create events on macOS. [#14](https://github.com/fsnotify/fsnotify/issues/14) (thanks @zhsso)
+* [Fix] Missing create events on macOS. [#14](https://github.com/burakgulbay/fsnotifier/issues/14) (thanks @zhsso)
 * [Fix] Make ./path and path equivalent. (thanks @zhsso)
 
 ## [1.0.0] - 2014-08-15
 
 * [API] Remove AddWatch on Windows, use Add.
-* Improve documentation for exported identifiers. [#30](https://github.com/fsnotify/fsnotify/issues/30)
+* Improve documentation for exported identifiers. [#30](https://github.com/burakgulbay/fsnotifier/issues/30)
 * Minor updates based on feedback from golint.
 
 ## dev / 2014-07-09
 
-* Moved to [github.com/fsnotify/fsnotify](https://github.com/fsnotify/fsnotify).
+* Moved to [github.com/burakgulbay/fsnotifier](https://github.com/burakgulbay/fsnotifier).
 * Use os.NewSyscallError instead of returning errno (thanks @hariharan-uno)
 
 ## dev / 2014-07-04
@@ -150,7 +150,7 @@ kqueue: Fix logic for CREATE after REMOVE [#111](https://github.com/fsnotify/fsn
 
 ## dev / 2014-06-28
 
-* [API] Don't set the Write Op for attribute notifications [#4](https://github.com/fsnotify/fsnotify/issues/4)
+* [API] Don't set the Write Op for attribute notifications [#4](https://github.com/burakgulbay/fsnotifier/issues/4)
 * Fix for String() method on Event (thanks Alex Brainman)
 * Don't build on Plan 9 or Solaris (thanks @4ad)
 
@@ -188,11 +188,11 @@ kqueue: Fix logic for CREATE after REMOVE [#111](https://github.com/fsnotify/fsn
 
 ## [0.9.3] - 2014-12-31
 
-* kqueue: cleanup internal watch before sending remove event [#51](https://github.com/fsnotify/fsnotify/issues/51)
+* kqueue: cleanup internal watch before sending remove event [#51](https://github.com/burakgulbay/fsnotifier/issues/51)
 
 ## [0.9.2] - 2014-08-17
 
-* [Backport] Fix missing create events on macOS. [#14](https://github.com/fsnotify/fsnotify/issues/14) (thanks @zhsso)
+* [Backport] Fix missing create events on macOS. [#14](https://github.com/burakgulbay/fsnotifier/issues/14) (thanks @zhsso)
 
 ## [0.9.1] - 2014-06-12
 
