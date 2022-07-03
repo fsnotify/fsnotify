@@ -54,7 +54,7 @@ func main() {
 					return
 				}
 				log.Println("event:", event)
-				if event.Op&fsnotify.Write == fsnotify.Write {
+				if event.Op == fsnotify.Write {
 					log.Println("modified file:", event.Name)
 				}
 			case err, ok := <-watcher.Errors:
