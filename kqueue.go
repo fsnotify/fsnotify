@@ -74,7 +74,7 @@ func (w *Watcher) Close() error {
 	w.isClosed = true
 
 	// copy paths to remove while locked
-	var pathsToRemove = make([]string, 0, len(w.watches))
+	pathsToRemove := make([]string, 0, len(w.watches))
 	for name := range w.watches {
 		pathsToRemove = append(pathsToRemove, name)
 	}
@@ -107,7 +107,7 @@ func (w *Watcher) Remove(name string) error {
 	watchfd, ok := w.watches[name]
 	w.mu.Unlock()
 	if !ok {
-		return fmt.Errorf("can't remove non-existent kevent watch for: %s", name)
+		return fmt.Errorf("%w: %s", ErrNonExistentWatch, name)
 	}
 
 	const registerRemove = unix.EV_DELETE
@@ -442,7 +442,6 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 	for _, fileInfo := range files {
 		filePath := filepath.Join(dirPath, fileInfo.Name())
 		err := w.sendFileCreatedEventIfNew(filePath, fileInfo)
-
 		if err != nil {
 			return
 		}

@@ -134,7 +134,7 @@ func (w *Watcher) Remove(name string) error {
 
 	// Remove it from inotify.
 	if !ok {
-		return fmt.Errorf("can't remove non-existent inotify watch for: %s", name)
+		return fmt.Errorf("%w: %s", ErrNonExistentWatch, name)
 	}
 
 	// We successfully removed the watch if InotifyRmWatch doesn't return an
