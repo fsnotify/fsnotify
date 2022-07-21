@@ -18,13 +18,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
-          stable: 'false'
           go-version: ${{ matrix.go }}
 
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: test
         run: |
@@ -34,10 +33,10 @@ jobs:
     runs-on: macos-10.15
     name: test (freebsd, 1.18)
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: test (freebsd, 1.18)
         id: test
-        uses: vmactions/freebsd-vm@v0.1.5
+        uses: vmactions/freebsd-vm@v0.2.0
         with:
           usesh: true
           prepare: pkg install -y go
@@ -48,12 +47,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
-          go-version: '1.17'
+          go-version: '1.18'
 
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: gofmt
         run: |
@@ -64,7 +63,7 @@ jobs:
           go vet ./...
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v2
+        uses: golangci/golangci-lint-action@v3
         continue-on-error: true
         with:
           version: latest
