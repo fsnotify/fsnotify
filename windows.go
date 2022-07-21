@@ -54,12 +54,12 @@ func NewWatcher() (*Watcher, error) {
 // Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error {
 	w.mu.Lock()
-	defer w.mu.Unlock()
-
 	if w.isClosed {
+		w.mu.Unlock()
 		return nil
 	}
 	w.isClosed = true
+	w.mu.Unlock()
 
 	// Send "quit" message to the reader goroutine
 	ch := make(chan error)
@@ -74,6 +74,7 @@ func (w *Watcher) Close() error {
 func (w *Watcher) Add(name string) error {
 	w.mu.Lock()
 	if w.isClosed {
+		w.mu.Unlock()
 		return errors.New("watcher already closed")
 	}
 	w.mu.Unlock()
