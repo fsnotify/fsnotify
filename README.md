@@ -101,8 +101,32 @@ Spotlight indexing on OS X can result in multiple events (see [howeyc #62][#62])
 **How many files can be watched at once?**
 
 There are OS-specific limits as to how many watches can be created:
-* Linux: /proc/sys/fs/inotify/max_user_watches contains the limit, reaching this limit results in a "no space left on device" error.
-* BSD / OSX: sysctl variables "kern.maxfiles" and "kern.maxfilesperproc", reaching these limits results in a "too many open files" error.
+
+* Linux: the `fs.inotify.max_user_watches` sysctl variable specifies the upper
+  limit for the number of watches per user, and `fs.inotify.max_user_instances`
+  specifies the maximum number of inotify instances per user. Every Watcher you
+  create is an "instance", and every path you add is a "watch".
+
+  These are also exposed in /proc as `/proc/sys/fs/inotify/max_user_watches` and
+  `/proc/sys/fs/inotify/max_user_instances`
+
+  To increase them you can use `sysctl` or write the value to proc file:
+
+	  # The default values on Linux 5.18
+      sysctl fs.inotify.max_user_watches=124983
+      sysctl fs.inotify.max_user_instances=128
+
+  To make the changes persist on reboot edit `/etc/sysctl.conf` or
+  `/usr/lib/sysctl.d/50-default.conf` (some systemd systems):
+
+      fs.inotify.max_user_watches=124983
+      fs.inotify.max_user_instances=128
+
+  Reaching the limit will result in a "no space left on device" or "too many
+  open files" error.
+
+* BSD / macOS: sysctl variables `kern.maxfiles` and `kern.maxfilesperproc`,
+  reaching these limits results in a "too many open files" error.
 
 **Why don't notifications work with NFS filesystems or filesystem in userspace (FUSE)?**
 
@@ -119,4 +143,3 @@ fsnotify requires support from underlying OS to work. The current NFS protocol d
 
 * [notify](https://github.com/rjeczalik/notify)
 * [fsevents](https://github.com/fsnotify/fsevents)
-
