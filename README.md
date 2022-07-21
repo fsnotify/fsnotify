@@ -94,9 +94,12 @@ No, you must add watches for any directory you want to watch (a recursive watche
 
 As of now, yes. Looking into making this single-thread friendly (see [howeyc #7][#7])
 
-**Why am I receiving multiple events for the same file on OS X?**
+**Why am I receiving multiple events for the same file on macOS?**
 
-Spotlight indexing on OS X can result in multiple events (see [howeyc #62][#62]). A temporary workaround is to add your folder(s) to the *Spotlight Privacy settings* until we have a native FSEvents implementation (see [#11][]).
+Spotlight indexing on macOS can result in multiple events (see
+[howeyc #62][#62]). A temporary workaround is to add your folder(s) to the
+*Spotlight Privacy settings* until we have a native FSEvents implementation (see
+[#11][]).
 
 **How many files can be watched at once?**
 
@@ -128,9 +131,10 @@ There are OS-specific limits as to how many watches can be created:
 * BSD / macOS: sysctl variables `kern.maxfiles` and `kern.maxfilesperproc`,
   reaching these limits results in a "too many open files" error.
 
-**Why don't notifications work with NFS filesystems or filesystem in userspace (FUSE)?**
+**Why don't notifications work with NFS, SMB, or filesystem in userspace (FUSE)?**
 
-fsnotify requires support from underlying OS to work. The current NFS protocol does not provide network level support for file notifications.
+fsnotify requires support from underlying OS to work. The current NFS and SMB
+protocols does not provide network level support for file notifications.
 
 [#62]: https://github.com/howeyc/fsnotify/issues/62
 [#18]: https://github.com/fsnotify/fsnotify/issues/18
