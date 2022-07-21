@@ -499,3 +499,52 @@ func TestInotifyWatchList(t *testing.T) {
 		}
 	}
 }
+
+func TestInotifyDeleteOpenedFile(t *testing.T) {
+	testDir := tempMkdir(t)
+	defer os.RemoveAll(testDir)
+
+	testFile := filepath.Join(testDir, "testfile")
+
+	// create and open a file
+	fd, err := os.Create(testFile)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	defer fd.Close()
+
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("Failed to create watcher: %v", err)
+	}
+	defer w.Close()
+
+	err = w.Add(testFile)
+	if err != nil {
+		t.Fatalf("Failed to add watch for %s: %v", testFile, err)
+	}
+
+	checkEvent := func(exp Op) {
+		select {
+		case event := <-w.Events:
+			t.Logf("Event received: %s", event.Op)
+			if event.Op != exp {
+				t.Fatalf("Event expected: %s, got: %s", exp, event.Op)
+			}
+		case <-time.After(100 * time.Millisecond):
+			t.Fatalf("Expected %s event not received", exp)
+		}
+	}
+
+	// Remove the (opened) file, check Chmod event (notifying
+	// about file link count change) is received
+	err = os.Remove(testFile)
+	if err != nil {
+		t.Fatalf("Failed to remove file: %s", err)
+	}
+	checkEvent(Chmod)
+
+	// Close the file, check Remove event is received
+	fd.Close()
+	checkEvent(Remove)
+}
