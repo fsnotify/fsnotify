@@ -12,7 +12,7 @@ jobs:
           - macos-latest
           - windows-latest
         go:
-          - '1.18.0-beta1'
+          - '1.18'
           - '1.17'
           - '1.16'
     runs-on: ${{ matrix.os }}
@@ -32,10 +32,10 @@ jobs:
 
   testFreeBSD:
     runs-on: macos-10.15
-    name: test (freebsd, 1.17)
+    name: test (freebsd, 1.18)
     steps:
       - uses: actions/checkout@v2
-      - name: test (freebsd, 1.17)
+      - name: test (freebsd, 1.18)
         id: test
         uses: vmactions/freebsd-vm@v0.1.5
         with:
