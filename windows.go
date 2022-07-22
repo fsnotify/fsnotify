@@ -501,9 +501,9 @@ func (w *Watcher) readEvents() {
 			case syscall.FILE_ACTION_RENAMED_OLD_NAME:
 				watch.rename = name
 			case syscall.FILE_ACTION_RENAMED_NEW_NAME:
-
-				// update saved path of all sub-watches
+				// Update saved path of all sub-watches.
 				oldFullName := filepath.Join(watch.path, watch.rename)
+				w.mu.Lock()
 				for _, watchMap := range w.watches {
 					for _, otherWatch := range watchMap {
 						if strings.HasPrefix(otherWatch.path, oldFullName) {
@@ -511,6 +511,7 @@ func (w *Watcher) readEvents() {
 						}
 					}
 				}
+				w.mu.Unlock()
 
 				if watch.names[watch.rename] != 0 {
 					watch.names[name] |= watch.names[watch.rename]
