@@ -16,8 +16,15 @@ import (
 
 // Event represents a single file system notification.
 type Event struct {
-	Name string // Relative path to the file or directory.
-	Op   Op     // File operation that triggered the event.
+	// Path to the file or directory.
+	//
+	// Paths are relative to the input; for example with Add("dir") the Name
+	// will be set to "dir/file" if you create that file, but if you use
+	// Add("/path/to/dir") it will be "/path/to/dir/file".
+	Name string
+
+	// File operation that triggered the event.
+	Op Op
 }
 
 // Op describes a set of file operations.
