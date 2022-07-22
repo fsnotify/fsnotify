@@ -1,0 +1,30 @@
+name: test
+on:
+  push:
+  pull_request:
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.18'
+
+      - name: checkout
+        uses: actions/checkout@v3
+
+      - name: gofmt
+        run: |
+          test -z "$(gofmt -s -d . | tee /dev/stderr)"
+
+      - name: vet
+        run: |
+          go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        continue-on-error: true
+        with:
+          version: latest
+          skip-go-installation: true
