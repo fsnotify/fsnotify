@@ -327,8 +327,8 @@ func (w *Watcher) remWatch(pathname string) error {
 	w.mu.Lock()
 	watch := w.watches.get(ino)
 	w.mu.Unlock()
-    if e := syscall.CloseHandle(ino.handle); e != nil {
-		w.Errors <- os.NewSyscallError("CloseHandle", e)
+	if err := syscall.CloseHandle(ino.handle); err != nil {
+		w.Errors <- os.NewSyscallError("CloseHandle", err)
 	}
 	if watch == nil {
 		return fmt.Errorf("%w: %s", ErrNonExistentWatch, pathname)
