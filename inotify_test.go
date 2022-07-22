@@ -354,14 +354,16 @@ func TestInotifyInnerMapLength(t *testing.T) {
 	_ = <-w.Events                      // consume Remove event
 	<-time.After(50 * time.Millisecond) // wait IN_IGNORE propagated
 
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if len(w.watches) != 0 {
-		t.Fatalf("Expected watches len is 0, but got: %d, %v", len(w.watches), w.watches)
-	}
-	if len(w.paths) != 0 {
-		t.Fatalf("Expected paths len is 0, but got: %d, %v", len(w.paths), w.paths)
-	}
+	func() {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		if len(w.watches) != 0 {
+			t.Fatalf("Expected watches len is 0, but got: %d, %v", len(w.watches), w.watches)
+		}
+		if len(w.paths) != 0 {
+			t.Fatalf("Expected paths len is 0, but got: %d, %v", len(w.paths), w.paths)
+		}
+	}()
 
 	w.Close()
 	wg.Wait()
