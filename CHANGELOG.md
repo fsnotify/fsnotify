@@ -40,6 +40,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    [#385](https://github.com/fsnotify/fsnotify/pull/385)
 * Go 1.14+: Fix unsafe pointer conversion [#325](https://github.com/fsnotify/fsnotify/pull/325)
 
+## [1.4.9] - 2020-03-11
+
+* Move example usage to the readme #329. This may resolve #328.
+
+## [1.4.8] - 2020-03-10
+
+* CI: test more go versions (@nathany 1d13583d846ea9d66dcabbfefbfb9d8e6fb05216)
+* Tests: Queued inotify events could have been read by the test before max_queued_events was hit (@matthias-stone #265)
+* Tests:  t.Fatalf -> t.Errorf in go routines (@gdey #266)
+* CI: Less verbosity (@nathany #267)
+* Tests: Darwin: Exchangedata is deprecated on 10.13 (@nathany #267)
+* Tests: Check if channels are closed in the example (@alexeykazakov #244)
+* CI: Only run golint on latest version of go and fix issues (@cpuguy83 #284)
+* CI: Add windows to travis matrix (@cpuguy83 #284)
+* Docs: Remover appveyor badge (@nathany 11844c0959f6fff69ba325d097fce35bd85a8e93)
+* Linux: create epoll and pipe fds with close-on-exec (@JohannesEbke #219)
+* Linux: open files with close-on-exec (@linxiulei #273)
+* Docs: Plan to support fanotify (@nathany ab058b44498e8b7566a799372a39d150d9ea0119 )
+* Project: Add go.mod (@nathany #309)
+* Project: Revise editor config (@nathany #309)
+* Project: Update copyright for 2019 (@nathany #309)
+* CI: Drop go1.8 from CI matrix (@nathany #309)
+* Docs: Updating the FAQ section for supportability with NFS & FUSE filesystems (@Pratik32 4bf2d1fec78374803a39307bfb8d340688f4f28e )
+
 ## [1.4.7] - 2018-01-09
 
 * BSD/macOS: Fix possible deadlock on closing the watcher on kqueue (thanks @nhooyr and @glycerine)
