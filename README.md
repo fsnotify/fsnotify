@@ -137,7 +137,7 @@ fsnotify requires support from underlying OS to work. The current NFS protocol d
 [#11]: https://github.com/fsnotify/fsnotify/issues/11
 [#7]: https://github.com/howeyc/fsnotify/issues/7
 
-[contributing]: https://github.com/fsnotify/fsnotify/blob/master/CONTRIBUTING.md
+[contributing]: https://github.com/fsnotify/fsnotify/blob/main/CONTRIBUTING.md
 
 ## Related Projects
 
