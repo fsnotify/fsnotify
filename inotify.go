@@ -297,7 +297,21 @@ func (w *Watcher) readEvents() {
 // channel. Such as events marked ignore by the kernel, or MODIFY events
 // against files that do not exist.
 func (e *Event) ignoreLinux(mask uint32) bool {
-	return mask&unix.IN_IGNORED == unix.IN_IGNORED
+	// Ignore anything the inotify API says to ignore
+	if mask&unix.IN_IGNORED == unix.IN_IGNORED {
+		return true
+	}
+
+	// If the event is Create or Write, the file must exist, or the
+	// event will be suppressed.
+	// *Note*: this was put in place because it was seen that a Write
+	// event was sent after the Remove. This ignores the Write and
+	// assumes a Remove will come or has come if the file doesn't exist.
+	if e.Op&Create == Create || e.Op&Write == Write {
+		_, statErr := os.Lstat(e.Name)
+		return os.IsNotExist(statErr)
+	}
+	return false
 }
 
 // newEvent returns an platform-independent Event based on an inotify mask.
