@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1255,6 +1256,10 @@ func TestCloseRace(t *testing.T) {
 	for i := 0; i < 150; i++ {
 		w, err := NewWatcher()
 		if err != nil {
+			if strings.Contains(err.Error(), "too many") { // syscall.EMFILE
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
 			t.Fatal(err)
 		}
 		go w.Close()
