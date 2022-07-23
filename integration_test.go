@@ -78,6 +78,10 @@ func addWatch(t *testing.T, watcher *Watcher, dir string) {
 }
 
 func TestFsnotifyMultipleOperations(t *testing.T) {
+	if runtime.GOOS == "netbsd" {
+		t.Skip("NetBSD behaviour is not fully correct") // TODO: investigate and fix.
+	}
+
 	watcher := newWatcher(t)
 
 	// Receive errors on the error channel on a separate goroutine
