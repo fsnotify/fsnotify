@@ -550,3 +550,35 @@ func TestInotifyDeleteOpenedFile(t *testing.T) {
 	fd.Close()
 	checkEvent(Remove)
 }
+
+func TestINotifyNoBlockingSyscalls(t *testing.T) {
+	getThreads := func() int {
+		d := fmt.Sprintf("/proc/%d/task", os.Getpid())
+		ls, err := os.ReadDir(d)
+		if err != nil {
+			t.Fatalf("reading %q: %s", d, err)
+		}
+		return len(ls)
+	}
+
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("Failed to create watcher: %v", err)
+	}
+
+	startingThreads := getThreads()
+	// Call readEvents a bunch of times; if this function has a blocking raw syscall, it'll create many new kthreads
+	for i := 0; i <= 60; i++ {
+		go w.readEvents()
+	}
+
+	// Bad synchronization mechanism
+	time.Sleep(time.Second * 2)
+
+	endingThreads := getThreads()
+
+	// Did we spawn any new threads?
+	if diff := endingThreads - startingThreads; diff > 0 {
+		t.Fatalf("Got a nonzero diff %v. starting: %v. ending: %v", diff, startingThreads, endingThreads)
+	}
+}
