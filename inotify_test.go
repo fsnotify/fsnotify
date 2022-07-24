@@ -11,9 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -555,17 +553,12 @@ func TestInotifyDeleteOpenedFile(t *testing.T) {
 
 func TestINotifyNoBlockingSyscalls(t *testing.T) {
 	getThreads := func() int {
-		cmd := fmt.Sprintf("ls /proc/%d/task | wc -l", os.Getpid())
-		output, err := exec.Command("/bin/bash", "-c", cmd).Output()
+		d := fmt.Sprintf("/proc/%d/task", os.Getpid())
+		ls, err := os.ReadDir(d)
 		if err != nil {
-			t.Fatalf("Failed to execute command to check number of threads, err %s", err)
+			t.Fatalf("reading %q: %s", d, err)
 		}
-
-		n, err := strconv.ParseInt(strings.Trim(string(output), "\n"), 10, 64)
-		if err != nil {
-			t.Fatalf("Failed to parse output as int, err: %s", err)
-		}
-		return int(n)
+		return len(ls)
 	}
 
 	w, err := NewWatcher()
