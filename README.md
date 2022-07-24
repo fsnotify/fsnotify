@@ -6,22 +6,26 @@
 
 `fsnotify` supports Windows, Linux, BSD and macOS with a common API.
 
-| Adapter               | OS                               | Status                                                                                                                          |
-| --------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| inotify               | Linux 2.6.27 or later, Android\* | Supported |
-| kqueue                | BSD, macOS, iOS\*                | Supported |
-| ReadDirectoryChangesW | Windows                          | Supported |
-| FSEvents              | macOS                            | [Planned](https://github.com/fsnotify/fsnotify/issues/11)                                                                       |
-| FEN                   | Solaris 11                       | [In Progress](https://github.com/fsnotify/fsnotify/pull/371)                                                                   |
-| fanotify              | Linux 2.6.37+                    | [Maybe](https://github.com/fsnotify/fsnotify/issues/114)                                                                      |
-| USN Journals          | Windows                          | [Maybe](https://github.com/fsnotify/fsnotify/issues/53)                                                                         |
-| Polling               | *All*                            | [Maybe](https://github.com/fsnotify/fsnotify/issues/9)                                                                          |
+| Adapter               | OS                       | Status                                                       |
+| --------------------- | -------------------------| -------------------------------------------------------------|
+| inotify               | Linux 2.6.32+, Android\* | Supported                                                    |
+| kqueue                | BSD, macOS, iOS\*        | Supported                                                    |
+| ReadDirectoryChangesW | Windows                  | Supported                                                    |
+| FSEvents              | macOS                    | [Planned](https://github.com/fsnotify/fsnotify/issues/11)    |
+| FEN                   | Solaris 11               | [In Progress](https://github.com/fsnotify/fsnotify/pull/371) |
+| fanotify              | Linux 2.6.37+            | [Maybe](https://github.com/fsnotify/fsnotify/issues/114)     |
+| USN Journals          | Windows                  | [Maybe](https://github.com/fsnotify/fsnotify/issues/53)      |
+| Polling               | *All*                    | [Maybe](https://github.com/fsnotify/fsnotify/issues/9)       |
 
 \* Android and iOS are untested.
 
-Please see [the documentation](https://pkg.go.dev/github.com/fsnotify/fsnotify) and consult the [FAQ](#faq) for usage information.
+fsnotify requires Go 1.16 or newer. Please see
+[the documentation](https://pkg.go.dev/github.com/fsnotify/fsnotify)
+and consult the [FAQ](#faq) for usage information.
 
-NOTE: fsnotify utilizes [`golang.org/x/sys`](https://pkg.go.dev/golang.org/x/sys) rather than [`syscall`](https://pkg.go.dev/syscall) from the standard library.
+NOTE: fsnotify utilizes
+[`golang.org/x/sys`](https://pkg.go.dev/golang.org/x/sys) rather than
+[`syscall`](https://pkg.go.dev/syscall) from the standard library.
 
 ## API stability
 
