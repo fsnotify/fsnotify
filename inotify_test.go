@@ -18,163 +18,119 @@ import (
 	"time"
 )
 
-func TestInotifyCloseRightAway(t *testing.T) {
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher")
-	}
-
-	// Close immediately; it won't even reach the first unix.Read.
-	w.Close()
-
-	// Wait for the close to complete.
-	<-time.After(50 * time.Millisecond)
-	isWatcherReallyClosed(t, w)
-}
-
-func TestInotifyCloseSlightlyLater(t *testing.T) {
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher")
-	}
-
-	// Wait until readEvents has reached unix.Read, and Close.
-	<-time.After(50 * time.Millisecond)
-	w.Close()
-
-	// Wait for the close to complete.
-	<-time.After(50 * time.Millisecond)
-	isWatcherReallyClosed(t, w)
-}
-
-func TestInotifyCloseSlightlyLaterWithWatch(t *testing.T) {
-	testDir := tempMkdir(t)
-	defer os.RemoveAll(testDir)
-
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher")
-	}
-	w.Add(testDir)
-
-	// Wait until readEvents has reached unix.Read, and Close.
-	<-time.After(50 * time.Millisecond)
-	w.Close()
-
-	// Wait for the close to complete.
-	<-time.After(50 * time.Millisecond)
-	isWatcherReallyClosed(t, w)
-}
-
-func TestInotifyCloseAfterRead(t *testing.T) {
-	testDir := tempMkdir(t)
-	defer os.RemoveAll(testDir)
-
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher")
-	}
-
-	err = w.Add(testDir)
-	if err != nil {
-		t.Fatalf("Failed to add .")
-	}
-
-	// Generate an event.
-	os.Create(filepath.Join(testDir, "somethingSOMETHINGsomethingSOMETHING"))
-
-	// Wait for readEvents to read the event, then close the watcher.
-	<-time.After(50 * time.Millisecond)
-	w.Close()
-
-	// Wait for the close to complete.
-	<-time.After(50 * time.Millisecond)
-	isWatcherReallyClosed(t, w)
-}
-
-func isWatcherReallyClosed(t *testing.T, w *Watcher) {
-	select {
-	case err, ok := <-w.Errors:
-		if ok {
-			t.Fatalf("w.Errors is not closed; readEvents is still alive after closing (error: %v)", err)
+// TODO: I'm not sure if these tests are still needed; I think they've become
+//       redundant after epoll was removed. Keep them for now to be sure.
+func TestInotifyClose(t *testing.T) {
+	isWatcherReallyClosed := func(t *testing.T, w *Watcher) {
+		select {
+		case err, ok := <-w.Errors:
+			if ok {
+				t.Fatalf("w.Errors is not closed; readEvents is still alive after closing (error: %v)", err)
+			}
+		default:
+			t.Fatalf("w.Errors would have blocked; readEvents is still alive!")
 		}
-	default:
-		t.Fatalf("w.Errors would have blocked; readEvents is still alive!")
-	}
-
-	select {
-	case _, ok := <-w.Events:
-		if ok {
-			t.Fatalf("w.Events is not closed; readEvents is still alive after closing")
+		select {
+		case _, ok := <-w.Events:
+			if ok {
+				t.Fatalf("w.Events is not closed; readEvents is still alive after closing")
+			}
+		default:
+			t.Fatalf("w.Events would have blocked; readEvents is still alive!")
 		}
-	default:
-		t.Fatalf("w.Events would have blocked; readEvents is still alive!")
 	}
+
+	t.Run("close immediately", func(t *testing.T) {
+		t.Parallel()
+		w := newWatcher(t)
+
+		w.Close()                           // Close immediately; it won't even reach the first unix.Read.
+		<-time.After(50 * time.Millisecond) // Wait for the close to complete.
+		isWatcherReallyClosed(t, w)
+	})
+
+	t.Run("close slightly later", func(t *testing.T) {
+		t.Parallel()
+		w := newWatcher(t)
+
+		<-time.After(50 * time.Millisecond) // Wait until readEvents has reached unix.Read, and Close.
+		w.Close()
+		<-time.After(50 * time.Millisecond) // Wait for the close to complete.
+		isWatcherReallyClosed(t, w)
+	})
+
+	t.Run("close slightly later with watch", func(t *testing.T) {
+		t.Parallel()
+		w := newWatcher(t)
+		addWatch(t, w, t.TempDir())
+
+		<-time.After(50 * time.Millisecond) // Wait until readEvents has reached unix.Read, and Close.
+		w.Close()
+		<-time.After(50 * time.Millisecond) // Wait for the close to complete.
+		isWatcherReallyClosed(t, w)
+	})
+
+	t.Run("close after read", func(t *testing.T) {
+		t.Parallel()
+		tmp := t.TempDir()
+		w := newWatcher(t)
+		addWatch(t, w, tmp)
+
+		touch(t, tmp, "somethingSOMETHINGsomethingSOMETHING") // Generate an event.
+
+		<-time.After(50 * time.Millisecond) // Wait for readEvents to read the event, then close the watcher.
+		w.Close()
+		<-time.After(50 * time.Millisecond) // Wait for the close to complete.
+		isWatcherReallyClosed(t, w)
+	})
+
+	t.Run("replace after close", func(t *testing.T) {
+		t.Parallel()
+
+		tmp := t.TempDir()
+		w := newWatcher(t)
+		defer w.Close()
+
+		addWatch(t, w, tmp)
+		touch(t, tmp, "testfile")
+		select {
+		case <-w.Events:
+		case err := <-w.Errors:
+			t.Fatalf("Error from watcher: %v", err)
+		case <-time.After(50 * time.Millisecond):
+			t.Fatalf("Took too long to wait for event")
+		}
+
+		// At this point, we've received one event, so the goroutine is ready and it
+		// blocking on unix.Read. Now try to swap the file descriptor under its
+		// nose.
+		w.Close()
+		w, err := NewWatcher()
+		defer func() { _ = w.Close() }()
+		if err != nil {
+			t.Fatalf("Failed to create second watcher: %v", err)
+		}
+
+		<-time.After(50 * time.Millisecond)
+		err = w.Add(tmp)
+		if err != nil {
+			t.Fatalf("Error adding tmp dir again: %v", err)
+		}
+	})
 }
 
-func TestInotifyCloseCreate(t *testing.T) {
-	testDir := tempMkdir(t)
-	defer os.RemoveAll(testDir)
-
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher: %v", err)
-	}
-	defer w.Close()
-
-	err = w.Add(testDir)
-	if err != nil {
-		t.Fatalf("Failed to add testDir: %v", err)
-	}
-	h, err := os.Create(filepath.Join(testDir, "testfile"))
-	if err != nil {
-		t.Fatalf("Failed to create file in testdir: %v", err)
-	}
-	h.Close()
-	select {
-	case <-w.Events:
-	case err := <-w.Errors:
-		t.Fatalf("Error from watcher: %v", err)
-	case <-time.After(50 * time.Millisecond):
-		t.Fatalf("Took too long to wait for event")
-	}
-
-	// At this point, we've received one event, so the goroutine is ready.
-	// It's also blocking on unix.Read.
-	// Now we try to swap the file descriptor under its nose.
-	w.Close()
-	w, err = NewWatcher()
-	defer func() { _ = w.Close() }()
-	if err != nil {
-		t.Fatalf("Failed to create second watcher: %v", err)
-	}
-
-	<-time.After(50 * time.Millisecond)
-	err = w.Add(testDir)
-	if err != nil {
-		t.Fatalf("Error adding testDir again: %v", err)
-	}
-}
-
-// This test verifies the watcher can keep up with file creations/deletions
-// when under load.
+// Verify the watcher can keep up with file creations/deletions when under load.
+//
+// TODO: should probably be in integrations_test.
 func TestInotifyStress(t *testing.T) {
 	maxNumToCreate := 1000
 
-	testDir := tempMkdir(t)
-	defer os.RemoveAll(testDir)
-	testFilePrefix := filepath.Join(testDir, "testfile")
+	tmp := t.TempDir()
+	testFilePrefix := filepath.Join(tmp, "testfile")
 
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher: %v", err)
-	}
+	w := newWatcher(t)
 	defer w.Close()
-
-	err = w.Add(testDir)
-	if err != nil {
-		t.Fatalf("Failed to add testDir: %v", err)
-	}
+	addWatch(t, w, tmp)
 
 	doneChan := make(chan struct{})
 	// The buffer ensures that the file generation goroutine is never blocked.
@@ -203,7 +159,7 @@ func TestInotifyStress(t *testing.T) {
 
 		for i := 0; i < maxNumToCreate; i++ {
 			testFile := fmt.Sprintf("%s%d", testFilePrefix, i)
-			err = os.Remove(testFile)
+			err := os.Remove(testFile)
 			if err != nil {
 				errChan <- fmt.Errorf("Remove failed: %v", err)
 			}
@@ -274,70 +230,17 @@ func TestInotifyStress(t *testing.T) {
 	}
 }
 
-func TestInotifyRemoveTwice(t *testing.T) {
-	testDir := tempMkdir(t)
-	defer os.RemoveAll(testDir)
-	testFile := filepath.Join(testDir, "testfile")
-
-	handle, err := os.Create(testFile)
-	if err != nil {
-		t.Fatalf("Create failed: %v", err)
-	}
-	handle.Close()
-
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher: %v", err)
-	}
-	defer w.Close()
-
-	err = w.Add(testFile)
-	if err != nil {
-		t.Fatalf("Failed to add testFile: %v", err)
-	}
-
-	err = w.Remove(testFile)
-	if err != nil {
-		t.Fatalf("wanted successful remove but got: %v", err)
-	}
-
-	err = w.Remove(testFile)
-	if err == nil {
-		t.Fatalf("no error on removing invalid file")
-	} else if !errors.Is(err, ErrNonExistentWatch) {
-		t.Fatalf("unexpected error %v on removing invalid file", err)
-	}
-
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if len(w.watches) != 0 {
-		t.Fatalf("Expected watches len is 0, but got: %d, %v", len(w.watches), w.watches)
-	}
-	if len(w.paths) != 0 {
-		t.Fatalf("Expected paths len is 0, but got: %d, %v", len(w.paths), w.paths)
-	}
-}
-
 func TestInotifyInnerMapLength(t *testing.T) {
-	testDir := tempMkdir(t)
-	defer os.RemoveAll(testDir)
-	testFile := filepath.Join(testDir, "testfile")
+	t.Parallel()
 
-	handle, err := os.Create(testFile)
-	if err != nil {
-		t.Fatalf("Create failed: %v", err)
-	}
-	handle.Close()
+	tmp := t.TempDir()
+	file := filepath.Join(tmp, "testfile")
 
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher: %v", err)
-	}
+	touch(t, file)
 
-	err = w.Add(testFile)
-	if err != nil {
-		t.Fatalf("Failed to add testFile: %v", err)
-	}
+	w := newWatcher(t)
+	addWatch(t, w, file)
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -347,10 +250,7 @@ func TestInotifyInnerMapLength(t *testing.T) {
 		}
 	}()
 
-	err = os.Remove(testFile)
-	if err != nil {
-		t.Fatalf("Failed to remove testFile: %v", err)
-	}
+	rm(t, file)
 	<-w.Events                          // consume Remove event
 	<-time.After(50 * time.Millisecond) // wait IN_IGNORE propagated
 
@@ -370,47 +270,36 @@ func TestInotifyInnerMapLength(t *testing.T) {
 }
 
 func TestInotifyOverflow(t *testing.T) {
+	t.Parallel()
+
 	// We need to generate many more events than the
-	// fs.inotify.max_queued_events sysctl setting.
-	// We use multiple goroutines (one per directory)
-	// to speed up file creation.
+	// fs.inotify.max_queued_events sysctl setting. We use multiple goroutines
+	// (one per directory) to speed up file creation.
 	numDirs := 128
 	numFiles := 1024
 
-	testDir := tempMkdir(t)
-	defer os.RemoveAll(testDir)
-
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher: %v", err)
-	}
+	tmp := t.TempDir()
+	w := newWatcher(t)
 	defer w.Close()
 
 	for dn := 0; dn < numDirs; dn++ {
-		testSubdir := fmt.Sprintf("%s/%d", testDir, dn)
-
-		err := os.Mkdir(testSubdir, 0o777)
-		if err != nil {
-			t.Fatalf("Cannot create subdir: %v", err)
-		}
-
-		err = w.Add(testSubdir)
-		if err != nil {
-			t.Fatalf("Failed to add subdir: %v", err)
-		}
+		dir := fmt.Sprintf("%s/%d", tmp, dn)
+		mkdir(t, dir, noWait)
+		addWatch(t, w, dir)
 	}
 
 	errChan := make(chan error, numDirs*numFiles)
 
-	// All events need to be in the inotify queue before pulling events off it to trigger this error.
+	// All events need to be in the inotify queue before pulling events off it
+	// to trigger this error.
 	wg := sync.WaitGroup{}
 	for dn := 0; dn < numDirs; dn++ {
-		testSubdir := fmt.Sprintf("%s/%d", testDir, dn)
+		dir := fmt.Sprintf("%s/%d", tmp, dn)
 
 		wg.Add(1)
 		go func() {
 			for fn := 0; fn < numFiles; fn++ {
-				testFile := fmt.Sprintf("%s/%d", testSubdir, fn)
+				testFile := fmt.Sprintf("%s/%d", dir, fn)
 
 				handle, err := os.Create(testFile)
 				if err != nil {
@@ -446,7 +335,7 @@ func TestInotifyOverflow(t *testing.T) {
 				t.Fatalf("Got an error from watcher: %v", err)
 			}
 		case evt := <-w.Events:
-			if !strings.HasPrefix(evt.Name, testDir) {
+			if !strings.HasPrefix(evt.Name, tmp) {
 				t.Fatalf("Got an event for an unknown file: %s", evt.Name)
 			}
 			if evt.Op == Create {
@@ -465,31 +354,103 @@ func TestInotifyOverflow(t *testing.T) {
 	}
 }
 
-func TestInotifyWatchList(t *testing.T) {
-	testDir := tempMkdir(t)
-	defer os.RemoveAll(testDir)
-	testFile := filepath.Join(testDir, "testfile")
+func TestInotifyNoBlockingSyscalls(t *testing.T) {
+	test := func() error {
+		getThreads := func() (int, error) {
+			// return pprof.Lookup("threadcreate").Count()
+			d := fmt.Sprintf("/proc/%d/task", os.Getpid())
+			ls, err := os.ReadDir(d)
+			if err != nil {
+				return 0, fmt.Errorf("reading %q: %s", d, err)
+			}
+			return len(ls), nil
+		}
 
-	handle, err := os.Create(testFile)
-	if err != nil {
-		t.Fatalf("Create failed: %v", err)
-	}
-	handle.Close()
+		w := newWatcher(t)
+		start, err := getThreads()
+		if err != nil {
+			return err
+		}
 
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher: %v", err)
+		// Call readEvents a bunch of times; if this function has a blocking raw
+		// syscall, it'll create many new kthreads
+		for i := 0; i <= 60; i++ {
+			go w.readEvents()
+		}
+
+		time.Sleep(2 * time.Second)
+
+		end, err := getThreads()
+		if err != nil {
+			return err
+		}
+		if diff := end - start; diff > 0 {
+			return fmt.Errorf("Got a nonzero diff %v. starting: %v. ending: %v", diff, start, end)
+		}
+		return nil
 	}
+
+	// This test can be a bit flaky, so run it twice and consider it "failed"
+	// only if both fail.
+	err := test()
+	if err != nil {
+		time.Sleep(2 * time.Second)
+		err := test()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// TODO: the below should probably be in integration_test, as they're not really
+//       inotify-specific as far as I can see.
+
+func TestInotifyRemoveTwice(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	testFile := filepath.Join(tmp, "testfile")
+
+	touch(t, testFile)
+
+	w := newWatcher(t)
 	defer w.Close()
+	addWatch(t, w, testFile)
 
-	err = w.Add(testFile)
+	err := w.Remove(testFile)
 	if err != nil {
-		t.Fatalf("Failed to add testFile: %v", err)
+		t.Fatal(err)
 	}
-	err = w.Add(testDir)
-	if err != nil {
-		t.Fatalf("Failed to add testDir: %v", err)
+
+	err = w.Remove(testFile)
+	if err == nil {
+		t.Fatalf("no error on removing invalid file")
+	} else if !errors.Is(err, ErrNonExistentWatch) {
+		t.Fatalf("remove %q: %s", testFile, err)
 	}
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.watches) != 0 {
+		t.Fatalf("Expected watches len is 0, but got: %d, %v", len(w.watches), w.watches)
+	}
+	if len(w.paths) != 0 {
+		t.Fatalf("Expected paths len is 0, but got: %d, %v", len(w.paths), w.paths)
+	}
+}
+
+func TestInotifyWatchList(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	testFile := filepath.Join(tmp, "testfile")
+
+	touch(t, testFile)
+
+	w := newWatcher(t)
+	defer w.Close()
+	addWatch(t, w, testFile)
+	addWatch(t, w, tmp)
 
 	value := w.WatchList()
 
@@ -503,28 +464,20 @@ func TestInotifyWatchList(t *testing.T) {
 }
 
 func TestInotifyDeleteOpenedFile(t *testing.T) {
-	testDir := tempMkdir(t)
-	defer os.RemoveAll(testDir)
+	t.Parallel()
 
-	testFile := filepath.Join(testDir, "testfile")
+	tmp := t.TempDir()
+	testFile := filepath.Join(tmp, "testfile")
 
-	// create and open a file
 	fd, err := os.Create(testFile)
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 	defer fd.Close()
 
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher: %v", err)
-	}
+	w := newWatcher(t)
 	defer w.Close()
-
-	err = w.Add(testFile)
-	if err != nil {
-		t.Fatalf("Failed to add watch for %s: %v", testFile, err)
-	}
+	addWatch(t, w, testFile)
 
 	checkEvent := func(exp Op) {
 		select {
@@ -538,47 +491,12 @@ func TestInotifyDeleteOpenedFile(t *testing.T) {
 		}
 	}
 
-	// Remove the (opened) file, check Chmod event (notifying
-	// about file link count change) is received
-	err = os.Remove(testFile)
-	if err != nil {
-		t.Fatalf("Failed to remove file: %s", err)
-	}
+	// Remove the (opened) file, check Chmod event (notifying about file link
+	// count change) is received
+	rm(t, testFile)
 	checkEvent(Chmod)
 
 	// Close the file, check Remove event is received
 	fd.Close()
 	checkEvent(Remove)
-}
-
-func TestINotifyNoBlockingSyscalls(t *testing.T) {
-	getThreads := func() int {
-		d := fmt.Sprintf("/proc/%d/task", os.Getpid())
-		ls, err := os.ReadDir(d)
-		if err != nil {
-			t.Fatalf("reading %q: %s", d, err)
-		}
-		return len(ls)
-	}
-
-	w, err := NewWatcher()
-	if err != nil {
-		t.Fatalf("Failed to create watcher: %v", err)
-	}
-
-	startingThreads := getThreads()
-	// Call readEvents a bunch of times; if this function has a blocking raw syscall, it'll create many new kthreads
-	for i := 0; i <= 60; i++ {
-		go w.readEvents()
-	}
-
-	// Bad synchronization mechanism
-	time.Sleep(time.Second * 2)
-
-	endingThreads := getThreads()
-
-	// Did we spawn any new threads?
-	if diff := endingThreads - startingThreads; diff > 0 {
-		t.Fatalf("Got a nonzero diff %v. starting: %v. ending: %v", diff, startingThreads, endingThreads)
-	}
 }

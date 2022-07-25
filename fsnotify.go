@@ -43,6 +43,12 @@ const (
 	Chmod
 )
 
+// Common errors that can be reported by a watcher
+var (
+	ErrNonExistentWatch = errors.New("can't remove non-existent watcher")
+	ErrEventOverflow    = errors.New("fsnotify queue overflow")
+)
+
 func (op Op) String() string {
 	var b strings.Builder
 	if op.Has(Create) {
@@ -77,9 +83,3 @@ func (e Event) Has(op Op) bool { return e.Op.Has(op) }
 func (e Event) String() string {
 	return fmt.Sprintf("%q: %s", e.Name, e.Op.String())
 }
-
-// Common errors that can be reported by a watcher
-var (
-	ErrNonExistentWatch = errors.New("can't remove non-existent watcher")
-	ErrEventOverflow    = errors.New("fsnotify queue overflow")
-)

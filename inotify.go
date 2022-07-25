@@ -22,7 +22,9 @@ import (
 
 // Watcher watches a set of files, delivering events to a channel.
 type Watcher struct {
-	fd          int // https://github.com/golang/go/issues/26439 can't call .Fd() on os.FIle or Read will no longer return on Close()
+	// Store fd here as os.File.Read() will no longer return on close after
+	// calling Fd(). See: https://github.com/golang/go/issues/26439
+	fd          int
 	Events      chan Event
 	Errors      chan error
 	mu          sync.Mutex // Map access
