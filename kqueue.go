@@ -237,8 +237,17 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 			}
 		}
 
-		watchfd, err = unix.Open(name, openMode, 0)
-		if watchfd == -1 {
+		// Retry on EINTR; open() can return EINTR in practice on macOS.
+		// See #354, and go issues 11180 and 39237.
+		for {
+			watchfd, err = unix.Open(name, openMode, 0)
+			if err == nil {
+				break
+			}
+			if errors.Is(err, unix.EINTR) {
+				continue
+			}
+
 			return "", err
 		}
 
