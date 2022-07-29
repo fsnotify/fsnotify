@@ -237,7 +237,7 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 			}
 		}
 
-		watchfd, err = unix.Open(name, openMode, 0700)
+		watchfd, err = unix.Open(name, openMode, 0)
 		if watchfd == -1 {
 			return "", err
 		}
@@ -429,7 +429,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 		filePath := filepath.Join(dirPath, fileInfo.Name())
 		filePath, err = w.internalWatch(filePath, fileInfo)
 		if err != nil {
-			return err
+			return fmt.Errorf("%q: %w", filepath.Join(dirPath, fileInfo.Name()), err)
 		}
 
 		w.mu.Lock()
