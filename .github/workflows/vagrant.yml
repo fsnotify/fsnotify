@@ -11,7 +11,16 @@ jobs:
           - debian6
     runs-on: macos-12
     steps:
-      - uses: actions/checkout@v3
+      - name: checkout
+        uses: actions/checkout@v3
+
+      - name: Cache Vagrant boxes
+        uses: actions/cache@v3
+        with:
+          path: ~/.vagrant.d/boxes
+          key: ${{ runner.os }}-vagrant-${{ hashFiles('Vagrantfile') }}
+          restore-keys: |
+            ${{ runner.os }}-vagrant-
 
       - name: setup Go
         uses: actions/setup-go@v3
@@ -21,6 +30,12 @@ jobs:
       - name: test
         run: |
           cp -f .github/workflows/Vagrantfile.${{ matrix.image }} Vagrantfile
-          GOOS=linux GOARCH=amd64 go test -o fsnotify.test -c ./...
+          export GOOS=linux
+          export GOARCH=amd64
+          for p in $(go list ./...); do
+            go test -c -o ${p//\//-}.test $p
+          done
           vagrant up
-          vagrant ssh -c "/vagrant/fsnotify.test"
+          for t in *.test; do
+            vagrant ssh -c "/vagrant/$t"
+          done
