@@ -80,6 +80,11 @@ func main() {
 }
 ```
 
+A slightly more expansive example can be found in [cmd/fsnotify](cmd/fsnotify), which can be run with:
+
+        # Watch the current directory (not recursive).
+        $ go run ./cmd/fsnotify .
+
 ## Contributing
 
 Please refer to [CONTRIBUTING][] before opening an issue or pull request.
