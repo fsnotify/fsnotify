@@ -21,6 +21,12 @@ jobs:
       - name: test
         run: |
           cp -f .github/workflows/Vagrantfile.${{ matrix.image }} Vagrantfile
-          GOOS=linux GOARCH=amd64 go test -o fsnotify.test -c ./...
+          export GOOS=linux
+          export GOARCH=amd64
+          for p in $(go list ./...); do
+            go test -c -o ${p//\//-}.test $p
+          done
           vagrant up
-          vagrant ssh -c "/vagrant/fsnotify.test"
+          for t in *.test; do
+            vagrant ssh -c "/vagrant/$t"
+          done
