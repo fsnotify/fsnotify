@@ -5,7 +5,8 @@
 //go:build !plan9
 // +build !plan9
 
-// Package fsnotify provides a platform-independent interface for file system notifications.
+// Package fsnotify provides a cross-platform interface for file system
+// notifications.
 package fsnotify
 
 import (
@@ -24,6 +25,9 @@ type Event struct {
 	Name string
 
 	// File operation that triggered the event.
+	//
+	// This is a bitmask as some systems may send multiple operations at once.
+	// Use the Op.Has() or Event.Has() method instead of comparing with ==.
 	Op Op
 }
 
@@ -40,29 +44,33 @@ const (
 )
 
 func (op Op) String() string {
-	// Use a builder for efficient string concatenation
-	var builder strings.Builder
-
-	if op&Create == Create {
-		builder.WriteString("|CREATE")
+	var b strings.Builder
+	if op.Has(Create) {
+		b.WriteString("|CREATE")
 	}
-	if op&Remove == Remove {
-		builder.WriteString("|REMOVE")
+	if op.Has(Remove) {
+		b.WriteString("|REMOVE")
 	}
-	if op&Write == Write {
-		builder.WriteString("|WRITE")
+	if op.Has(Write) {
+		b.WriteString("|WRITE")
 	}
-	if op&Rename == Rename {
-		builder.WriteString("|RENAME")
+	if op.Has(Rename) {
+		b.WriteString("|RENAME")
 	}
-	if op&Chmod == Chmod {
-		builder.WriteString("|CHMOD")
+	if op.Has(Chmod) {
+		b.WriteString("|CHMOD")
 	}
-	if builder.Len() == 0 {
+	if b.Len() == 0 {
 		return ""
 	}
-	return builder.String()[1:] // Strip leading pipe
+	return b.String()[1:]
 }
+
+// Has reports if this operation has the given operation.
+func (o Op) Has(h Op) bool { return o&h == h }
+
+// Has reports if this event has the given operation.
+func (e Event) Has(op Op) bool { return e.Op.Has(op) }
 
 // String returns a string representation of the event in the form
 // "file: REMOVE|WRITE|..."
