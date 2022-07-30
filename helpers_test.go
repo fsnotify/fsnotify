@@ -316,7 +316,7 @@ func (e Events) String() string {
 		if i > 0 {
 			b.WriteString("\n")
 		}
-		fmt.Fprintf(b, "%-20s %q", ee.Op.String(), strings.ReplaceAll(ee.Name, `\`, "/"))
+		fmt.Fprintf(b, "%-20s %q", ee.Op.String(), filepath.ToSlash(ee.Name))
 	}
 	return b.String()
 }
