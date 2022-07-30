@@ -87,7 +87,8 @@ watcher is on the roadmap: [#18]).
 [#18]: https://github.com/fsnotify/fsnotify/issues/18
 
 ### Do I have to watch the Error and Event channels in a separate goroutine?
-As of now, yes.
+As of now, yes (you can read both channels in the same goroutine, you don't need
+a separate goroutine for both channels; see the example).
 
 ### Why don't notifications work with NFS, SMB, or FUSE?
 fsnotify requires support from underlying OS to work. The current NFS and SMB
