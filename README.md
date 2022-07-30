@@ -90,9 +90,14 @@ watcher is on the roadmap: [#18]).
 As of now, yes (you can read both channels in the same goroutine, you don't need
 a separate goroutine for both channels; see the example).
 
-### Why don't notifications work with NFS, SMB, or FUSE?
+### Why don't notifications work with NFS, SMB, FUSE, /proc, or /sys?
 fsnotify requires support from underlying OS to work. The current NFS and SMB
-protocols does not provide network level support for file notifications.
+protocols does not provide network level support for file notifications, and
+neither do the /proc and /sys virtual filesystems.
+
+This could be fixed with a polling watcher ([#9]), but it's not yet implemented.
+
+[#9]: https://github.com/fsnotify/fsnotify/issues/9
 
 Platform-specific notes
 -----------------------
