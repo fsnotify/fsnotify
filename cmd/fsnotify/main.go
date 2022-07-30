@@ -42,7 +42,7 @@ func main() {
 
 				i++
 				m := ""
-				if e.Op&fsnotify.Write == fsnotify.Write {
+				if e.Has(fsnotify.Write) {
 					m = "(modified)"
 				}
 				line("%3d %-10s %-10s %q", i, e.Op, m, e.Name)
