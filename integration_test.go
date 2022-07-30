@@ -277,8 +277,8 @@ func TestWatchAttrib(t *testing.T) {
 func TestWatchRm(t *testing.T) {
 	tests := []testCase{
 		{"remove watched directory", func(t *testing.T, w *Watcher, tmp string) {
-			if runtime.GOOS == "openbsd" {
-				t.Skip("behaviour is inconsistent on OpenBSD and this test is flaky")
+			if runtime.GOOS == "openbsd" && runtime.GOOS == "netbsd" {
+				t.Skip("behaviour is inconsistent on OpenBSD and NetBSD, and this test is flaky")
 			}
 
 			file := filepath.Join(tmp, "file")
