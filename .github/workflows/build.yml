@@ -1,15 +1,11 @@
-name: build
-on:
-  push:
-  pull_request:
+name: 'build'
+on:   ['push', 'pull_request']
 jobs:
-  cross-compile-supported:
+  cross-compile:
     strategy:
       fail-fast: false
       matrix:
-        go:
-          - '1.16'
-          - '1.18'
+        go: ['1.16', '1.18']
     runs-on: ubuntu-latest
     steps:
       - name: setup Go

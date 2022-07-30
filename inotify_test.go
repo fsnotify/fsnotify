@@ -132,7 +132,7 @@ func TestInotifyCloseCreate(t *testing.T) {
 	}
 	h.Close()
 	select {
-	case _ = <-w.Events:
+	case <-w.Events:
 	case err := <-w.Errors:
 		t.Fatalf("Error from watcher: %v", err)
 	case <-time.After(50 * time.Millisecond):
@@ -144,7 +144,7 @@ func TestInotifyCloseCreate(t *testing.T) {
 	// Now we try to swap the file descriptor under its nose.
 	w.Close()
 	w, err = NewWatcher()
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 	if err != nil {
 		t.Fatalf("Failed to create second watcher: %v", err)
 	}
@@ -351,7 +351,7 @@ func TestInotifyInnerMapLength(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to remove testFile: %v", err)
 	}
-	_ = <-w.Events                      // consume Remove event
+	<-w.Events                          // consume Remove event
 	<-time.After(50 * time.Millisecond) // wait IN_IGNORE propagated
 
 	func() {

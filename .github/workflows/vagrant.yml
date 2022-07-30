@@ -1,7 +1,5 @@
-name: vagrant
-on:
-  push:
-  pull_request:
+name: 'test'
+on:   ['push', 'pull_request']
 jobs:
   test:
     strategy:
