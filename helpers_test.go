@@ -411,6 +411,12 @@ func newEvents(t *testing.T, s string) Events {
 	if e, ok := events[runtime.GOOS]; ok {
 		return e
 	}
+	switch runtime.GOOS {
+	case "freebsd", "netbsd", "openbsd", "dragonfly", "darwin":
+		if e, ok := events["kqueue"]; ok {
+			return e
+		}
+	}
 	return events[""]
 }
 
