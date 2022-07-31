@@ -452,6 +452,8 @@ func TestClose(t *testing.T) {
 	})
 }
 
+// TODO: should also check internal state is correct/cleaned up; e.g. no
+//       left-over file descriptors or whatnot.
 func TestRemove(t *testing.T) {
 	t.Run("works", func(t *testing.T) {
 		t.Parallel()
@@ -473,6 +475,24 @@ func TestRemove(t *testing.T) {
 		have := w.stop(t)
 		if len(have) > 0 {
 			t.Errorf("received events; expected none:\n%s", have)
+		}
+	})
+
+	t.Run("remove same dir twice", func(t *testing.T) {
+		tmp := t.TempDir()
+
+		touch(t, tmp, "file")
+
+		w := newWatcher(t)
+		defer w.Close()
+
+		addWatch(t, w, tmp)
+
+		if err := w.Remove(tmp); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.Remove(tmp); err == nil {
+			t.Fatal("no error")
 		}
 	})
 
