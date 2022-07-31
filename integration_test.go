@@ -164,6 +164,36 @@ func TestWatchRename(t *testing.T) {
 			windows:
 				create /renamed
 		`},
+
+		{"rename watched directory", func(t *testing.T, w *Watcher, tmp string) {
+			addWatch(t, w, tmp)
+
+			dir := filepath.Join(tmp, "dir")
+			mkdir(t, dir)
+			addWatch(t, w, dir)
+
+			mv(t, dir, tmp, "dir-renamed")
+			touch(t, tmp, "dir-renamed/file")
+		}, `
+			CREATE   "/dir"           # mkdir
+			RENAME   "/dir"           # mv
+			CREATE   "/dir-renamed"
+			RENAME   "/dir"
+			CREATE   "/dir/file"      # touch
+
+			windows:
+				CREATE       "/dir"                 # mkdir
+				RENAME       "/dir"                 # mv
+				CREATE       "/dir-renamed"
+				CREATE       "/dir-renamed/file"    # touch
+
+			# TODO: no results for the touch; this is probably a bug; windows
+			# was fixed in #370.
+			kqueue:
+				CREATE               "/dir"           # mkdir
+				CREATE               "/dir-renamed"   # mv
+				REMOVE|RENAME        "/dir"
+		`},
 	}
 
 	for _, tt := range tests {
