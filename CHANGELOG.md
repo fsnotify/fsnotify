@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+This version of fsnotify needs Go 1.16 (this was already the case since 1.5.1,
+but not documented).
+
+### Additions
+
+- all: add `Event.Has()` and `Op.Has()` (#477)
+
+  This makes checking events a lot easier; for example:
+
+	    if event.Op&Write == Write && !(event.Op&Remove == Remove) {
+	    }
+
+	Becomes:
+
+	    if event.Has(Write) && !event.Has(Remove) {
+	    }
+
+- all: add cmd/fsnotify (#463)
+
+  A command-line utility for testing. This is mainly useful for developers and
+  bug reports.
+
+### Changes and fixes
+
+- inotify: don't ignore events for files that don't exist (#260, #470)
+
+  Previously the inotify watcher would call os.Lstat() to check if a file still
+  exists before emitting events.
+
+  This was inconsistent with other platforms, racy, resulted in inconsistent
+  event reporting, and generally a source of confusion. It was added in 2013 to
+  fix a memory leak that no longer exists.
+
+- all: return `ErrNonExistentWatch` when `Remove()` is called on a path that's
+  not watched (#460)
+
+- inotify: replace epoll() with non-blocking inotify #434
+
+  Non-blocking inotify was not generally available at the time this library was
+  written in 2014, but now it is. As a result, the minimum Linux version is
+  bumped from 2.6.27 to 2.6.32. This hugely simplifies the code and is faster.
+
+- macos: retry opening files on EINTR (#475)
+
+- windows: fix renaming a watched directory, if the parent is also watched (#370)
+
+- windows: close file handle on Remove() (#288)
+
+- kqueue: put pathname in the error if watching a file fails (#471)
+
+- inotify, windows: calling Close() more than once could race (#465)
+
+- kqueue: improve Close() performance (#233)
+
+- all: various documentation additions and clarifications.
+
 ## [1.5.4] - 2022-04-25
 
 * Windows: add missing defer to `Watcher.WatchList` [#447](https://github.com/fsnotify/fsnotify/pull/447)
