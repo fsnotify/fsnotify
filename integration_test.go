@@ -4,6 +4,7 @@
 package fsnotify
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"runtime"
@@ -11,6 +12,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/fsnotify/fsnotify/internal"
 )
 
 func TestWatch(t *testing.T) {
@@ -78,6 +81,31 @@ func TestWatch(t *testing.T) {
 				write  /sub
 				remove /sub
 				remove /file
+		`},
+
+		{"file in directory is not readable", func(t *testing.T, w *Watcher, tmp string) {
+			if runtime.GOOS == "windows" {
+				t.Skip("attributes don't work on Windows")
+			}
+
+			touch(t, tmp, "file-unreadable")
+			chmod(t, 0, tmp, "file-unreadable")
+			touch(t, tmp, "file")
+			addWatch(t, w, tmp)
+
+			cat(t, "hello", tmp, "file")
+			rm(t, tmp, "file")
+			rm(t, tmp, "file-unreadable")
+		}, `
+			WRITE     "/file"
+			REMOVE    "/file"
+			REMOVE    "/file-unreadable"
+
+			# We never set up a watcher on the unreadable file, so we don't get
+			# the REMOVE.
+			kqueue:
+                WRITE    "/file"
+                REMOVE   "/file"
 		`},
 	}
 
@@ -441,6 +469,38 @@ func TestClose(t *testing.T) {
 			go w.Close()
 			go w.Close()
 			go w.Close()
+		}
+	})
+}
+
+func TestAdd(t *testing.T) {
+	t.Run("permission denied", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("attributes don't work on Windows")
+		}
+
+		t.Parallel()
+
+		tmp := t.TempDir()
+		dir := filepath.Join(tmp, "dir-unreadable")
+		mkdir(t, dir)
+		touch(t, dir, "/file")
+		chmod(t, 0, dir)
+
+		w := newWatcher(t)
+		defer func() {
+			w.Close()
+			chmod(t, 0o755, dir) // Make TempDir() cleanup work
+		}()
+		err := w.Add(dir)
+		if err == nil {
+			t.Fatal("error is nil")
+		}
+		if !errors.Is(err, internal.UnixEACCES) {
+			t.Errorf("not unix.EACCESS: %T %#[1]v", err)
+		}
+		if !errors.Is(err, internal.SyscallEACCES) {
+			t.Errorf("not syscall.EACCESS: %T %#[1]v", err)
 		}
 	})
 }
