@@ -212,11 +212,12 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 		}
 
 		// Follow Symlinks
-		// Unfortunately, Linux can add bogus symlinks to watch list without
-		// issue, and Windows can't do symlinks period (AFAIK). To  maintain
-		// consistency, we will act like everything is fine. There will simply
-		// be no file events for broken symlinks.
-		// Hence the returns of nil on errors.
+		//
+		// Linux can add unresolvable symlinks to the watch list without issue,
+		// and Windows can't do symlinks period. To maintain consistency, we
+		// will act like everything is fine if the link can't be resolved.
+		// There will simply be no file events for broken symlinks. Hence the
+		// returns of nil on errors.
 		if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
 			name, err = filepath.EvalSymlinks(name)
 			if err != nil {
@@ -332,7 +333,7 @@ loop:
 			w.mu.Unlock()
 			event := newEvent(path.name, mask)
 
-			if path.isDir && !(event.Op&Remove == Remove) {
+			if path.isDir && !event.Has(Remove) {
 				// Double check to make sure the directory exists. This can happen when
 				// we do a rm -fr on a recursively watched folders and we receive a
 				// modification event first but the folder has been deleted and later
@@ -343,14 +344,14 @@ loop:
 				}
 			}
 
-			if event.Op&Rename == Rename || event.Op&Remove == Remove {
+			if event.Has(Rename) || event.Has(Remove) {
 				w.Remove(event.Name)
 				w.mu.Lock()
 				delete(w.fileExists, event.Name)
 				w.mu.Unlock()
 			}
 
-			if path.isDir && event.Op&Write == Write && !(event.Op&Remove == Remove) {
+			if path.isDir && event.Has(Write) && !event.Has(Remove) {
 				w.sendDirectoryChangeEvents(event.Name)
 			} else {
 				// Send the event on the Events channel.
@@ -361,7 +362,7 @@ loop:
 				}
 			}
 
-			if event.Op&Remove == Remove {
+			if event.Has(Remove) {
 				// Look for a file that may have overwritten this.
 				// For example, mv f1 f2 will delete f2, then create f2.
 				if path.isDir {
