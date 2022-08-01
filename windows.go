@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build windows
 // +build windows
 
 package fsnotify
@@ -11,7 +12,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -19,14 +22,16 @@ import (
 
 // Watcher watches a set of files, delivering events to a channel.
 type Watcher struct {
-	Events   chan Event
-	Errors   chan error
-	isClosed bool           // Set to true when Close() is first called
-	mu       sync.Mutex     // Map access
-	port     syscall.Handle // Handle to completion port
-	watches  watchMap       // Map of watches (key: i-number)
-	input    chan *input    // Inputs to the reader are sent on this channel
-	quit     chan chan<- error
+	Events chan Event
+	Errors chan error
+
+	port  syscall.Handle // Handle to completion port
+	input chan *input    // Inputs to the reader are sent on this channel
+	quit  chan chan<- error
+
+	mu       sync.Mutex // Protects access to watches, isClosed
+	watches  watchMap   // Map of watches (key: i-number)
+	isClosed bool       // Set to true when Close() is first called
 }
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
@@ -49,10 +54,13 @@ func NewWatcher() (*Watcher, error) {
 
 // Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error {
+	w.mu.Lock()
 	if w.isClosed {
+		w.mu.Unlock()
 		return nil
 	}
 	w.isClosed = true
+	w.mu.Unlock()
 
 	// Send "quit" message to the reader goroutine
 	ch := make(chan error)
@@ -65,9 +73,13 @@ func (w *Watcher) Close() error {
 
 // Add starts watching the named file or directory (non-recursively).
 func (w *Watcher) Add(name string) error {
+	w.mu.Lock()
 	if w.isClosed {
+		w.mu.Unlock()
 		return errors.New("watcher already closed")
 	}
+	w.mu.Unlock()
+
 	in := &input{
 		op:    opAddWatch,
 		path:  filepath.Clean(name),
@@ -93,6 +105,21 @@ func (w *Watcher) Remove(name string) error {
 		return err
 	}
 	return <-in.reply
+}
+
+// WatchList returns the directories and files that are being monitered.
+func (w *Watcher) WatchList() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	entries := make([]string, 0, len(w.watches))
+	for _, entry := range w.watches {
+		for _, watchEntry := range entry {
+			entries = append(entries, watchEntry.path)
+		}
+	}
+
+	return entries
 }
 
 const (
@@ -171,8 +198,10 @@ type watch struct {
 	buf    [4096]byte
 }
 
-type indexMap map[uint64]*watch
-type watchMap map[uint32]indexMap
+type (
+	indexMap map[uint64]*watch
+	watchMap map[uint32]indexMap
+)
 
 func (w *Watcher) wakeupReader() error {
 	e := syscall.PostQueuedCompletionStatus(w.port, 0, 0, nil)
@@ -298,15 +327,18 @@ func (w *Watcher) remWatch(pathname string) error {
 	w.mu.Lock()
 	watch := w.watches.get(ino)
 	w.mu.Unlock()
+	if err := syscall.CloseHandle(ino.handle); err != nil {
+		w.Errors <- os.NewSyscallError("CloseHandle", err)
+	}
 	if watch == nil {
-		return fmt.Errorf("can't remove non-existent watch for: %s", pathname)
+		return fmt.Errorf("%w: %s", ErrNonExistentWatch, pathname)
 	}
 	if pathname == dir {
 		w.sendEvent(watch.path, watch.mask&sysFSIGNORED)
 		watch.mask = 0
 	} else {
 		name := filepath.Base(pathname)
-		w.sendEvent(watch.path+"\\"+name, watch.names[name]&sysFSIGNORED)
+		w.sendEvent(filepath.Join(watch.path, name), watch.names[name]&sysFSIGNORED)
 		delete(watch.names, name)
 	}
 	return w.startRead(watch)
@@ -316,7 +348,7 @@ func (w *Watcher) remWatch(pathname string) error {
 func (w *Watcher) deleteWatch(watch *watch) {
 	for name, mask := range watch.names {
 		if mask&provisional == 0 {
-			w.sendEvent(watch.path+"\\"+name, mask&sysFSIGNORED)
+			w.sendEvent(filepath.Join(watch.path, name), mask&sysFSIGNORED)
 		}
 		delete(watch.names, name)
 	}
@@ -451,9 +483,17 @@ func (w *Watcher) readEvents() {
 
 			// Point "raw" to the event in the buffer
 			raw := (*syscall.FileNotifyInformation)(unsafe.Pointer(&watch.buf[offset]))
-			buf := (*[syscall.MAX_PATH]uint16)(unsafe.Pointer(&raw.FileName))
-			name := syscall.UTF16ToString(buf[:raw.FileNameLength/2])
-			fullname := watch.path + "\\" + name
+			// TODO: Consider using unsafe.Slice that is available from go1.17
+			// https://stackoverflow.com/questions/51187973/how-to-create-an-array-or-a-slice-from-an-array-unsafe-pointer-in-golang
+			// instead of using a fixed syscall.MAX_PATH buf, we create a buf that is the size of the path name
+			size := int(raw.FileNameLength / 2)
+			var buf []uint16
+			sh := (*reflect.SliceHeader)(unsafe.Pointer(&buf))
+			sh.Data = uintptr(unsafe.Pointer(&raw.FileName))
+			sh.Len = size
+			sh.Cap = size
+			name := syscall.UTF16ToString(buf)
+			fullname := filepath.Join(watch.path, name)
 
 			var mask uint64
 			switch raw.Action {
@@ -464,6 +504,18 @@ func (w *Watcher) readEvents() {
 			case syscall.FILE_ACTION_RENAMED_OLD_NAME:
 				watch.rename = name
 			case syscall.FILE_ACTION_RENAMED_NEW_NAME:
+				// Update saved path of all sub-watches.
+				old := filepath.Join(watch.path, watch.rename)
+				w.mu.Lock()
+				for _, watchMap := range w.watches {
+					for _, ww := range watchMap {
+						if strings.HasPrefix(ww.path, old) {
+							ww.path = filepath.Join(fullname, strings.TrimPrefix(ww.path, old))
+						}
+					}
+				}
+				w.mu.Unlock()
+
 				if watch.names[watch.rename] != 0 {
 					watch.names[name] |= watch.names[watch.rename]
 					delete(watch.names, watch.rename)
@@ -491,7 +543,7 @@ func (w *Watcher) readEvents() {
 				}
 			}
 			if raw.Action == syscall.FILE_ACTION_RENAMED_NEW_NAME {
-				fullname = watch.path + "\\" + watch.rename
+				fullname = filepath.Join(watch.path, watch.rename)
 				sendNameEvent()
 			}
 
