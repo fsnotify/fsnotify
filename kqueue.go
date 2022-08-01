@@ -22,6 +22,7 @@ import (
 type Watcher struct {
 	Events chan Event
 	Errors chan error
+	done   chan bool
 
 	kq        int    // File descriptor (as returned by the kqueue() syscall).
 	closepipe [2]int // Pipe used for closing.
@@ -87,6 +88,7 @@ func (w *Watcher) Close() error {
 	}
 
 	// Send "quit" message to the reader goroutine.
+	w.done <- true
 	unix.Close(w.closepipe[1])
 
 	return nil
@@ -314,7 +316,8 @@ func (w *Watcher) readEvents() {
 			select {
 			case w.Errors <- err:
 			case <-w.done:
-				break loop
+				closed = true
+				continue
 			}
 			continue
 		}
@@ -360,7 +363,8 @@ func (w *Watcher) readEvents() {
 				select {
 				case w.Events <- event:
 				case <-w.done:
-					break loop
+					closed = true
+					continue
 				}
 			}
 
