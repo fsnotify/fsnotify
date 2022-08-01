@@ -10,11 +10,12 @@ package fsnotify
 import (
 	"errors"
 	"fmt"
-	"golang.org/x/sys/unix"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"golang.org/x/sys/unix"
 )
 
 const eventBits = unix.FILE_MODIFIED | unix.FILE_ATTRIB | unix.FILE_NOFOLLOW

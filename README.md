@@ -1,35 +1,28 @@
-# File system notifications for Go
+fsnotify is a Go library to provide cross-platform filesystem notifications on
+Windows, Linux, macOS, BSD, illumos, and Solaris.
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/fsnotify/fsnotify.svg)](https://pkg.go.dev/github.com/fsnotify/fsnotify) [![Go Report Card](https://goreportcard.com/badge/github.com/fsnotify/fsnotify)](https://goreportcard.com/report/github.com/fsnotify/fsnotify) [![Maintainers Wanted](https://img.shields.io/badge/maintainers-wanted-red.svg)](https://github.com/fsnotify/fsnotify/issues/413)
+fsnotify requires Go 1.16 or newer.
 
+API docs: https://pkg.go.dev/github.com/fsnotify/fsnotify
 
+Platform support:
 
-fsnotify utilizes [golang.org/x/sys](https://godoc.org/golang.org/x/sys) rather than `syscall` from the standard library. 
+| Adapter               | OS               | Status                                                       |
+| --------------------- | ---------------- | ------------------------------------------------------------ |
+| inotify               | Linux 2.6.32+    | Supported                                                    |
+| kqueue                | BSD, macOS       | Supported                                                    |
+| ReadDirectoryChangesW | Windows          | Supported                                                    |
+| FEN                   | illumos, Solaris | Supported                                                    |
+| FSEvents              | macOS            | [Planned](https://github.com/fsnotify/fsnotify/issues/11)    |
+| fanotify              | Linux 2.6.37+    | [Maybe](https://github.com/fsnotify/fsnotify/issues/114)     |
+| USN Journals          | Windows          | [Maybe](https://github.com/fsnotify/fsnotify/issues/53)      |
+| Polling               | *All*            | [Maybe](https://github.com/fsnotify/fsnotify/issues/9)       |
 
-Cross platform: Windows, Linux, BSD, macOS, and Solaris/illumos.
+Linux and macOS should include Android and iOS, but these are currently untested.
 
-| Adapter               | OS                               | Status                                                                                                                          |
-| --------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| inotify               | Linux 2.6.27 or later, Android\* | Supported |
-| kqueue                | BSD, macOS, iOS\*                | Supported |
-| ReadDirectoryChangesW | Windows                          | Supported |
-| FSEvents              | macOS                            | [Planned](https://github.com/fsnotify/fsnotify/issues/11)                                                                       |
-| FEN                   | Solaris 11, illumos              | Supported |
-| fanotify              | Linux 2.6.37+                    | [Maybe](https://github.com/fsnotify/fsnotify/issues/114)                                                                      |
-| USN Journals          | Windows                          | [Maybe](https://github.com/fsnotify/fsnotify/issues/53)                                                                         |
-| Polling               | *All*                            | [Maybe](https://github.com/fsnotify/fsnotify/issues/9)                                                                          |
-
-\* Android and iOS are untested.
-
-Please see [the documentation](https://pkg.go.dev/github.com/fsnotify/fsnotify) and consult the [FAQ](#faq) for usage information.
-
-## API stability
-
-fsnotify is a fork of [howeyc/fsnotify](https://github.com/howeyc/fsnotify) with a new API as of v1.0. The API is based on [this design document](http://goo.gl/MrYxyA). 
-
-All [releases](https://github.com/fsnotify/fsnotify/releases) are tagged based on [Semantic Versioning](http://semver.org/).
-
-## Usage
+Usage
+-----
+A basic example:
 
 ```go
 package main
@@ -56,7 +49,7 @@ func main() {
 					return
 				}
 				log.Println("event:", event)
-				if event.Op&fsnotify.Write == fsnotify.Write {
+				if event.Has(fsnotify.Write) {
 					log.Println("modified file:", event.Name)
 				}
 			case err, ok := <-watcher.Errors:
@@ -68,7 +61,7 @@ func main() {
 		}
 	}()
 
-	err = watcher.Add("/tmp/foo")
+	err = watcher.Add("/tmp")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -76,47 +69,87 @@ func main() {
 }
 ```
 
-## Contributing
+A slightly more expansive example can be found in [cmd/fsnotify](cmd/fsnotify),
+which can be run with:
 
-Please refer to [CONTRIBUTING][] before opening an issue or pull request.
+    # Watch the current directory (not recursive).
+    $ go run ./cmd/fsnotify .
 
-## FAQ
+FAQ
+---
+### Will a file still be watched when it's moved to another directory?
+No, not unless you are watching the location it was moved to.
 
-**When a file is moved to another directory is it still being watched?**
+### Are all subdirectories watched too?
+No, you must add watches for any directory you want to watch (a recursive
+watcher is on the roadmap: [#18]).
 
-No (it shouldn't be, unless you are watching where it was moved to).
-
-**When I watch a directory, are all subdirectories watched as well?**
-
-No, you must add watches for any directory you want to watch (a recursive watcher is on the roadmap [#18][]).
-
-**Do I have to watch the Error and Event channels in a separate goroutine?**
-
-As of now, yes. Looking into making this single-thread friendly (see [howeyc #7][#7])
-
-**Why am I receiving multiple events for the same file on OS X?**
-
-Spotlight indexing on OS X can result in multiple events (see [howeyc #62][#62]). A temporary workaround is to add your folder(s) to the *Spotlight Privacy settings* until we have a native FSEvents implementation (see [#11][]).
-
-**How many files can be watched at once?**
-
-There are OS-specific limits as to how many watches can be created:
-* Linux: /proc/sys/fs/inotify/max_user_watches contains the limit, reaching this limit results in a "no space left on device" error.
-* BSD / OSX: sysctl variables "kern.maxfiles" and "kern.maxfilesperproc", reaching these limits results in a "too many open files" error.
-
-**Why don't notifications work with NFS filesystems or filesystem in userspace (FUSE)?**
-
-fsnotify requires support from underlying OS to work. The current NFS protocol does not provide network level support for file notifications.
-
-[#62]: https://github.com/howeyc/fsnotify/issues/62
 [#18]: https://github.com/fsnotify/fsnotify/issues/18
+
+### Do I have to watch the Error and Event channels in a separate goroutine?
+As of now, yes (you can read both channels in the same goroutine, you don't need
+a separate goroutine for both channels; see the example).
+
+### Why don't notifications work with NFS, SMB, FUSE, /proc, or /sys?
+fsnotify requires support from underlying OS to work. The current NFS and SMB
+protocols does not provide network level support for file notifications, and
+neither do the /proc and /sys virtual filesystems.
+
+This could be fixed with a polling watcher ([#9]), but it's not yet implemented.
+
+[#9]: https://github.com/fsnotify/fsnotify/issues/9
+
+Platform-specific notes
+-----------------------
+### Linux
+When a file is removed a REMOVE event won't be emitted until all file
+descriptors are closed. It will emit a CHMOD though:
+
+    fp := os.Open("file")
+    os.Remove("file")        // CHMOD
+    fp.Close()               // REMOVE
+
+Linux: the `fs.inotify.max_user_watches` sysctl variable specifies the upper
+limit for the number of watches per user, and `fs.inotify.max_user_instances`
+specifies the maximum number of inotify instances per user. Every Watcher you
+create is an "instance", and every path you add is a "watch".
+
+These are also exposed in /proc as `/proc/sys/fs/inotify/max_user_watches` and
+`/proc/sys/fs/inotify/max_user_instances`
+
+To increase them you can use `sysctl` or write the value to proc file:
+
+    # The default values on Linux 5.18
+    sysctl fs.inotify.max_user_watches=124983
+    sysctl fs.inotify.max_user_instances=128
+
+To make the changes persist on reboot edit `/etc/sysctl.conf` or
+`/usr/lib/sysctl.d/50-default.conf` (some systemd systems):
+
+    fs.inotify.max_user_watches=124983
+    fs.inotify.max_user_instances=128
+
+Reaching the limit will result in a "no space left on device" or "too many open
+files" error.
+
+### kqueue (macOS, all BSD systems)
+kqueue requires opening a file descriptor for every file that's being watched;
+so if you're watching a directory with five files then that's six file
+descriptors. You will run in to your system's "max open files" limit faster on
+these platforms.
+
+The sysctl variables `kern.maxfiles` and `kern.maxfilesperproc` can be used to
+control the maximum number of open files.
+
+### macOS
+Spotlight indexing on macOS can result in multiple events (see [#15]). A temporary
+workaround is to add your folder(s) to the *Spotlight Privacy settings* until we
+have a native FSEvents implementation (see [#11]).
+
 [#11]: https://github.com/fsnotify/fsnotify/issues/11
-[#7]: https://github.com/howeyc/fsnotify/issues/7
+[#15]: https://github.com/fsnotify/fsnotify/issues/15
 
-[contributing]: https://github.com/fsnotify/fsnotify/blob/master/CONTRIBUTING.md
-
-## Related Projects
-
-* [notify](https://github.com/rjeczalik/notify)
-* [fsevents](https://github.com/fsnotify/fsevents)
-
+Related Projects
+----------------
+- [notify](https://github.com/rjeczalik/notify)
+- [fsevents](https://github.com/fsnotify/fsevents)

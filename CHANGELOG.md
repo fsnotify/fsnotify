@@ -7,11 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-* Solaris: add support for File Event Notifications (fen) [#12](https://github.com/fsnotify/fsnotify/issues/12)
+This version of fsnotify needs Go 1.16 (this was already the case since 1.5.1,
+but not documented).
+
+### Additions
+
+- all: add `Event.Has()` and `Op.Has()` (#477)
+
+  This makes checking events a lot easier; for example:
+
+	    if event.Op&Write == Write && !(event.Op&Remove == Remove) {
+	    }
+
+	Becomes:
+
+	    if event.Has(Write) && !event.Has(Remove) {
+	    }
+
+- all: add cmd/fsnotify (#463)
+
+  A command-line utility for testing. This is mainly useful for developers and
+  bug reports.
+
+### Changes and fixes
+
+- inotify: don't ignore events for files that don't exist (#260, #470)
+
+  Previously the inotify watcher would call os.Lstat() to check if a file still
+  exists before emitting events.
+
+  This was inconsistent with other platforms, racy, resulted in inconsistent
+  event reporting, and generally a source of confusion. It was added in 2013 to
+  fix a memory leak that no longer exists.
+
+- all: return `ErrNonExistentWatch` when `Remove()` is called on a path that's
+  not watched (#460)
+
+- inotify: replace epoll() with non-blocking inotify #434
+
+  Non-blocking inotify was not generally available at the time this library was
+  written in 2014, but now it is. As a result, the minimum Linux version is
+  bumped from 2.6.27 to 2.6.32. This hugely simplifies the code and is faster.
+
+- macos: retry opening files on EINTR (#475)
+
+- windows: fix renaming a watched directory, if the parent is also watched (#370)
+
+- windows: close file handle on Remove() (#288)
+
+- kqueue: put pathname in the error if watching a file fails (#471)
+
+- inotify, windows: calling Close() more than once could race (#465)
+
+- kqueue: improve Close() performance (#233)
+
+- all: various documentation additions and clarifications.
+
+## [1.5.4] - 2022-04-25
+
+* Windows: add missing defer to `Watcher.WatchList` [#447](https://github.com/fsnotify/fsnotify/pull/447)
+* go.mod: use latest x/sys [#444](https://github.com/fsnotify/fsnotify/pull/444)
+* Fix compilation for OpenBSD [#443](https://github.com/fsnotify/fsnotify/pull/443)
+
+## [1.5.3] - 2022-04-22
+
+* This version is retracted. An incorrect branch is published accidentally [#445](https://github.com/fsnotify/fsnotify/issues/445)
+
+## [1.5.2] - 2022-04-21
+
+* Add a feature to return the directories and files that are being monitored [#374](https://github.com/fsnotify/fsnotify/pull/374)
+* Fix potential crash on windows if `raw.FileNameLength` exceeds `syscall.MAX_PATH` [#361](https://github.com/fsnotify/fsnotify/pull/361)
+* Allow build on unsupported GOOS [#424](https://github.com/fsnotify/fsnotify/pull/424)
+* Don't set `poller.fd` twice in `newFdPoller` [#406](https://github.com/fsnotify/fsnotify/pull/406)
+* fix go vet warnings: call to `(*T).Fatalf` from a non-test goroutine [#416](https://github.com/fsnotify/fsnotify/pull/416)
 
 ## [1.5.1] - 2021-08-24
 
-* Revert Add AddRaw to not follow symlinks
+* Revert Add AddRaw to not follow symlinks [#394](https://github.com/fsnotify/fsnotify/pull/394)
 
 ## [1.5.0] - 2021-08-20
 
@@ -23,6 +95,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    [#381](https://github.com/fsnotify/fsnotify/pull/381)
    [#385](https://github.com/fsnotify/fsnotify/pull/385)
 * Go 1.14+: Fix unsafe pointer conversion [#325](https://github.com/fsnotify/fsnotify/pull/325)
+
+## [1.4.9] - 2020-03-11
+
+* Move example usage to the readme #329. This may resolve #328.
+
+## [1.4.8] - 2020-03-10
+
+* CI: test more go versions (@nathany 1d13583d846ea9d66dcabbfefbfb9d8e6fb05216)
+* Tests: Queued inotify events could have been read by the test before max_queued_events was hit (@matthias-stone #265)
+* Tests:  t.Fatalf -> t.Errorf in go routines (@gdey #266)
+* CI: Less verbosity (@nathany #267)
+* Tests: Darwin: Exchangedata is deprecated on 10.13 (@nathany #267)
+* Tests: Check if channels are closed in the example (@alexeykazakov #244)
+* CI: Only run golint on latest version of go and fix issues (@cpuguy83 #284)
+* CI: Add windows to travis matrix (@cpuguy83 #284)
+* Docs: Remover appveyor badge (@nathany 11844c0959f6fff69ba325d097fce35bd85a8e93)
+* Linux: create epoll and pipe fds with close-on-exec (@JohannesEbke #219)
+* Linux: open files with close-on-exec (@linxiulei #273)
+* Docs: Plan to support fanotify (@nathany ab058b44498e8b7566a799372a39d150d9ea0119 )
+* Project: Add go.mod (@nathany #309)
+* Project: Revise editor config (@nathany #309)
+* Project: Update copyright for 2019 (@nathany #309)
+* CI: Drop go1.8 from CI matrix (@nathany #309)
+* Docs: Updating the FAQ section for supportability with NFS & FUSE filesystems (@Pratik32 4bf2d1fec78374803a39307bfb8d340688f4f28e )
 
 ## [1.4.7] - 2018-01-09
 
