@@ -77,3 +77,17 @@ jobs:
           run: |
             # TODO: no -race for the same reason as OpenBSD (the timing; it does run).
             go117 test ./...
+
+  testillumos:
+    runs-on: macos-12
+    name: test (illumos, 1.17)
+    steps:
+    - uses: actions/checkout@v2
+    - name: test (illumos, 1.17)
+      id: test
+      uses: papertigers/illumos-vm@r38
+      with:
+        prepare: |
+          pkg install go-117
+        run: |
+          /opt/ooce/go-1.17/bin/go test ./...
