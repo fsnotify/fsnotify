@@ -414,8 +414,18 @@ func newEvents(t *testing.T, s string) Events {
 		return e
 	}
 	switch runtime.GOOS {
+	// kqueue shortcut
 	case "freebsd", "netbsd", "openbsd", "dragonfly", "darwin":
 		if e, ok := events["kqueue"]; ok {
+			return e
+		}
+	// Fall back to solaris for illumos, and vice versa.
+	case "solaris":
+		if e, ok := events["illumos"]; ok {
+			return e
+		}
+	case "illumos":
+		if e, ok := events["solaris"]; ok {
 			return e
 		}
 	}
