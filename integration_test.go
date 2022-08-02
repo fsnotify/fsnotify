@@ -250,6 +250,10 @@ func TestWatchSymlink(t *testing.T) {
 				remove    /link
 				create    /link
 				write     /link
+			solaris:
+				remove    /link
+				create    /link
+				write     /link
 		`},
 	}
 
