@@ -282,7 +282,7 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 }
 
 func (w *Watcher) updateDirectory(path string) error {
-	// The directory was modified, so we must find unwatched entites and
+	// The directory was modified, so we must find unwatched entities and
 	// watch them. If something was removed from the directory, nothing will
 	// happen, as everything else should still be watched.
 	files, err := ioutil.ReadDir(path)
