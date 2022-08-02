@@ -186,6 +186,11 @@ func TestWatchRename(t *testing.T) {
 				RENAME       "/dir"                 # mv
 				CREATE       "/dir-renamed"
 				CREATE       "/dir-renamed/file"    # touch
+			solaris:
+				CREATE       "/dir"                 # mkdir
+				RENAME       "/dir"                 # mv
+				CREATE       "/dir-renamed"
+				CREATE       "/dir-renamed/file"    # touch
 
 			# TODO: no results for the touch; this is probably a bug; windows
 			# was fixed in #370.
