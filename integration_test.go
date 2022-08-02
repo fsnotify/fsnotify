@@ -70,6 +70,15 @@ func TestWatch(t *testing.T) {
 			remove /sub
 			remove /file
 
+			# Why is solaris watching the subdirectory?
+			#solaris:
+			#	create /sub
+			#	create /file
+			#	create /sub/file2
+			#	remove /sub
+			#	remove /sub/file2
+			#	remove /file
+
 			# Windows includes a write for the /sub dir too, two of them even(?)
 			windows:
 				create /sub
