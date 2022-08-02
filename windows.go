@@ -29,9 +29,9 @@ type Watcher struct {
 	input chan *input    // Inputs to the reader are sent on this channel
 	quit  chan chan<- error
 
-	mu       sync.Mutex // Protects access to watches, isClosed
-	watches  watchMap   // Map of watches (key: i-number)
-	isClosed bool       // Set to true when Close() is first called
+	mu       *sync.Mutex // Protects access to watches, isClosed
+	watches  watchMap    // Map of watches (key: i-number)
+	isClosed bool        // Set to true when Close() is first called
 }
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
@@ -41,6 +41,7 @@ func NewWatcher() (*Watcher, error) {
 		return nil, os.NewSyscallError("CreateIoCompletionPort", e)
 	}
 	w := &Watcher{
+		mu:      new(sync.Mutex),
 		port:    port,
 		watches: make(watchMap),
 		input:   make(chan *input, 1),

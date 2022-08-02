@@ -27,7 +27,7 @@ type Watcher struct {
 
 	kq int // File descriptor (as returned by the kqueue() syscall).
 
-	mu              sync.Mutex                  // Protects access to watcher data
+	mu              *sync.Mutex                 // Protects access to watcher data
 	watches         map[string]int              // Map of watched file descriptors (key: path).
 	watchesByDir    map[string]map[int]struct{} // Map of watched file descriptors indexed by the parent directory (key: dirname(path)).
 	externalWatches map[string]bool             // Map of watches added by user of the library.
@@ -51,6 +51,7 @@ func NewWatcher() (*Watcher, error) {
 
 	w := &Watcher{
 		kq:              kq,
+		mu:              new(sync.Mutex),
 		watches:         make(map[string]int),
 		watchesByDir:    make(map[string]map[int]struct{}),
 		dirFlags:        make(map[string]uint32),

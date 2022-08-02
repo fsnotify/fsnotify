@@ -27,7 +27,7 @@ type Watcher struct {
 	fd          int
 	Events      chan Event
 	Errors      chan error
-	mu          sync.Mutex // Map access
+	mu          *sync.Mutex // Map access
 	inotifyFile *os.File
 	watches     map[string]*watch // Map of inotify watches (key: path)
 	paths       map[int]string    // Map of watched paths (key: watch descriptor)
@@ -47,6 +47,7 @@ func NewWatcher() (*Watcher, error) {
 
 	w := &Watcher{
 		fd:          fd,
+		mu:          new(sync.Mutex),
 		inotifyFile: os.NewFile(uintptr(fd), ""),
 		watches:     make(map[string]*watch),
 		paths:       make(map[int]string),

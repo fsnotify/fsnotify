@@ -255,12 +255,12 @@ func chmod(t *testing.T, mode fs.FileMode, path ...string) {
 type eventCollector struct {
 	w      *Watcher
 	events Events
-	mu     sync.Mutex
+	mu     *sync.Mutex
 	done   chan struct{}
 }
 
 func newCollector(t *testing.T) *eventCollector {
-	return &eventCollector{w: newWatcher(t), done: make(chan struct{})}
+	return &eventCollector{w: newWatcher(t), mu: new(sync.Mutex), done: make(chan struct{})}
 }
 
 func (w *eventCollector) stop(t *testing.T) Events {

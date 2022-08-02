@@ -523,3 +523,15 @@ func TestRemove(t *testing.T) {
 		}
 	})
 }
+
+// Make sure we don't race if people pass the watcher by value.
+func TestWatcherByValue(t *testing.T) {
+	var (
+		tmp = t.TempDir()
+		w   = newWatcher(t)
+		ww  = *w
+	)
+	for i := 0; i < 10; i++ {
+		go ww.Add(tmp)
+	}
+}
