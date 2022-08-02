@@ -341,6 +341,10 @@ func TestWatchRm(t *testing.T) {
 			linux:
 				remove         /file
 				remove         /
+			# Why is solaris like this?? Bug?
+			#solaris:
+			#	remove         /
+			#	remove         /file
 			windows:
 				remove         /file
 				remove         /
