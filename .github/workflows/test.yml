@@ -12,7 +12,7 @@ jobs:
           - windows-latest
         go:
           - '1.16'
-          - '1.18'
+          - '1.19'
     runs-on: ${{ matrix.os }}
     steps:
       - name: setup Go

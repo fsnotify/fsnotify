@@ -5,7 +5,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ['1.16', '1.18']
+        go: ['1.16', '1.19']
     runs-on: ubuntu-latest
     steps:
       - name: setup Go
