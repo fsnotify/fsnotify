@@ -31,6 +31,11 @@ Just `go test ./...` runs all the tests; the CI runs this on all supported
 platforms. Testing different platforms locally can be done with something like
 [goon] or [Vagrant], but this isn't super-easy to set up at the moment.
 
+Running tests on different architectures with QEMU can be done with the
+`.github/workflows/test-archs.sh` script; this uses `qemu-arch` and doesn't
+require setting up a full VM. This is run in the CI for Linux only at the
+moment.
+
 The main tests are in [integration_test.go].
 
 [goon]: https://github.com/arp242/goon

@@ -1,0 +1,23 @@
+name: 'test-archs'
+on:   ['push', 'pull_request']
+jobs:
+  test-archs:
+    # QEMU only works on Linux for now.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v2
+        with:
+          platforms: 'i386,arm,aarch64,mips,mips64,mips64el,mipsel,ppc64,ppc64le,riscv64,s390x'
+
+      - name: setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.18'
+
+      - name: checkout
+        uses: actions/checkout@v3
+
+      - name: test-archs
+        run: |
+          ./.github/workflows/test-archs.sh
