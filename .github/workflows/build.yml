@@ -1,5 +1,8 @@
 name: 'build'
-on:   ['push', 'pull_request']
+on:
+  push:
+    paths: ['**.go', 'go.mod', '.github/workflows/*']
+
 jobs:
   cross-compile:
     strategy:
