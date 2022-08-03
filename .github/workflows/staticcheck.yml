@@ -1,5 +1,8 @@
 name: 'staticcheck'
-on:   ['push', 'pull_request']
+on:
+  push:
+    paths: ['**.go', 'go.mod', '.github/workflows/*']
+
 jobs:
   staticcheck:
     name:    'staticcheck'
