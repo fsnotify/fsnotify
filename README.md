@@ -14,7 +14,7 @@ Platform support:
 | ReadDirectoryChangesW | Windows        | Supported                                                    |
 | FSEvents              | macOS          | [Planned](https://github.com/fsnotify/fsnotify/issues/11)    |
 | FEN                   | Solaris 11     | [In Progress](https://github.com/fsnotify/fsnotify/pull/371) |
-| fanotify              | Linux 2.6.37+  | [Maybe](https://github.com/fsnotify/fsnotify/issues/114)     |
+| fanotify              | Linux 5.9+     | [Maybe](https://github.com/fsnotify/fsnotify/issues/114)     |
 | USN Journals          | Windows        | [Maybe](https://github.com/fsnotify/fsnotify/issues/53)      |
 | Polling               | *All*          | [Maybe](https://github.com/fsnotify/fsnotify/issues/9)       |
 
