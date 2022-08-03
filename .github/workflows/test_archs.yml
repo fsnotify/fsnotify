@@ -1,4 +1,4 @@
-#name: 'test-qemu'
+name: 'test-qemu'
 on:
   push:
     paths: ['**.go', 'go.mod', '.github/workflows/*']

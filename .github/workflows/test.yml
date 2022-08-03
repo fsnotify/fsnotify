@@ -1,4 +1,4 @@
-#name: 'test'
+name: 'test'
 on:
   push:
     paths: ['**.go', 'go.mod', '.github/workflows/*']
