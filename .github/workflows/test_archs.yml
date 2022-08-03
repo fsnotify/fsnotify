@@ -1,10 +1,10 @@
-name: 'test'
+#name: 'test-qemu'
 on:
   push:
     paths: ['**.go', 'go.mod', '.github/workflows/*']
 
 jobs:
-  test:
+  test-qemu:
     strategy:
       fail-fast: false
       matrix:

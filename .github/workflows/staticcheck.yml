@@ -1,4 +1,4 @@
-name: 'staticcheck'
+#name: 'staticcheck'
 on:
   push:
     paths: ['**.go', 'go.mod', '.github/workflows/*']

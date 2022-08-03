@@ -1,10 +1,10 @@
-name: 'test'
+#name: 'test-vagrant'
 on:
   push:
     paths: ['**.go', 'go.mod', '.github/workflows/*']
 
 jobs:
-  test:
+  test-vagrant:
     strategy:
       fail-fast: false
       matrix:
