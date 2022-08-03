@@ -17,6 +17,7 @@ jobs:
           - 'ppc64le'
           - 'riscv64'
           - 's390x'
+
     # QEMU only works on Linux for now, and use Ubuntu 22.04 to get a
     # reasonably recent version of QEMU.
     runs-on: ubuntu-22.04
@@ -33,6 +34,6 @@ jobs:
       - name: checkout
         uses: actions/checkout@v3
 
-      - name: '${{ matrix.arch }}'
+      - name: 'ubuntu ${{ matrix.arch }}'
         run: |
           GOARCH=${{ matrix.arch }} ./.github/workflows/test-archs.sh
