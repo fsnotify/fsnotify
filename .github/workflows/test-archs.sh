@@ -56,7 +56,7 @@ for a in $archs; do
 		continue
 	fi
 
-	printf 'Testing %-10s (with %s)\n' "$GOARCH" "$qemu"
+	printf '\n==> Testing %-10s (with %s)\n' "$GOARCH" "$qemu"
 
 	if ! command -v "$qemu" >/dev/null; then
 		echo >&2 "$0: error: command '$qemu' not on system"

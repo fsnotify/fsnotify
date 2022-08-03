@@ -2,8 +2,9 @@ name: 'test-archs'
 on:   ['push', 'pull_request']
 jobs:
   test-archs:
-    # QEMU only works on Linux for now.
-    runs-on: ubuntu-latest
+    # QEMU only works on Linux for now, and use Ubuntu 22.04 to get a
+    # reasonably recent version of QEMU.
+    runs-on: ubuntu-22.04
     steps:
       - name: Setup QEMU
         # uses: docker/setup-qemu-action@v2
