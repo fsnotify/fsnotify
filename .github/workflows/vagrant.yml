@@ -1,7 +1,10 @@
-name: 'test'
-on:   ['push', 'pull_request']
+name: 'test-vagrant'
+on:
+  push:
+    paths: ['**.go', 'go.mod', '.github/workflows/*']
+
 jobs:
-  test:
+  test-vagrant:
     strategy:
       fail-fast: false
       matrix:
@@ -23,7 +26,7 @@ jobs:
       - name: setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.18'
+          go-version: '1.19'
 
       - name: test
         run: |
