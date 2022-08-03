@@ -12,19 +12,6 @@ merge PRs in a reasonable timeframe, but please be aware that:
   runtime behaviour can't change in ways that are likely to lead to problems for
   users.
 
-Contributor License Agreement
------------------------------
-fsnotify is derived from code in the [golang.org/x/exp] package and it may be
-merged back to a golang.org/x/... package in the future. Therefore fsnotify
-carries the same license as Go and all contributors have to [sign the Google
-CLA]. **You retain your copyright**; it just declares that you own the copyright
-(i.e. wrote the code) and grants Google permission to use it.
-
-[golang.org/x/exp]: https://godoc.org/golang.org/x/exp
-[sign the Google CLA]: https://cla.developers.google.com/about/google-individual
-
-Please indicate that you have signed the CLA in your pull request.
-
 Testing
 -------
 Just `go test ./...` runs all the tests; the CI runs this on all supported
