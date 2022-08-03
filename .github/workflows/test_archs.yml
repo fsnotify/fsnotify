@@ -1,15 +1,27 @@
-name: 'test-archs'
+name: 'test'
 on:   ['push', 'pull_request']
 jobs:
-  test-archs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - '386'
+          - 'arm'
+          - 'arm64'
+          - 'mips'
+          - 'mips64'
+          - 'mips64le'
+          - 'mipsle'
+          - 'ppc64'
+          - 'ppc64le'
+          - 'riscv64'
+          - 's390x'
     # QEMU only works on Linux for now, and use Ubuntu 22.04 to get a
     # reasonably recent version of QEMU.
     runs-on: ubuntu-22.04
     steps:
       - name: Setup QEMU
-        # uses: docker/setup-qemu-action@v2
-        # with:
-        #   platforms: 'i386,arm,aarch64,mips,mips64,mips64el,mipsel,ppc64,ppc64le,riscv64,s390x'
         run: |
           sudo apt-get install -y qemu-user
 
@@ -21,6 +33,6 @@ jobs:
       - name: checkout
         uses: actions/checkout@v3
 
-      - name: test-archs
+      - name: '${{ matrix.arch }}'
         run: |
-          ./.github/workflows/test-archs.sh
+          GOARCH=${{ matrix.arch }} ./.github/workflows/test-archs.sh
