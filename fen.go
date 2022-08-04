@@ -26,6 +26,7 @@ type Watcher struct {
 	done chan struct{} // Channel for sending a "quit message" to the reader goroutine
 
 	mu   sync.Mutex
+	dirs map[string]struct{} // map of explicitly watched directories
 	port *unix.EventPort
 }
 
@@ -36,6 +37,7 @@ func NewWatcher() (*Watcher, error) {
 	w := new(Watcher)
 	w.Events = make(chan Event)
 	w.Errors = make(chan error)
+	w.dirs = make(map[string]struct{})
 	w.port, err = unix.NewEventPort()
 	if err != nil {
 		return nil, err
@@ -103,6 +105,9 @@ func (w *Watcher) Add(name string) error {
 	case err != nil:
 		return err
 	case stat.IsDir():
+		w.mu.Lock()
+		w.dirs[name] = struct{}{}
+		w.mu.Unlock()
 		return w.handleDirectory(name, stat, w.associateFile)
 	default:
 		return w.associateFile(name, stat)
@@ -122,6 +127,9 @@ func (w *Watcher) Remove(name string) error {
 	case err != nil:
 		return err
 	case stat.IsDir():
+		w.mu.Lock()
+		delete(w.dirs, name)
+		w.mu.Unlock()
 		return w.handleDirectory(name, stat, w.dissociateFile)
 	default:
 		return w.port.DissociatePath(name)
@@ -206,6 +214,10 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 	var toSend *Event
 	reRegister := true
 
+	w.mu.Lock()
+	_, watchedDir := w.dirs[path]
+	w.mu.Unlock()
+
 	if events&unix.FILE_DELETE == unix.FILE_DELETE {
 		toSend = &Event{path, Remove}
 		if !w.sendEvent(*toSend) {
@@ -240,6 +252,11 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 
 	// The file is gone, nothing left to do.
 	if !reRegister {
+		if watchedDir {
+			w.mu.Lock()
+			delete(w.dirs, path)
+			w.mu.Unlock()
+		}
 		return nil
 	}
 
@@ -254,8 +271,10 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 
 	if events&unix.FILE_MODIFIED == unix.FILE_MODIFIED {
 		if fmode.IsDir() {
-			if err := w.updateDirectory(path); err != nil {
-				return err
+			if watchedDir {
+				if err := w.updateDirectory(path); err != nil {
+					return err
+				}
 			}
 		} else {
 			toSend = &Event{path, Write}

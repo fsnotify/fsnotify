@@ -70,15 +70,6 @@ func TestWatch(t *testing.T) {
 			remove /sub
 			remove /file
 
-			# Why is solaris watching the subdirectory?
-			#solaris:
-			#	create /sub
-			#	create /file
-			#	create /sub/file2
-			#	remove /sub
-			#	remove /sub/file2
-			#	remove /file
-
 			# Windows includes a write for the /sub dir too, two of them even(?)
 			windows:
 				create /sub
@@ -195,18 +186,21 @@ func TestWatchRename(t *testing.T) {
 				RENAME       "/dir"                 # mv
 				CREATE       "/dir-renamed"
 				CREATE       "/dir-renamed/file"    # touch
-			solaris:
-				CREATE       "/dir"                 # mkdir
-				RENAME       "/dir"                 # mv
-				CREATE       "/dir-renamed"
-				CREATE       "/dir-renamed/file"    # touch
-
 			# TODO: no results for the touch; this is probably a bug; windows
 			# was fixed in #370.
 			kqueue:
 				CREATE               "/dir"           # mkdir
 				CREATE               "/dir-renamed"   # mv
 				REMOVE|RENAME        "/dir"
+
+			# We don't currently have a way to realize that the CREATEd directory is the one that was RENAMEd,
+			# so we don't know we need to watch it for new files.
+			# Possibly similar to the issue with kqueue??
+			solaris:
+				CREATE       "/dir"                 # mkdir
+				RENAME       "/dir"                 # mv
+				CREATE       "/dir-renamed"
+
 		`},
 	}
 
