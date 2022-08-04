@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -21,14 +22,16 @@ import (
 
 // Watcher watches a set of files, delivering events to a channel.
 type Watcher struct {
-	Events   chan Event
-	Errors   chan error
-	isClosed bool           // Set to true when Close() is first called
-	mu       sync.Mutex     // Map access
-	port     syscall.Handle // Handle to completion port
-	watches  watchMap       // Map of watches (key: i-number)
-	input    chan *input    // Inputs to the reader are sent on this channel
-	quit     chan chan<- error
+	Events chan Event
+	Errors chan error
+
+	port  syscall.Handle // Handle to completion port
+	input chan *input    // Inputs to the reader are sent on this channel
+	quit  chan chan<- error
+
+	mu       sync.Mutex // Protects access to watches, isClosed
+	watches  watchMap   // Map of watches (key: i-number)
+	isClosed bool       // Set to true when Close() is first called
 }
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
@@ -51,10 +54,13 @@ func NewWatcher() (*Watcher, error) {
 
 // Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error {
+	w.mu.Lock()
 	if w.isClosed {
+		w.mu.Unlock()
 		return nil
 	}
 	w.isClosed = true
+	w.mu.Unlock()
 
 	// Send "quit" message to the reader goroutine
 	ch := make(chan error)
@@ -67,9 +73,13 @@ func (w *Watcher) Close() error {
 
 // Add starts watching the named file or directory (non-recursively).
 func (w *Watcher) Add(name string) error {
+	w.mu.Lock()
 	if w.isClosed {
+		w.mu.Unlock()
 		return errors.New("watcher already closed")
 	}
+	w.mu.Unlock()
+
 	in := &input{
 		op:    opAddWatch,
 		path:  filepath.Clean(name),
@@ -95,6 +105,21 @@ func (w *Watcher) Remove(name string) error {
 		return err
 	}
 	return <-in.reply
+}
+
+// WatchList returns the directories and files that are being monitered.
+func (w *Watcher) WatchList() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	entries := make([]string, 0, len(w.watches))
+	for _, entry := range w.watches {
+		for _, watchEntry := range entry {
+			entries = append(entries, watchEntry.path)
+		}
+	}
+
+	return entries
 }
 
 const (
@@ -173,8 +198,10 @@ type watch struct {
 	buf    [4096]byte
 }
 
-type indexMap map[uint64]*watch
-type watchMap map[uint32]indexMap
+type (
+	indexMap map[uint64]*watch
+	watchMap map[uint32]indexMap
+)
 
 func (w *Watcher) wakeupReader() error {
 	e := syscall.PostQueuedCompletionStatus(w.port, 0, 0, nil)
@@ -300,11 +327,11 @@ func (w *Watcher) remWatch(pathname string) error {
 	w.mu.Lock()
 	watch := w.watches.get(ino)
 	w.mu.Unlock()
-	if e := syscall.CloseHandle(ino.handle); e != nil {
-		w.Errors <- os.NewSyscallError("CloseHandle", e)
+	if err := syscall.CloseHandle(ino.handle); err != nil {
+		w.Errors <- os.NewSyscallError("CloseHandle", err)
 	}
 	if watch == nil {
-		return fmt.Errorf("can't remove non-existent watch for: %s", pathname)
+		return fmt.Errorf("%w: %s", ErrNonExistentWatch, pathname)
 	}
 	if pathname == dir {
 		w.sendEvent(watch.path, watch.mask&sysFSIGNORED)
@@ -477,6 +504,18 @@ func (w *Watcher) readEvents() {
 			case syscall.FILE_ACTION_RENAMED_OLD_NAME:
 				watch.rename = name
 			case syscall.FILE_ACTION_RENAMED_NEW_NAME:
+				// Update saved path of all sub-watches.
+				old := filepath.Join(watch.path, watch.rename)
+				w.mu.Lock()
+				for _, watchMap := range w.watches {
+					for _, ww := range watchMap {
+						if strings.HasPrefix(ww.path, old) {
+							ww.path = filepath.Join(fullname, strings.TrimPrefix(ww.path, old))
+						}
+					}
+				}
+				w.mu.Unlock()
+
 				if watch.names[watch.rename] != 0 {
 					watch.names[name] |= watch.names[watch.rename]
 					delete(watch.names, watch.rename)

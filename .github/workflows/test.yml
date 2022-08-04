@@ -1,7 +1,8 @@
-name: test
+name: 'test'
 on:
   push:
-  pull_request:
+    paths: ['**.go', 'go.mod', '.github/workflows/*']
+
 jobs:
   test:
     strategy:
@@ -9,63 +10,87 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          - macos-latest
+          - macos-11
+          - macos-12
           - windows-latest
         go:
-          - '1.18.0-beta1'
-          - '1.17'
           - '1.16'
+          - '1.19'
     runs-on: ${{ matrix.os }}
     steps:
       - name: setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
-          stable: 'false'
           go-version: ${{ matrix.go }}
 
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: test
         run: |
-          go test --race ./...
+          go test -race ./...
 
   testFreeBSD:
-    runs-on: macos-10.15
-    name: test (freebsd, 1.17)
+    runs-on: macos-12
+    name: test (freebsd, 1.18)
     steps:
-      - uses: actions/checkout@v2
-      - name: test (freebsd, 1.17)
+      - uses: actions/checkout@v3
+      - name: test (freebsd, 1.18)
         id: test
-        uses: vmactions/freebsd-vm@v0.1.5
+        uses: vmactions/freebsd-vm@v0.2.0
         with:
           usesh: true
           prepare: pkg install -y go
           run: |
-            go test
+            go test -race ./...
 
-  lint:
-    runs-on: ubuntu-latest
+  testOpenBSD:
+    runs-on: macos-12
+    name: test (openbsd, 1.17)
     steps:
-      - name: setup Go
-        uses: actions/setup-go@v2
+      - uses: actions/checkout@v3
+      - name: test (openbsd, 1.17)
+        id: test
+        uses: vmactions/openbsd-vm@v0.0.6
         with:
-          go-version: '1.17'
+          prepare: pkg_add go
+          run: |
+            # Default of 512 leads to "too many open files".
+            ulimit -n 1024
 
-      - name: checkout
-        uses: actions/checkout@v2
+            # No -race as the VM doesn't include the comp set.
+            #
+            # TODO: should probably add this, but on my local machine the tests
+            #       time out with -race as the waits aren't long enough (OpenBSD
+            #       is kind of slow), so should probably look into that first.
+            #       Go 1.19 is supposed to have a much faster race detector, so
+            #       maybe waiting until we have that is enough.
+            go test ./...
 
-      - name: gofmt
-        run: |
-          test -z "$(gofmt -s -d . | tee /dev/stderr)"
-
-      - name: vet
-        run: |
-          go vet ./...
-
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v2
-        continue-on-error: true
+  testNetBSD:
+    runs-on: macos-12
+    name: test (netbsd, 1.17)
+    steps:
+      - uses: actions/checkout@v3
+      - name: test (netbsd, 1.17)
+        id: test
+        uses: vmactions/netbsd-vm@v0.0.4
         with:
-          version: latest
-          skip-go-installation: true
+          prepare: pkg_add go
+          run: |
+            # TODO: no -race for the same reason as OpenBSD (the timing; it does run).
+            go117 test ./...
+
+  testillumos:
+    runs-on: macos-12
+    name: test (illumos, 1.17)
+    steps:
+    - uses: actions/checkout@v2
+    - name: test (illumos, 1.17)
+      id: test
+      uses: papertigers/illumos-vm@r38
+      with:
+        prepare: |
+          pkg install go-117
+        run: |
+          /opt/ooce/go-1.17/bin/go test ./...
