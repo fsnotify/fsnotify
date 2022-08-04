@@ -81,14 +81,14 @@ func (w *Watcher) isClosed() bool {
 
 // Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error {
-	if w.isClosed() {
-		return nil
-	}
-	close(w.done)
 	// Take the lock used by associateFile to prevent
 	// lingering events from being processed after the close
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if w.isClosed() {
+		return nil
+	}
+	close(w.done)
 	return w.port.Close()
 }
 
