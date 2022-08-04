@@ -8,13 +8,13 @@ API docs: https://pkg.go.dev/github.com/fsnotify/fsnotify
 Platform support:
 
 | Adapter               | OS               | Status                                                       |
-| --------------------- | ---------------- | ------------------------------------------------------------ |
+| --------------------- | -----------------| -------------------------------------------------------------|
 | inotify               | Linux 2.6.32+    | Supported                                                    |
 | kqueue                | BSD, macOS       | Supported                                                    |
 | ReadDirectoryChangesW | Windows          | Supported                                                    |
-| FEN                   | illumos, Solaris | Supported                                                    |
 | FSEvents              | macOS            | [Planned](https://github.com/fsnotify/fsnotify/issues/11)    |
-| fanotify              | Linux 2.6.37+    | [Maybe](https://github.com/fsnotify/fsnotify/issues/114)     |
+| FEN                   | illumos, Solaris | Supported                                                    |
+| fanotify              | Linux 5.9+       | [Maybe](https://github.com/fsnotify/fsnotify/issues/114)     |
 | USN Journals          | Windows          | [Maybe](https://github.com/fsnotify/fsnotify/issues/53)      |
 | Polling               | *All*            | [Maybe](https://github.com/fsnotify/fsnotify/issues/9)       |
 
