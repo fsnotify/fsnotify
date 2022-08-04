@@ -5,9 +5,11 @@ package fsnotify
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -522,4 +524,54 @@ func TestRemove(t *testing.T) {
 			w.Close()
 		}
 	})
+}
+
+// Make sure file handles are correctly released.
+//
+// regression test for #42 see https://gist.github.com/timshannon/603f92824c5294269797
+func TestRemoveChildCleanly(t *testing.T) {
+	tmp := t.TempDir()
+
+	w := newWatcher(t)
+	defer w.Close()
+
+	// consume the events
+	var werr error
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+	loop:
+		for {
+			select {
+			case werr = <-w.Errors:
+				break loop
+			case <-w.Events:
+			}
+		}
+	}()
+
+	addWatch(t, w, tmp)
+	dir := filepath.Join(tmp, "child")
+	mkdir(t, dir)
+	addWatch(t, w, dir) // start watching child
+	rmWatch(t, w, dir)  // stop watching child
+	rmAll(t, dir)       // delete child dir
+
+	// Child dir should no longer exist
+	_, err := os.Stat(dir)
+	if err == nil {
+		t.Fatalf("dir %q should no longer exist!", dir)
+	}
+
+	if _, ok := err.(*os.PathError); err != nil && !ok {
+		t.Errorf("Expected a PathError, got %v", err)
+	}
+
+	w.Close()
+	wg.Wait()
+
+	if werr != nil {
+		t.Fatal(werr)
+	}
 }
