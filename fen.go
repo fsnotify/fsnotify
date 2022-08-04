@@ -18,8 +18,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const eventBits = unix.FILE_MODIFIED | unix.FILE_ATTRIB | unix.FILE_NOFOLLOW
-
 // Watcher watches a set of files, delivering events to a channel.
 type Watcher struct {
 	Events chan Event
@@ -333,8 +331,10 @@ func (w *Watcher) associateFile(path string, stat os.FileInfo) error {
 			return err
 		}
 	}
-	fmode := stat.Mode()
-	return w.port.AssociatePath(path, stat, eventBits, fmode)
+	// FILE_NOFOLLOW means we watch symlinks themselves rather than their targets
+	return w.port.AssociatePath(path, stat,
+		unix.FILE_MODIFIED|unix.FILE_ATTRIB|unix.FILE_NOFOLLOW,
+		stat.Mode())
 }
 
 func (w *Watcher) dissociateFile(path string, stat os.FileInfo) error {
