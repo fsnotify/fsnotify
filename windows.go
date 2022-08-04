@@ -16,8 +16,9 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 // Watcher watches a set of files, delivering events to a channel.
@@ -25,7 +26,7 @@ type Watcher struct {
 	Events chan Event
 	Errors chan error
 
-	port  syscall.Handle // Handle to completion port
+	port  windows.Handle // Handle to completion port
 	input chan *input    // Inputs to the reader are sent on this channel
 	quit  chan chan<- error
 
@@ -36,7 +37,7 @@ type Watcher struct {
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
 func NewWatcher() (*Watcher, error) {
-	port, err := syscall.CreateIoCompletionPort(syscall.InvalidHandle, 0, 0, 0)
+	port, err := windows.CreateIoCompletionPort(windows.InvalidHandle, 0, 0, 0)
 	if err != nil {
 		return nil, os.NewSyscallError("CreateIoCompletionPort", err)
 	}
@@ -183,13 +184,13 @@ type input struct {
 }
 
 type inode struct {
-	handle syscall.Handle
+	handle windows.Handle
 	volume uint32
 	index  uint64
 }
 
 type watch struct {
-	ov     syscall.Overlapped
+	ov     windows.Overlapped
 	ino    *inode            // i-number
 	path   string            // Directory path
 	mask   uint64            // Directory itself is being watched with these notify flags
@@ -204,7 +205,7 @@ type (
 )
 
 func (w *Watcher) wakeupReader() error {
-	err := syscall.PostQueuedCompletionStatus(w.port, 0, 0, nil)
+	err := windows.PostQueuedCompletionStatus(w.port, 0, 0, nil)
 	if err != nil {
 		return os.NewSyscallError("PostQueuedCompletionStatus", err)
 	}
@@ -212,11 +213,11 @@ func (w *Watcher) wakeupReader() error {
 }
 
 func getDir(pathname string) (dir string, err error) {
-	attr, err := syscall.GetFileAttributes(syscall.StringToUTF16Ptr(pathname))
+	attr, err := windows.GetFileAttributes(windows.StringToUTF16Ptr(pathname))
 	if err != nil {
 		return "", os.NewSyscallError("GetFileAttributes", err)
 	}
-	if attr&syscall.FILE_ATTRIBUTE_DIRECTORY != 0 {
+	if attr&windows.FILE_ATTRIBUTE_DIRECTORY != 0 {
 		dir = pathname
 	} else {
 		dir, _ = filepath.Split(pathname)
@@ -226,19 +227,19 @@ func getDir(pathname string) (dir string, err error) {
 }
 
 func getIno(path string) (ino *inode, err error) {
-	h, err := syscall.CreateFile(syscall.StringToUTF16Ptr(path),
-		syscall.FILE_LIST_DIRECTORY,
-		syscall.FILE_SHARE_READ|syscall.FILE_SHARE_WRITE|syscall.FILE_SHARE_DELETE,
-		nil, syscall.OPEN_EXISTING,
-		syscall.FILE_FLAG_BACKUP_SEMANTICS|syscall.FILE_FLAG_OVERLAPPED, 0)
+	h, err := windows.CreateFile(windows.StringToUTF16Ptr(path),
+		windows.FILE_LIST_DIRECTORY,
+		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
+		nil, windows.OPEN_EXISTING,
+		windows.FILE_FLAG_BACKUP_SEMANTICS|windows.FILE_FLAG_OVERLAPPED, 0)
 	if err != nil {
 		return nil, os.NewSyscallError("CreateFile", err)
 	}
 
-	var fi syscall.ByHandleFileInformation
-	err = syscall.GetFileInformationByHandle(h, &fi)
+	var fi windows.ByHandleFileInformation
+	err = windows.GetFileInformationByHandle(h, &fi)
 	if err != nil {
-		syscall.CloseHandle(h)
+		windows.CloseHandle(h)
 		return nil, os.NewSyscallError("GetFileInformationByHandle", err)
 	}
 	ino = &inode{
@@ -285,9 +286,9 @@ func (w *Watcher) addWatch(pathname string, flags uint64) error {
 	watchEntry := w.watches.get(ino)
 	w.mu.Unlock()
 	if watchEntry == nil {
-		_, err := syscall.CreateIoCompletionPort(ino.handle, w.port, 0, 0)
+		_, err := windows.CreateIoCompletionPort(ino.handle, w.port, 0, 0)
 		if err != nil {
-			syscall.CloseHandle(ino.handle)
+			windows.CloseHandle(ino.handle)
 			return os.NewSyscallError("CreateIoCompletionPort", err)
 		}
 		watchEntry = &watch{
@@ -300,7 +301,7 @@ func (w *Watcher) addWatch(pathname string, flags uint64) error {
 		w.mu.Unlock()
 		flags |= provisional
 	} else {
-		syscall.CloseHandle(ino.handle)
+		windows.CloseHandle(ino.handle)
 	}
 	if pathname == dir {
 		watchEntry.mask |= flags
@@ -336,7 +337,7 @@ func (w *Watcher) remWatch(pathname string) error {
 	watch := w.watches.get(ino)
 	w.mu.Unlock()
 
-	err = syscall.CloseHandle(ino.handle)
+	err = windows.CloseHandle(ino.handle)
 	if err != nil {
 		w.Errors <- os.NewSyscallError("CloseHandle", err)
 	}
@@ -372,7 +373,7 @@ func (w *Watcher) deleteWatch(watch *watch) {
 
 // Must run within the I/O thread.
 func (w *Watcher) startRead(watch *watch) error {
-	err := syscall.CancelIo(watch.ino.handle)
+	err := windows.CancelIo(watch.ino.handle)
 	if err != nil {
 		w.Errors <- os.NewSyscallError("CancelIo", err)
 		w.deleteWatch(watch)
@@ -382,7 +383,7 @@ func (w *Watcher) startRead(watch *watch) error {
 		mask |= toWindowsFlags(m)
 	}
 	if mask == 0 {
-		err := syscall.CloseHandle(watch.ino.handle)
+		err := windows.CloseHandle(watch.ino.handle)
 		if err != nil {
 			w.Errors <- os.NewSyscallError("CloseHandle", err)
 		}
@@ -392,11 +393,11 @@ func (w *Watcher) startRead(watch *watch) error {
 		return nil
 	}
 
-	rdErr := syscall.ReadDirectoryChanges(watch.ino.handle, &watch.buf[0],
+	rdErr := windows.ReadDirectoryChanges(watch.ino.handle, &watch.buf[0],
 		uint32(unsafe.Sizeof(watch.buf)), false, mask, nil, &watch.ov, 0)
 	if rdErr != nil {
 		err := os.NewSyscallError("ReadDirectoryChanges", rdErr)
-		if rdErr == syscall.ERROR_ACCESS_DENIED && watch.mask&provisional == 0 {
+		if rdErr == windows.ERROR_ACCESS_DENIED && watch.mask&provisional == 0 {
 			// Watched directory was probably removed
 			if w.sendEvent(watch.path, watch.mask&sysFSDELETESELF) {
 				if watch.mask&sysFSONESHOT != 0 {
@@ -417,13 +418,14 @@ func (w *Watcher) startRead(watch *watch) error {
 // Entry point to the I/O thread.
 func (w *Watcher) readEvents() {
 	var (
-		n, key uint32
-		ov     *syscall.Overlapped
+		n   uint32
+		key uintptr
+		ov  *windows.Overlapped
 	)
 	runtime.LockOSThread()
 
 	for {
-		qErr := syscall.GetQueuedCompletionStatus(w.port, &n, &key, &ov, syscall.INFINITE)
+		qErr := windows.GetQueuedCompletionStatus(w.port, &n, &key, &ov, windows.INFINITE)
 		// This error is handled after the watch == nil check below. NOTE: this
 		// seems odd, note sure if it's correct.
 
@@ -444,7 +446,7 @@ func (w *Watcher) readEvents() {
 					}
 				}
 
-				err := syscall.CloseHandle(w.port)
+				err := windows.CloseHandle(w.port)
 				if err != nil {
 					err = os.NewSyscallError("CloseHandle", err)
 				}
@@ -465,7 +467,7 @@ func (w *Watcher) readEvents() {
 		}
 
 		switch qErr {
-		case syscall.ERROR_MORE_DATA:
+		case windows.ERROR_MORE_DATA:
 			if watch == nil {
 				w.Errors <- errors.New("ERROR_MORE_DATA has unexpectedly null lpOverlapped buffer")
 			} else {
@@ -474,13 +476,13 @@ func (w *Watcher) readEvents() {
 				// In practice we can get away with just carrying on.
 				n = uint32(unsafe.Sizeof(watch.buf))
 			}
-		case syscall.ERROR_ACCESS_DENIED:
+		case windows.ERROR_ACCESS_DENIED:
 			// Watched directory was probably removed
 			w.sendEvent(watch.path, watch.mask&sysFSDELETESELF)
 			w.deleteWatch(watch)
 			w.startRead(watch)
 			continue
-		case syscall.ERROR_OPERATION_ABORTED:
+		case windows.ERROR_OPERATION_ABORTED:
 			// CancelIo was called on this handle
 			continue
 		default:
@@ -498,28 +500,28 @@ func (w *Watcher) readEvents() {
 			}
 
 			// Point "raw" to the event in the buffer
-			raw := (*syscall.FileNotifyInformation)(unsafe.Pointer(&watch.buf[offset]))
+			raw := (*windows.FileNotifyInformation)(unsafe.Pointer(&watch.buf[offset]))
 			// TODO: Consider using unsafe.Slice that is available from go1.17
 			// https://stackoverflow.com/questions/51187973/how-to-create-an-array-or-a-slice-from-an-array-unsafe-pointer-in-golang
-			// instead of using a fixed syscall.MAX_PATH buf, we create a buf that is the size of the path name
+			// instead of using a fixed windows.MAX_PATH buf, we create a buf that is the size of the path name
 			size := int(raw.FileNameLength / 2)
 			var buf []uint16
 			sh := (*reflect.SliceHeader)(unsafe.Pointer(&buf))
 			sh.Data = uintptr(unsafe.Pointer(&raw.FileName))
 			sh.Len = size
 			sh.Cap = size
-			name := syscall.UTF16ToString(buf)
+			name := windows.UTF16ToString(buf)
 			fullname := filepath.Join(watch.path, name)
 
 			var mask uint64
 			switch raw.Action {
-			case syscall.FILE_ACTION_REMOVED:
+			case windows.FILE_ACTION_REMOVED:
 				mask = sysFSDELETESELF
-			case syscall.FILE_ACTION_MODIFIED:
+			case windows.FILE_ACTION_MODIFIED:
 				mask = sysFSMODIFY
-			case syscall.FILE_ACTION_RENAMED_OLD_NAME:
+			case windows.FILE_ACTION_RENAMED_OLD_NAME:
 				watch.rename = name
-			case syscall.FILE_ACTION_RENAMED_NEW_NAME:
+			case windows.FILE_ACTION_RENAMED_NEW_NAME:
 				// Update saved path of all sub-watches.
 				old := filepath.Join(watch.path, watch.rename)
 				w.mu.Lock()
@@ -546,10 +548,10 @@ func (w *Watcher) readEvents() {
 					}
 				}
 			}
-			if raw.Action != syscall.FILE_ACTION_RENAMED_NEW_NAME {
+			if raw.Action != windows.FILE_ACTION_RENAMED_NEW_NAME {
 				sendNameEvent()
 			}
-			if raw.Action == syscall.FILE_ACTION_REMOVED {
+			if raw.Action == windows.FILE_ACTION_REMOVED {
 				w.sendEvent(fullname, watch.names[name]&sysFSIGNORED)
 				delete(watch.names, name)
 			}
@@ -558,7 +560,7 @@ func (w *Watcher) readEvents() {
 					watch.mask = 0
 				}
 			}
-			if raw.Action == syscall.FILE_ACTION_RENAMED_NEW_NAME {
+			if raw.Action == windows.FILE_ACTION_RENAMED_NEW_NAME {
 				fullname = filepath.Join(watch.path, watch.rename)
 				sendNameEvent()
 			}
@@ -598,31 +600,31 @@ func (w *Watcher) sendEvent(name string, mask uint64) bool {
 func toWindowsFlags(mask uint64) uint32 {
 	var m uint32
 	if mask&sysFSACCESS != 0 {
-		m |= syscall.FILE_NOTIFY_CHANGE_LAST_ACCESS
+		m |= windows.FILE_NOTIFY_CHANGE_LAST_ACCESS
 	}
 	if mask&sysFSMODIFY != 0 {
-		m |= syscall.FILE_NOTIFY_CHANGE_LAST_WRITE
+		m |= windows.FILE_NOTIFY_CHANGE_LAST_WRITE
 	}
 	if mask&sysFSATTRIB != 0 {
-		m |= syscall.FILE_NOTIFY_CHANGE_ATTRIBUTES
+		m |= windows.FILE_NOTIFY_CHANGE_ATTRIBUTES
 	}
 	if mask&(sysFSMOVE|sysFSCREATE|sysFSDELETE) != 0 {
-		m |= syscall.FILE_NOTIFY_CHANGE_FILE_NAME | syscall.FILE_NOTIFY_CHANGE_DIR_NAME
+		m |= windows.FILE_NOTIFY_CHANGE_FILE_NAME | windows.FILE_NOTIFY_CHANGE_DIR_NAME
 	}
 	return m
 }
 
 func toFSnotifyFlags(action uint32) uint64 {
 	switch action {
-	case syscall.FILE_ACTION_ADDED:
+	case windows.FILE_ACTION_ADDED:
 		return sysFSCREATE
-	case syscall.FILE_ACTION_REMOVED:
+	case windows.FILE_ACTION_REMOVED:
 		return sysFSDELETE
-	case syscall.FILE_ACTION_MODIFIED:
+	case windows.FILE_ACTION_MODIFIED:
 		return sysFSMODIFY
-	case syscall.FILE_ACTION_RENAMED_OLD_NAME:
+	case windows.FILE_ACTION_RENAMED_OLD_NAME:
 		return sysFSMOVEDFROM
-	case syscall.FILE_ACTION_RENAMED_NEW_NAME:
+	case windows.FILE_ACTION_RENAMED_NEW_NAME:
 		return sysFSMOVEDTO
 	}
 	return 0
