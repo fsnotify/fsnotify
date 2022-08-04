@@ -36,9 +36,9 @@ type Watcher struct {
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
 func NewWatcher() (*Watcher, error) {
-	port, e := syscall.CreateIoCompletionPort(syscall.InvalidHandle, 0, 0, 0)
-	if e != nil {
-		return nil, os.NewSyscallError("CreateIoCompletionPort", e)
+	port, err := syscall.CreateIoCompletionPort(syscall.InvalidHandle, 0, 0, 0)
+	if err != nil {
+		return nil, os.NewSyscallError("CreateIoCompletionPort", err)
 	}
 	w := &Watcher{
 		port:    port,
@@ -204,17 +204,17 @@ type (
 )
 
 func (w *Watcher) wakeupReader() error {
-	e := syscall.PostQueuedCompletionStatus(w.port, 0, 0, nil)
-	if e != nil {
-		return os.NewSyscallError("PostQueuedCompletionStatus", e)
+	err := syscall.PostQueuedCompletionStatus(w.port, 0, 0, nil)
+	if err != nil {
+		return os.NewSyscallError("PostQueuedCompletionStatus", err)
 	}
 	return nil
 }
 
 func getDir(pathname string) (dir string, err error) {
-	attr, e := syscall.GetFileAttributes(syscall.StringToUTF16Ptr(pathname))
-	if e != nil {
-		return "", os.NewSyscallError("GetFileAttributes", e)
+	attr, err := syscall.GetFileAttributes(syscall.StringToUTF16Ptr(pathname))
+	if err != nil {
+		return "", os.NewSyscallError("GetFileAttributes", err)
 	}
 	if attr&syscall.FILE_ATTRIBUTE_DIRECTORY != 0 {
 		dir = pathname
@@ -226,18 +226,20 @@ func getDir(pathname string) (dir string, err error) {
 }
 
 func getIno(path string) (ino *inode, err error) {
-	h, e := syscall.CreateFile(syscall.StringToUTF16Ptr(path),
+	h, err := syscall.CreateFile(syscall.StringToUTF16Ptr(path),
 		syscall.FILE_LIST_DIRECTORY,
 		syscall.FILE_SHARE_READ|syscall.FILE_SHARE_WRITE|syscall.FILE_SHARE_DELETE,
 		nil, syscall.OPEN_EXISTING,
 		syscall.FILE_FLAG_BACKUP_SEMANTICS|syscall.FILE_FLAG_OVERLAPPED, 0)
-	if e != nil {
-		return nil, os.NewSyscallError("CreateFile", e)
+	if err != nil {
+		return nil, os.NewSyscallError("CreateFile", err)
 	}
+
 	var fi syscall.ByHandleFileInformation
-	if e = syscall.GetFileInformationByHandle(h, &fi); e != nil {
+	err = syscall.GetFileInformationByHandle(h, &fi)
+	if err != nil {
 		syscall.CloseHandle(h)
-		return nil, os.NewSyscallError("GetFileInformationByHandle", e)
+		return nil, os.NewSyscallError("GetFileInformationByHandle", err)
 	}
 	ino = &inode{
 		handle: h,
@@ -274,6 +276,7 @@ func (w *Watcher) addWatch(pathname string, flags uint64) error {
 	if flags&sysFSONLYDIR != 0 && pathname != dir {
 		return nil
 	}
+
 	ino, err := getIno(dir)
 	if err != nil {
 		return err
@@ -282,9 +285,10 @@ func (w *Watcher) addWatch(pathname string, flags uint64) error {
 	watchEntry := w.watches.get(ino)
 	w.mu.Unlock()
 	if watchEntry == nil {
-		if _, e := syscall.CreateIoCompletionPort(ino.handle, w.port, 0, 0); e != nil {
+		_, err := syscall.CreateIoCompletionPort(ino.handle, w.port, 0, 0)
+		if err != nil {
 			syscall.CloseHandle(ino.handle)
-			return os.NewSyscallError("CreateIoCompletionPort", e)
+			return os.NewSyscallError("CreateIoCompletionPort", err)
 		}
 		watchEntry = &watch{
 			ino:   ino,
@@ -303,9 +307,12 @@ func (w *Watcher) addWatch(pathname string, flags uint64) error {
 	} else {
 		watchEntry.names[filepath.Base(pathname)] |= flags
 	}
-	if err = w.startRead(watchEntry); err != nil {
+
+	err = w.startRead(watchEntry)
+	if err != nil {
 		return err
 	}
+
 	if pathname == dir {
 		watchEntry.mask &= ^provisional
 	} else {
@@ -324,10 +331,13 @@ func (w *Watcher) remWatch(pathname string) error {
 	if err != nil {
 		return err
 	}
+
 	w.mu.Lock()
 	watch := w.watches.get(ino)
 	w.mu.Unlock()
-	if err := syscall.CloseHandle(ino.handle); err != nil {
+
+	err = syscall.CloseHandle(ino.handle)
+	if err != nil {
 		w.Errors <- os.NewSyscallError("CloseHandle", err)
 	}
 	if watch == nil {
@@ -362,8 +372,9 @@ func (w *Watcher) deleteWatch(watch *watch) {
 
 // Must run within the I/O thread.
 func (w *Watcher) startRead(watch *watch) error {
-	if e := syscall.CancelIo(watch.ino.handle); e != nil {
-		w.Errors <- os.NewSyscallError("CancelIo", e)
+	err := syscall.CancelIo(watch.ino.handle)
+	if err != nil {
+		w.Errors <- os.NewSyscallError("CancelIo", err)
 		w.deleteWatch(watch)
 	}
 	mask := toWindowsFlags(watch.mask)
@@ -371,19 +382,21 @@ func (w *Watcher) startRead(watch *watch) error {
 		mask |= toWindowsFlags(m)
 	}
 	if mask == 0 {
-		if e := syscall.CloseHandle(watch.ino.handle); e != nil {
-			w.Errors <- os.NewSyscallError("CloseHandle", e)
+		err := syscall.CloseHandle(watch.ino.handle)
+		if err != nil {
+			w.Errors <- os.NewSyscallError("CloseHandle", err)
 		}
 		w.mu.Lock()
 		delete(w.watches[watch.ino.volume], watch.ino.index)
 		w.mu.Unlock()
 		return nil
 	}
-	e := syscall.ReadDirectoryChanges(watch.ino.handle, &watch.buf[0],
+
+	rdErr := syscall.ReadDirectoryChanges(watch.ino.handle, &watch.buf[0],
 		uint32(unsafe.Sizeof(watch.buf)), false, mask, nil, &watch.ov, 0)
-	if e != nil {
-		err := os.NewSyscallError("ReadDirectoryChanges", e)
-		if e == syscall.ERROR_ACCESS_DENIED && watch.mask&provisional == 0 {
+	if rdErr != nil {
+		err := os.NewSyscallError("ReadDirectoryChanges", rdErr)
+		if rdErr == syscall.ERROR_ACCESS_DENIED && watch.mask&provisional == 0 {
 			// Watched directory was probably removed
 			if w.sendEvent(watch.path, watch.mask&sysFSDELETESELF) {
 				if watch.mask&sysFSONESHOT != 0 {
@@ -410,9 +423,11 @@ func (w *Watcher) readEvents() {
 	runtime.LockOSThread()
 
 	for {
-		e := syscall.GetQueuedCompletionStatus(w.port, &n, &key, &ov, syscall.INFINITE)
-		watch := (*watch)(unsafe.Pointer(ov))
+		qErr := syscall.GetQueuedCompletionStatus(w.port, &n, &key, &ov, syscall.INFINITE)
+		// This error is handled after the watch == nil check below. NOTE: this
+		// seems odd, note sure if it's correct.
 
+		watch := (*watch)(unsafe.Pointer(ov))
 		if watch == nil {
 			select {
 			case ch := <-w.quit:
@@ -428,9 +443,10 @@ func (w *Watcher) readEvents() {
 						w.startRead(watch)
 					}
 				}
-				var err error
-				if e := syscall.CloseHandle(w.port); e != nil {
-					err = os.NewSyscallError("CloseHandle", e)
+
+				err := syscall.CloseHandle(w.port)
+				if err != nil {
+					err = os.NewSyscallError("CloseHandle", err)
 				}
 				close(w.Events)
 				close(w.Errors)
@@ -448,7 +464,7 @@ func (w *Watcher) readEvents() {
 			continue
 		}
 
-		switch e {
+		switch qErr {
 		case syscall.ERROR_MORE_DATA:
 			if watch == nil {
 				w.Errors <- errors.New("ERROR_MORE_DATA has unexpectedly null lpOverlapped buffer")
@@ -468,7 +484,7 @@ func (w *Watcher) readEvents() {
 			// CancelIo was called on this handle
 			continue
 		default:
-			w.Errors <- os.NewSyscallError("GetQueuedCompletionPort", e)
+			w.Errors <- os.NewSyscallError("GetQueuedCompletionPort", qErr)
 			continue
 		case nil:
 		}
