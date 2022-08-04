@@ -195,7 +195,7 @@ type watch struct {
 	mask   uint64            // Directory itself is being watched with these notify flags
 	names  map[string]uint64 // Map of names being watched and their notify flags
 	rename string            // Remembers the old name while renaming a file
-	buf    [4096]byte
+	buf    [65536]byte       // 64K buffer
 }
 
 type (
