@@ -27,14 +27,14 @@ type Watcher struct {
 
 	kq int // File descriptor (as returned by the kqueue() syscall).
 
-	mu              sync.Mutex                  // Protects access to watcher data
-	watches         map[string]int              // Map of watched file descriptors (key: path).
-	watchesByDir    map[string]map[int]struct{} // Map of watched file descriptors indexed by the parent directory (key: dirname(path)).
-	externalWatches map[string]bool             // Map of watches added by user of the library.
-	dirFlags        map[string]uint32           // Map of watched directories to fflags used in kqueue.
-	paths           map[int]pathInfo            // Map file descriptors to path names for processing kqueue events.
-	fileExists      map[string]bool             // Keep track of if we know this file exists (to stop duplicate create events).
-	isClosed        bool                        // Set to true when Close() is first called
+	mu           sync.Mutex                  // Protects access to watcher data
+	watches      map[string]int              // Watched file descriptors (key: path).
+	watchesByDir map[string]map[int]struct{} // Watched file descriptors indexed by the parent directory (key: dirname(path)).
+	userWatches  map[string]struct{}         // Watches added with Watcher.Add()
+	dirFlags     map[string]uint32           // Watched directories to fflags used in kqueue.
+	paths        map[int]pathInfo            // File descriptors to path names for processing kqueue events.
+	fileExists   map[string]struct{}         // Keep track of if we know this file exists (to stop duplicate create events).
+	isClosed     bool                        // Set to true when Close() is first called
 }
 
 type pathInfo struct {
@@ -50,16 +50,16 @@ func NewWatcher() (*Watcher, error) {
 	}
 
 	w := &Watcher{
-		kq:              kq,
-		watches:         make(map[string]int),
-		watchesByDir:    make(map[string]map[int]struct{}),
-		dirFlags:        make(map[string]uint32),
-		paths:           make(map[int]pathInfo),
-		fileExists:      make(map[string]bool),
-		externalWatches: make(map[string]bool),
-		Events:          make(chan Event),
-		Errors:          make(chan error),
-		done:            make(chan struct{}),
+		kq:           kq,
+		watches:      make(map[string]int),
+		watchesByDir: make(map[string]map[int]struct{}),
+		dirFlags:     make(map[string]uint32),
+		paths:        make(map[int]pathInfo),
+		fileExists:   make(map[string]struct{}),
+		userWatches:  make(map[string]struct{}),
+		Events:       make(chan Event),
+		Errors:       make(chan error),
+		done:         make(chan struct{}),
 	}
 
 	go w.readEvents()
@@ -96,7 +96,7 @@ func (w *Watcher) Close() error {
 // Add starts watching the named file or directory (non-recursively).
 func (w *Watcher) Add(name string) error {
 	w.mu.Lock()
-	w.externalWatches[name] = true
+	w.userWatches[name] = struct{}{}
 	w.mu.Unlock()
 	_, err := w.addWatch(name, noteAllEvents)
 	return err
@@ -140,7 +140,7 @@ func (w *Watcher) Remove(name string) error {
 		w.mu.Lock()
 		for fd := range w.watchesByDir[name] {
 			path := w.paths[fd]
-			if !w.externalWatches[path.name] {
+			if _, ok := w.userWatches[path.name]; !ok {
 				pathsToRemove = append(pathsToRemove, path.name)
 			}
 		}
@@ -325,21 +325,23 @@ loop:
 
 		// Flush the events we received to the Events channel
 		for len(kevents) > 0 {
-			kevent := &kevents[0]
-			watchfd := int(kevent.Ident)
-			mask := uint32(kevent.Fflags)
+			var (
+				kevent  = &kevents[0]
+				watchfd = int(kevent.Ident)
+				mask    = uint32(kevent.Fflags)
+			)
 			w.mu.Lock()
 			path := w.paths[watchfd]
 			w.mu.Unlock()
+
 			event := newEvent(path.name, mask)
 
 			if path.isDir && !event.Has(Remove) {
-				// Double check to make sure the directory exists. This can happen when
-				// we do a rm -fr on a recursively watched folders and we receive a
-				// modification event first but the folder has been deleted and later
-				// receive the delete event
+				// Double check to make sure the directory exists. This can
+				// happen when we do a rm -fr on a recursively watched folders
+				// and we receive a modification event first but the folder has
+				// been deleted and later receive the delete event.
 				if _, err := os.Lstat(event.Name); os.IsNotExist(err) {
-					// mark is as delete event
 					event.Op |= Remove
 				}
 			}
@@ -423,10 +425,6 @@ func newEvent(name string, mask uint32) Event {
 	return e
 }
 
-func newCreateEvent(name string) Event {
-	return Event{Name: name, Op: Create}
-}
-
 // watchDirectoryFiles to mimic inotify when adding a watch on a directory
 func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 	// Get all files
@@ -443,7 +441,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 		}
 
 		w.mu.Lock()
-		w.fileExists[filePath] = true
+		w.fileExists[filePath] = struct{}{}
 		w.mu.Unlock()
 	}
 
@@ -483,7 +481,7 @@ func (w *Watcher) sendFileCreatedEventIfNew(filePath string, fileInfo os.FileInf
 	if !doesExist {
 		// Send create event
 		select {
-		case w.Events <- newCreateEvent(filePath):
+		case w.Events <- Event{Name: filePath, Op: Create}:
 		case <-w.done:
 			return
 		}
@@ -496,7 +494,7 @@ func (w *Watcher) sendFileCreatedEventIfNew(filePath string, fileInfo os.FileInf
 	}
 
 	w.mu.Lock()
-	w.fileExists[filePath] = true
+	w.fileExists[filePath] = struct{}{}
 	w.mu.Unlock()
 
 	return nil

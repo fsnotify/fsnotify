@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -184,13 +183,7 @@ func mv(t *testing.T, src string, dst ...string) {
 		t.Fatalf("mv: dst must have at least one element: %s", dst)
 	}
 
-	var err error
-	switch runtime.GOOS {
-	case "windows", "plan9":
-		err = os.Rename(src, filepath.Join(dst...))
-	default:
-		err = exec.Command("mv", src, filepath.Join(dst...)).Run()
-	}
+	err := os.Rename(src, filepath.Join(dst...))
 	if err != nil {
 		t.Fatalf("mv(%q, %q): %s", src, filepath.Join(dst...), err)
 	}
@@ -440,4 +433,9 @@ func cmpEvents(t *testing.T, tmp string, have, want Events) {
 
 func indent(s fmt.Stringer) string {
 	return "\t" + strings.ReplaceAll(s.String(), "\n", "\n\t")
+}
+
+func isCI() bool {
+	_, ok := os.LookupEnv("CI")
+	return ok
 }

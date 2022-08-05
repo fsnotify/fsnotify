@@ -113,8 +113,8 @@ func TestWatchRename(t *testing.T) {
 		`},
 
 		{"rename to unwatched directory", func(t *testing.T, w *Watcher, tmp string) {
-			if runtime.GOOS == "netbsd" {
-				t.Skip("NetBSD behaviour is not fully correct") // TODO: investigate and fix.
+			if runtime.GOOS == "netbsd" && isCI() {
+				t.Skip("fails in CI; see #488")
 			}
 
 			unwatched := t.TempDir()
@@ -128,10 +128,10 @@ func TestWatchRename(t *testing.T) {
 			cat(t, "data", renamed) // Modify the file outside of the watched dir
 			touch(t, file)          // Recreate the file that was moved
 		}, `
-			create /file
-			write  /file
-			rename /file
-			create /file
+			create /file # cat data >file
+			write  /file # ^
+			rename /file # mv file ../renamed
+			create /file # touch file
 
 			# Windows has REMOVE /file, rather than CREATE /file
 			windows:
