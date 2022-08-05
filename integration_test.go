@@ -142,11 +142,6 @@ func TestWatchRename(t *testing.T) {
 		`},
 
 		{"rename overwriting existing file", func(t *testing.T, w *Watcher, tmp string) {
-			switch runtime.GOOS {
-			case "windows":
-				t.Skipf("os.Rename over existing file does not create an event on %q", runtime.GOOS)
-			}
-
 			touch(t, tmp, "renamed")
 			addWatch(t, w, tmp)
 
@@ -158,10 +153,8 @@ func TestWatchRename(t *testing.T) {
 			remove /renamed
 			create /renamed
 
-			# No remove event for Windows and Linux.
+			# No remove event for inotify; inotify just sends MOVE_SELF.
 			linux:
-				create /renamed
-			windows:
 				create /renamed
 		`},
 
