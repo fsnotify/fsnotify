@@ -196,10 +196,6 @@ func TestWatchRename(t *testing.T) {
 }
 
 func TestWatchSymlink(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlinks don't work on Windows")
-	}
-
 	tests := []testCase{
 		{"create unresolvable symlink", func(t *testing.T, w *Watcher, tmp string) {
 			addWatch(t, w, tmp)
@@ -207,6 +203,10 @@ func TestWatchSymlink(t *testing.T) {
 			symlink(t, filepath.Join(tmp, "target"), tmp, "link")
 		}, `
 			create /link
+
+			windows:
+                create    /link
+                write     /link
 		`},
 
 		{"cyclic symlink", func(t *testing.T, w *Watcher, tmp string) {
@@ -234,7 +234,7 @@ func TestWatchSymlink(t *testing.T) {
 			write  /link
 			create /link
 
-			linux:
+			linux, windows:
 				remove    /link
 				create    /link
 				write     /link

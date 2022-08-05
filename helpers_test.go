@@ -348,12 +348,15 @@ func (e Events) copy() Events {
 //   # Windows-specific test.
 //   windows:
 //     WRITE    path
+//
+// You can specify multiple platforms with a comma (e.g. "windows, linux:").
+// "kqueue" is a shortcut for all kqueue systems (BSD, macOS).
 func newEvents(t *testing.T, s string) Events {
 	t.Helper()
 
 	var (
 		lines  = strings.Split(s, "\n")
-		group  string
+		groups = []string{""}
 		events = make(map[string]Events)
 	)
 	for no, line := range lines {
@@ -365,7 +368,10 @@ func newEvents(t *testing.T, s string) Events {
 			continue
 		}
 		if strings.HasSuffix(line, ":") {
-			group = strings.TrimRight(line, ":")
+			groups = strings.Split(strings.TrimRight(line, ":"), ",")
+			for i := range groups {
+				groups[i] = strings.TrimSpace(groups[i])
+			}
 			continue
 		}
 
@@ -398,7 +404,10 @@ func newEvents(t *testing.T, s string) Events {
 				}
 			}
 		}
-		events[group] = append(events[group], Event{Name: path, Op: op})
+
+		for _, g := range groups {
+			events[g] = append(events[g], Event{Name: path, Op: op})
+		}
 	}
 
 	if e, ok := events[runtime.GOOS]; ok {
