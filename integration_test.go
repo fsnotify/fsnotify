@@ -113,8 +113,8 @@ func TestWatchRename(t *testing.T) {
 		`},
 
 		{"rename to unwatched directory", func(t *testing.T, w *Watcher, tmp string) {
-			if runtime.GOOS == "netbsd" {
-				t.Skip("NetBSD behaviour is not fully correct") // TODO: investigate and fix.
+			if runtime.GOOS == "netbsd" && isCI() {
+				t.Skip("fails in CI; see #488")
 			}
 
 			unwatched := t.TempDir()
@@ -128,10 +128,10 @@ func TestWatchRename(t *testing.T) {
 			cat(t, "data", renamed) // Modify the file outside of the watched dir
 			touch(t, file)          // Recreate the file that was moved
 		}, `
-			create /file
-			write  /file
-			rename /file
-			create /file
+			create /file # cat data >file
+			write  /file # ^
+			rename /file # mv file ../renamed
+			create /file # touch file
 
 			# Windows has REMOVE /file, rather than CREATE /file
 			windows:
@@ -142,11 +142,6 @@ func TestWatchRename(t *testing.T) {
 		`},
 
 		{"rename overwriting existing file", func(t *testing.T, w *Watcher, tmp string) {
-			switch runtime.GOOS {
-			case "windows":
-				t.Skipf("os.Rename over existing file does not create an event on %q", runtime.GOOS)
-			}
-
 			touch(t, tmp, "renamed")
 			addWatch(t, w, tmp)
 
@@ -158,10 +153,8 @@ func TestWatchRename(t *testing.T) {
 			remove /renamed
 			create /renamed
 
-			# No remove event for Windows and Linux.
+			# No remove event for inotify; inotify just sends MOVE_SELF.
 			linux:
-				create /renamed
-			windows:
 				create /renamed
 		`},
 
@@ -203,10 +196,6 @@ func TestWatchRename(t *testing.T) {
 }
 
 func TestWatchSymlink(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlinks don't work on Windows")
-	}
-
 	tests := []testCase{
 		{"create unresolvable symlink", func(t *testing.T, w *Watcher, tmp string) {
 			addWatch(t, w, tmp)
@@ -214,6 +203,10 @@ func TestWatchSymlink(t *testing.T) {
 			symlink(t, filepath.Join(tmp, "target"), tmp, "link")
 		}, `
 			create /link
+
+			windows:
+                create    /link
+                write     /link
 		`},
 
 		{"cyclic symlink", func(t *testing.T, w *Watcher, tmp string) {
@@ -241,7 +234,7 @@ func TestWatchSymlink(t *testing.T) {
 			write  /link
 			create /link
 
-			linux:
+			linux, windows:
 				remove    /link
 				create    /link
 				write     /link

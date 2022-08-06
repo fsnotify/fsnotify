@@ -241,11 +241,12 @@ func (w *Watcher) readEvents() {
 		// We don't know how many events we just read into the buffer
 		// While the offset points to at least one whole event...
 		for offset <= uint32(n-unix.SizeofInotifyEvent) {
-			// Point "raw" to the event in the buffer
-			raw := (*unix.InotifyEvent)(unsafe.Pointer(&buf[offset]))
-
-			mask := uint32(raw.Mask)
-			nameLen := uint32(raw.Len)
+			var (
+				// Point "raw" to the event in the buffer
+				raw     = (*unix.InotifyEvent)(unsafe.Pointer(&buf[offset]))
+				mask    = uint32(raw.Mask)
+				nameLen = uint32(raw.Len)
+			)
 
 			if mask&unix.IN_Q_OVERFLOW != 0 {
 				select {

@@ -1,5 +1,8 @@
 name: 'test'
-on:   ['push', 'pull_request']
+on:
+  push:
+    paths: ['**.go', 'go.mod', '.github/workflows/*']
+
 jobs:
   test:
     strategy:
@@ -12,7 +15,7 @@ jobs:
           - windows-latest
         go:
           - '1.16'
-          - '1.18'
+          - '1.19'
     runs-on: ${{ matrix.os }}
     steps:
       - name: setup Go
@@ -77,3 +80,17 @@ jobs:
           run: |
             # TODO: no -race for the same reason as OpenBSD (the timing; it does run).
             go117 test ./...
+
+  testillumos:
+    runs-on: macos-12
+    name: test (illumos, 1.17)
+    steps:
+    - uses: actions/checkout@v2
+    - name: test (illumos, 1.17)
+      id: test
+      uses: papertigers/illumos-vm@r38
+      with:
+        prepare: |
+          pkg install go-117
+        run: |
+          /opt/ooce/go-1.17/bin/go test ./...

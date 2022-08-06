@@ -19,7 +19,7 @@ func fatal(err error) {
 }
 
 func line(s string, args ...interface{}) {
-	fmt.Printf(time.Now().Format("15:16:05.0000")+" "+s+"\n", args...)
+	fmt.Printf(time.Now().Format("15:04:05.0000")+" "+s+"\n", args...)
 }
 
 func main() {

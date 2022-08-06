@@ -1,11 +1,14 @@
 name: 'build'
-on:   ['push', 'pull_request']
+on:
+  push:
+    paths: ['**.go', 'go.mod', '.github/workflows/*']
+
 jobs:
   cross-compile:
     strategy:
       fail-fast: false
       matrix:
-        go: ['1.16', '1.18']
+        go: ['1.16', '1.19']
     runs-on: ubuntu-latest
     steps:
       - name: setup Go
@@ -18,6 +21,7 @@ jobs:
 
       - name: build
         run: |
+          set -x
           for a in $(go tool dist list); do
             GOOS=${a%%/*} GOARCH=${a#*/} go build
           done
