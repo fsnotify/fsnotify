@@ -14,7 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -23,18 +22,19 @@ import (
 type Watcher struct {
 	Events chan Event
 	Errors chan error
-	done   chan struct{} // Channel for sending a "quit message" to the reader goroutine
+	done   chan struct{}
 
-	kq int // File descriptor (as returned by the kqueue() syscall).
+	kq        int    // File descriptor (as returned by the kqueue() syscall).
+	closepipe [2]int // Pipe used for closing.
 
-	mu              sync.Mutex                  // Protects access to watcher data
-	watches         map[string]int              // Map of watched file descriptors (key: path).
-	watchesByDir    map[string]map[int]struct{} // Map of watched file descriptors indexed by the parent directory (key: dirname(path)).
-	externalWatches map[string]bool             // Map of watches added by user of the library.
-	dirFlags        map[string]uint32           // Map of watched directories to fflags used in kqueue.
-	paths           map[int]pathInfo            // Map file descriptors to path names for processing kqueue events.
-	fileExists      map[string]bool             // Keep track of if we know this file exists (to stop duplicate create events).
-	isClosed        bool                        // Set to true when Close() is first called
+	mu           sync.Mutex                  // Protects access to watcher data
+	watches      map[string]int              // Watched file descriptors (key: path).
+	watchesByDir map[string]map[int]struct{} // Watched file descriptors indexed by the parent directory (key: dirname(path)).
+	userWatches  map[string]struct{}         // Watches added with Watcher.Add()
+	dirFlags     map[string]uint32           // Watched directories to fflags used in kqueue.
+	paths        map[int]pathInfo            // File descriptors to path names for processing kqueue events.
+	fileExists   map[string]struct{}         // Keep track of if we know this file exists (to stop duplicate create events).
+	isClosed     bool                        // Set to true when Close() is first called
 }
 
 type pathInfo struct {
@@ -44,26 +44,82 @@ type pathInfo struct {
 
 // NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
 func NewWatcher() (*Watcher, error) {
-	kq, err := kqueue()
+	kq, closepipe, err := newKqueue()
 	if err != nil {
 		return nil, err
 	}
 
 	w := &Watcher{
-		kq:              kq,
-		watches:         make(map[string]int),
-		watchesByDir:    make(map[string]map[int]struct{}),
-		dirFlags:        make(map[string]uint32),
-		paths:           make(map[int]pathInfo),
-		fileExists:      make(map[string]bool),
-		externalWatches: make(map[string]bool),
-		Events:          make(chan Event),
-		Errors:          make(chan error),
-		done:            make(chan struct{}),
+		kq:           kq,
+		closepipe:    closepipe,
+		watches:      make(map[string]int),
+		watchesByDir: make(map[string]map[int]struct{}),
+		dirFlags:     make(map[string]uint32),
+		paths:        make(map[int]pathInfo),
+		fileExists:   make(map[string]struct{}),
+		userWatches:  make(map[string]struct{}),
+		Events:       make(chan Event),
+		Errors:       make(chan error),
+		done:         make(chan struct{}),
 	}
 
 	go w.readEvents()
 	return w, nil
+}
+
+// newKqueue creates a new kernel event queue and returns a descriptor.
+//
+// This registers a new event on closepipe, which will trigger an event when
+// it's closed. This way we can use kevent() without timeout/polling; without
+// the closepipe, it would block forever and we wouldn't be able to stop it at
+// all.
+func newKqueue() (kq int, closepipe [2]int, err error) {
+	kq, err = unix.Kqueue()
+	if kq == -1 {
+		return kq, closepipe, err
+	}
+
+	// Register the close pipe.
+	err = unix.Pipe(closepipe[:])
+	if err != nil {
+		unix.Close(kq)
+		return kq, closepipe, err
+	}
+
+	// Register changes to listen on the closepipe.
+	changes := make([]unix.Kevent_t, 1)
+	// SetKevent converts int to the platform-specific types.
+	unix.SetKevent(&changes[0], closepipe[0], unix.EVFILT_READ,
+		unix.EV_ADD|unix.EV_ENABLE|unix.EV_ONESHOT)
+
+	ok, err := unix.Kevent(kq, changes, nil, nil)
+	if ok == -1 {
+		unix.Close(kq)
+		unix.Close(closepipe[0])
+		unix.Close(closepipe[1])
+		return kq, closepipe, err
+	}
+	return kq, closepipe, nil
+}
+
+// Returns true if the event was sent, or false if watcher is closed.
+func (w *Watcher) sendEvent(e Event) bool {
+	select {
+	case w.Events <- e:
+		return true
+	case <-w.done:
+	}
+	return false
+}
+
+// Returns true if the error was sent, or false if watcher is closed.
+func (w *Watcher) sendError(err error) bool {
+	select {
+	case w.Errors <- err:
+		return true
+	case <-w.done:
+	}
+	return false
 }
 
 // Close removes all watches and closes the events channel.
@@ -87,8 +143,8 @@ func (w *Watcher) Close() error {
 		w.Remove(name)
 	}
 
-	// send a "quit" message to the reader goroutine
-	close(w.done)
+	// Send "quit" message to the reader goroutine.
+	unix.Close(w.closepipe[1])
 
 	return nil
 }
@@ -96,7 +152,7 @@ func (w *Watcher) Close() error {
 // Add starts watching the named file or directory (non-recursively).
 func (w *Watcher) Add(name string) error {
 	w.mu.Lock()
-	w.externalWatches[name] = true
+	w.userWatches[name] = struct{}{}
 	w.mu.Unlock()
 	_, err := w.addWatch(name, noteAllEvents)
 	return err
@@ -112,8 +168,8 @@ func (w *Watcher) Remove(name string) error {
 		return fmt.Errorf("%w: %s", ErrNonExistentWatch, name)
 	}
 
-	const registerRemove = unix.EV_DELETE
-	if err := register(w.kq, []int{watchfd}, registerRemove, 0); err != nil {
+	err := w.register([]int{watchfd}, unix.EV_DELETE, 0)
+	if err != nil {
 		return err
 	}
 
@@ -140,7 +196,7 @@ func (w *Watcher) Remove(name string) error {
 		w.mu.Lock()
 		for fd := range w.watchesByDir[name] {
 			path := w.paths[fd]
-			if !w.externalWatches[path.name] {
+			if _, ok := w.userWatches[path.name]; !ok {
 				pathsToRemove = append(pathsToRemove, path.name)
 			}
 		}
@@ -172,9 +228,6 @@ func (w *Watcher) WatchList() []string {
 // Watch all events (except NOTE_EXTEND, NOTE_LINK, NOTE_REVOKE)
 const noteAllEvents = unix.NOTE_DELETE | unix.NOTE_WRITE | unix.NOTE_ATTRIB | unix.NOTE_RENAME
 
-// keventWaitTime to block on each read from kevent
-var keventWaitTime = durationToTimespec(100 * time.Millisecond)
-
 // addWatch adds name to the watched file set.
 // The flags are interpreted as described in kevent(2).
 // Returns the real path to the file which was added, if any, which may be different from the one passed in the case of symlinks.
@@ -201,13 +254,8 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 			return "", err
 		}
 
-		// Don't watch sockets.
-		if fi.Mode()&os.ModeSocket == os.ModeSocket {
-			return "", nil
-		}
-
-		// Don't watch named pipes.
-		if fi.Mode()&os.ModeNamedPipe == os.ModeNamedPipe {
+		// Don't watch sockets or named pipes
+		if (fi.Mode()&os.ModeSocket == os.ModeSocket) || (fi.Mode()&os.ModeNamedPipe == os.ModeNamedPipe) {
 			return "", nil
 		}
 
@@ -255,8 +303,8 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 		isDir = fi.IsDir()
 	}
 
-	const registerAdd = unix.EV_ADD | unix.EV_CLEAR | unix.EV_ENABLE
-	if err := register(w.kq, []int{watchfd}, registerAdd, flags); err != nil {
+	err := w.register([]int{watchfd}, unix.EV_ADD|unix.EV_CLEAR|unix.EV_ENABLE, flags)
+	if err != nil {
 		unix.Close(watchfd)
 		return "", err
 	}
@@ -301,45 +349,53 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 // Event values that it sends down the Events channel.
 func (w *Watcher) readEvents() {
 	eventBuffer := make([]unix.Kevent_t, 10)
-
-loop:
-	for {
-		// See if there is a message on the "done" channel
-		select {
-		case <-w.done:
-			break loop
-		default:
+	defer func() {
+		err := unix.Close(w.kq)
+		if err != nil {
+			w.Errors <- err
 		}
+		unix.Close(w.closepipe[0])
+		close(w.done)
+		close(w.Events)
+		close(w.Errors)
+	}()
 
-		// Get new events
-		kevents, err := read(w.kq, eventBuffer, &keventWaitTime)
+	for closed := false; !closed; {
+		kevents, err := w.read(eventBuffer)
 		// EINTR is okay, the syscall was interrupted before timeout expired.
 		if err != nil && err != unix.EINTR {
-			select {
-			case w.Errors <- err:
-			case <-w.done:
-				break loop
+			if !w.sendError(err) {
+				closed = true
 			}
 			continue
 		}
 
 		// Flush the events we received to the Events channel
-		for len(kevents) > 0 {
-			kevent := &kevents[0]
-			watchfd := int(kevent.Ident)
-			mask := uint32(kevent.Fflags)
+		for _, kevent := range kevents {
+			var (
+				watchfd = int(kevent.Ident)
+				mask    = uint32(kevent.Fflags)
+			)
+
+			// Shut down the loop when the pipe is closed, but only after all
+			// other events have been processed.
+			if watchfd == w.closepipe[0] {
+				closed = true
+				continue
+			}
+
 			w.mu.Lock()
 			path := w.paths[watchfd]
 			w.mu.Unlock()
-			event := newEvent(path.name, mask)
+
+			event := w.newEvent(path.name, mask)
 
 			if path.isDir && !event.Has(Remove) {
-				// Double check to make sure the directory exists. This can happen when
-				// we do a rm -fr on a recursively watched folders and we receive a
-				// modification event first but the folder has been deleted and later
-				// receive the delete event
+				// Double check to make sure the directory exists. This can
+				// happen when we do a rm -fr on a recursively watched folders
+				// and we receive a modification event first but the folder has
+				// been deleted and later receive the delete event.
 				if _, err := os.Lstat(event.Name); os.IsNotExist(err) {
-					// mark is as delete event
 					event.Op |= Remove
 				}
 			}
@@ -354,11 +410,9 @@ loop:
 			if path.isDir && event.Has(Write) && !event.Has(Remove) {
 				w.sendDirectoryChangeEvents(event.Name)
 			} else {
-				// Send the event on the Events channel.
-				select {
-				case w.Events <- event:
-				case <-w.done:
-					break loop
+				if !w.sendEvent(event) {
+					closed = true
+					continue
 				}
 			}
 
@@ -386,27 +440,12 @@ loop:
 					}
 				}
 			}
-
-			// Move to next event
-			kevents = kevents[1:]
 		}
 	}
-
-	// cleanup
-	err := unix.Close(w.kq)
-	if err != nil {
-		// only way the previous loop breaks is if w.done was closed so we need to async send to w.Errors.
-		select {
-		case w.Errors <- err:
-		default:
-		}
-	}
-	close(w.Events)
-	close(w.Errors)
 }
 
 // newEvent returns an platform-independent Event based on kqueue Fflags.
-func newEvent(name string, mask uint32) Event {
+func (w *Watcher) newEvent(name string, mask uint32) Event {
 	e := Event{Name: name}
 	if mask&unix.NOTE_DELETE == unix.NOTE_DELETE {
 		e.Op |= Remove
@@ -423,10 +462,6 @@ func newEvent(name string, mask uint32) Event {
 	return e
 }
 
-func newCreateEvent(name string) Event {
-	return Event{Name: name, Op: Create}
-}
-
 // watchDirectoryFiles to mimic inotify when adding a watch on a directory
 func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 	// Get all files
@@ -436,14 +471,24 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 	}
 
 	for _, fileInfo := range files {
-		filePath := filepath.Join(dirPath, fileInfo.Name())
-		filePath, err = w.internalWatch(filePath, fileInfo)
+		path := filepath.Join(dirPath, fileInfo.Name())
+
+		cleanPath, err := w.internalWatch(path, fileInfo)
 		if err != nil {
-			return fmt.Errorf("%q: %w", filepath.Join(dirPath, fileInfo.Name()), err)
+			// No permission to read the file; that's not a problem: just skip.
+			// But do add it to w.fileExists to prevent it from being picked up
+			// as a "new" file later (it still shows up in the directory
+			// listing).
+			switch {
+			case errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM):
+				cleanPath = filepath.Clean(path)
+			default:
+				return fmt.Errorf("%q: %w", filepath.Join(dirPath, fileInfo.Name()), err)
+			}
 		}
 
 		w.mu.Lock()
-		w.fileExists[filePath] = true
+		w.fileExists[cleanPath] = struct{}{}
 		w.mu.Unlock()
 	}
 
@@ -458,9 +503,7 @@ func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
 	// Get all files
 	files, err := ioutil.ReadDir(dirPath)
 	if err != nil {
-		select {
-		case w.Errors <- err:
-		case <-w.done:
+		if !w.sendError(err) {
 			return
 		}
 	}
@@ -482,9 +525,7 @@ func (w *Watcher) sendFileCreatedEventIfNew(filePath string, fileInfo os.FileInf
 	w.mu.Unlock()
 	if !doesExist {
 		// Send create event
-		select {
-		case w.Events <- newCreateEvent(filePath):
-		case <-w.done:
+		if !w.sendEvent(Event{Name: filePath, Op: Create}) {
 			return
 		}
 	}
@@ -496,7 +537,7 @@ func (w *Watcher) sendFileCreatedEventIfNew(filePath string, fileInfo os.FileInf
 	}
 
 	w.mu.Lock()
-	w.fileExists[filePath] = true
+	w.fileExists[filePath] = struct{}{}
 	w.mu.Unlock()
 
 	return nil
@@ -518,27 +559,17 @@ func (w *Watcher) internalWatch(name string, fileInfo os.FileInfo) (string, erro
 	return w.addWatch(name, noteAllEvents)
 }
 
-// kqueue creates a new kernel event queue and returns a descriptor.
-func kqueue() (kq int, err error) {
-	kq, err = unix.Kqueue()
-	if kq == -1 {
-		return kq, err
-	}
-	return kq, nil
-}
-
-// register events with the queue
-func register(kq int, fds []int, flags int, fflags uint32) error {
+// Register events with the queue.
+func (w *Watcher) register(fds []int, flags int, fflags uint32) error {
 	changes := make([]unix.Kevent_t, len(fds))
-
 	for i, fd := range fds {
-		// SetKevent converts int to the platform-specific types:
+		// SetKevent converts int to the platform-specific types.
 		unix.SetKevent(&changes[i], fd, unix.EVFILT_VNODE, flags)
 		changes[i].Fflags = fflags
 	}
 
-	// register the events
-	success, err := unix.Kevent(kq, changes, nil, nil)
+	// Register the events.
+	success, err := unix.Kevent(w.kq, changes, nil, nil)
 	if success == -1 {
 		return err
 	}
@@ -546,16 +577,10 @@ func register(kq int, fds []int, flags int, fflags uint32) error {
 }
 
 // read retrieves pending events, or waits until an event occurs.
-// A timeout of nil blocks indefinitely, while 0 polls the queue.
-func read(kq int, events []unix.Kevent_t, timeout *unix.Timespec) ([]unix.Kevent_t, error) {
-	n, err := unix.Kevent(kq, nil, events, timeout)
+func (w *Watcher) read(events []unix.Kevent_t) ([]unix.Kevent_t, error) {
+	n, err := unix.Kevent(w.kq, nil, events, nil)
 	if err != nil {
 		return nil, err
 	}
 	return events[0:n], nil
-}
-
-// durationToTimespec prepares a timeout value
-func durationToTimespec(d time.Duration) unix.Timespec {
-	return unix.NsecToTimespec(d.Nanoseconds())
 }

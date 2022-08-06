@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 This version of fsnotify needs Go 1.16 (this was already the case since 1.5.1,
-but not documented).
+but not documented). It also increases the minimum Linux version to 2.6.32.
 
 ### Additions
 
@@ -26,19 +26,19 @@ but not documented).
 
 - all: add cmd/fsnotify (#463)
 
-  A command-line utility for testing. This is mainly useful for developers and
-  bug reports.
+  A command-line utility for testing and as an example.
 
 ### Changes and fixes
 
 - inotify: don't ignore events for files that don't exist (#260, #470)
 
-  Previously the inotify watcher would call os.Lstat() to check if a file still
-  exists before emitting events.
+  Previously the inotify watcher would call `os.Lstat()` to check if a file
+  still exists before emitting events.
 
-  This was inconsistent with other platforms, racy, resulted in inconsistent
-  event reporting, and generally a source of confusion. It was added in 2013 to
-  fix a memory leak that no longer exists.
+  This was inconsistent with other platforms and resulted in inconsistent event
+  reporting (e.g. when a file is quickly removed and re-created), and generally
+  a source of confusion. It was added in 2013 to fix a memory leak that no
+  longer exists.
 
 - all: return `ErrNonExistentWatch` when `Remove()` is called on a path that's
   not watched (#460)
@@ -49,9 +49,22 @@ but not documented).
   written in 2014, but now it is. As a result, the minimum Linux version is
   bumped from 2.6.27 to 2.6.32. This hugely simplifies the code and is faster.
 
+- kqueue: don't check for events every 100ms (#480)
+
+  The watcher would wake up every 100ms, even when there was nothing to do. Now
+  it waits until there is something to do.
+
 - macos: retry opening files on EINTR (#475)
 
-- windows: fix renaming a watched directory, if the parent is also watched (#370)
+- kqueue: skip unreadable files (#479)
+
+  kqueue requires a file descriptor for every file in a directory; this would
+  fail if a file was unreadable by the current user. Now these files are simply
+  skipped.
+
+- windows: fix renaming a watched directory if the parent is also watched (#370)
+
+- windows: increase buffer size from 4K to 64K (#485)
 
 - windows: close file handle on Remove() (#288)
 

@@ -60,6 +60,26 @@ func NewWatcher() (*Watcher, error) {
 	return w, nil
 }
 
+// Returns true if the event was sent, or false if watcher is closed.
+func (w *Watcher) sendEvent(e Event) bool {
+	select {
+	case w.Events <- e:
+		return true
+	case <-w.done:
+	}
+	return false
+}
+
+// Returns true if the error was sent, or false if watcher is closed.
+func (w *Watcher) sendError(err error) bool {
+	select {
+	case w.Errors <- err:
+		return true
+	case <-w.done:
+	}
+	return false
+}
+
 func (w *Watcher) isClosed() bool {
 	select {
 	case <-w.done:
@@ -100,11 +120,9 @@ func (w *Watcher) Add(name string) error {
 		return errors.New("inotify instance already closed")
 	}
 
-	const agnosticEvents = unix.IN_MOVED_TO | unix.IN_MOVED_FROM |
+	var flags uint32 = unix.IN_MOVED_TO | unix.IN_MOVED_FROM |
 		unix.IN_CREATE | unix.IN_ATTRIB | unix.IN_MODIFY |
 		unix.IN_MOVE_SELF | unix.IN_DELETE | unix.IN_DELETE_SELF
-
-	var flags uint32 = agnosticEvents
 
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -209,9 +227,7 @@ func (w *Watcher) readEvents() {
 		case errors.Unwrap(err) == os.ErrClosed:
 			return
 		case err != nil:
-			select {
-			case w.Errors <- err:
-			case <-w.done:
+			if !w.sendError(err) {
 				return
 			}
 			continue
@@ -229,9 +245,7 @@ func (w *Watcher) readEvents() {
 				// Read was too short.
 				err = errors.New("notify: short read in readEvents()")
 			}
-			select {
-			case w.Errors <- err:
-			case <-w.done:
+			if !w.sendError(err) {
 				return
 			}
 			continue
@@ -241,16 +255,15 @@ func (w *Watcher) readEvents() {
 		// We don't know how many events we just read into the buffer
 		// While the offset points to at least one whole event...
 		for offset <= uint32(n-unix.SizeofInotifyEvent) {
-			// Point "raw" to the event in the buffer
-			raw := (*unix.InotifyEvent)(unsafe.Pointer(&buf[offset]))
-
-			mask := uint32(raw.Mask)
-			nameLen := uint32(raw.Len)
+			var (
+				// Point "raw" to the event in the buffer
+				raw     = (*unix.InotifyEvent)(unsafe.Pointer(&buf[offset]))
+				mask    = uint32(raw.Mask)
+				nameLen = uint32(raw.Len)
+			)
 
 			if mask&unix.IN_Q_OVERFLOW != 0 {
-				select {
-				case w.Errors <- ErrEventOverflow:
-				case <-w.done:
+				if !w.sendError(ErrEventOverflow) {
 					return
 				}
 			}
@@ -278,13 +291,11 @@ func (w *Watcher) readEvents() {
 				name += "/" + strings.TrimRight(string(bytes[0:nameLen]), "\000")
 			}
 
-			event := newEvent(name, mask)
+			event := w.newEvent(name, mask)
 
 			// Send the events that are not ignored on the events channel
 			if mask&unix.IN_IGNORED == 0 {
-				select {
-				case w.Events <- event:
-				case <-w.done:
+				if !w.sendEvent(event) {
 					return
 				}
 			}
@@ -296,7 +307,7 @@ func (w *Watcher) readEvents() {
 }
 
 // newEvent returns an platform-independent Event based on an inotify mask.
-func newEvent(name string, mask uint32) Event {
+func (w *Watcher) newEvent(name string, mask uint32) Event {
 	e := Event{Name: name}
 	if mask&unix.IN_CREATE == unix.IN_CREATE || mask&unix.IN_MOVED_TO == unix.IN_MOVED_TO {
 		e.Op |= Create

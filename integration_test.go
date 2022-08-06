@@ -4,6 +4,7 @@
 package fsnotify
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"runtime"
@@ -11,6 +12,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/fsnotify/fsnotify/internal"
 )
 
 func TestWatch(t *testing.T) {
@@ -79,6 +82,31 @@ func TestWatch(t *testing.T) {
 				remove /sub
 				remove /file
 		`},
+
+		{"file in directory is not readable", func(t *testing.T, w *Watcher, tmp string) {
+			if runtime.GOOS == "windows" {
+				t.Skip("attributes don't work on Windows")
+			}
+
+			touch(t, tmp, "file-unreadable")
+			chmod(t, 0, tmp, "file-unreadable")
+			touch(t, tmp, "file")
+			addWatch(t, w, tmp)
+
+			cat(t, "hello", tmp, "file")
+			rm(t, tmp, "file")
+			rm(t, tmp, "file-unreadable")
+		}, `
+			WRITE     "/file"
+			REMOVE    "/file"
+			REMOVE    "/file-unreadable"
+
+			# We never set up a watcher on the unreadable file, so we don't get
+			# the REMOVE.
+			kqueue:
+                WRITE    "/file"
+                REMOVE   "/file"
+		`},
 	}
 
 	for _, tt := range tests {
@@ -113,8 +141,8 @@ func TestWatchRename(t *testing.T) {
 		`},
 
 		{"rename to unwatched directory", func(t *testing.T, w *Watcher, tmp string) {
-			if runtime.GOOS == "netbsd" {
-				t.Skip("NetBSD behaviour is not fully correct") // TODO: investigate and fix.
+			if runtime.GOOS == "netbsd" && isCI() {
+				t.Skip("fails in CI; see #488")
 			}
 
 			unwatched := t.TempDir()
@@ -128,10 +156,10 @@ func TestWatchRename(t *testing.T) {
 			cat(t, "data", renamed) // Modify the file outside of the watched dir
 			touch(t, file)          // Recreate the file that was moved
 		}, `
-			create /file
-			write  /file
-			rename /file
-			create /file
+			create /file # cat data >file
+			write  /file # ^
+			rename /file # mv file ../renamed
+			create /file # touch file
 
 			# Windows has REMOVE /file, rather than CREATE /file
 			windows:
@@ -142,11 +170,6 @@ func TestWatchRename(t *testing.T) {
 		`},
 
 		{"rename overwriting existing file", func(t *testing.T, w *Watcher, tmp string) {
-			switch runtime.GOOS {
-			case "windows":
-				t.Skipf("os.Rename over existing file does not create an event on %q", runtime.GOOS)
-			}
-
 			touch(t, tmp, "renamed")
 			addWatch(t, w, tmp)
 
@@ -158,10 +181,8 @@ func TestWatchRename(t *testing.T) {
 			remove /renamed
 			create /renamed
 
-			# No remove event for Windows and Linux.
+			# No remove event for inotify; inotify just sends MOVE_SELF.
 			linux:
-				create /renamed
-			windows:
 				create /renamed
 		`},
 
@@ -211,10 +232,6 @@ func TestWatchRename(t *testing.T) {
 }
 
 func TestWatchSymlink(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlinks don't work on Windows")
-	}
-
 	tests := []testCase{
 		{"create unresolvable symlink", func(t *testing.T, w *Watcher, tmp string) {
 			addWatch(t, w, tmp)
@@ -222,6 +239,10 @@ func TestWatchSymlink(t *testing.T) {
 			symlink(t, filepath.Join(tmp, "target"), tmp, "link")
 		}, `
 			create /link
+
+			windows:
+                create    /link
+                write     /link
 		`},
 
 		{"cyclic symlink", func(t *testing.T, w *Watcher, tmp string) {
@@ -249,7 +270,7 @@ func TestWatchSymlink(t *testing.T) {
 			write  /link
 			create /link
 
-			linux:
+			linux, windows:
 				remove    /link
 				create    /link
 				write     /link
@@ -463,6 +484,38 @@ func TestClose(t *testing.T) {
 			go w.Close()
 			go w.Close()
 			go w.Close()
+		}
+	})
+}
+
+func TestAdd(t *testing.T) {
+	t.Run("permission denied", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("attributes don't work on Windows")
+		}
+
+		t.Parallel()
+
+		tmp := t.TempDir()
+		dir := filepath.Join(tmp, "dir-unreadable")
+		mkdir(t, dir)
+		touch(t, dir, "/file")
+		chmod(t, 0, dir)
+
+		w := newWatcher(t)
+		defer func() {
+			w.Close()
+			chmod(t, 0o755, dir) // Make TempDir() cleanup work
+		}()
+		err := w.Add(dir)
+		if err == nil {
+			t.Fatal("error is nil")
+		}
+		if !errors.Is(err, internal.UnixEACCES) {
+			t.Errorf("not unix.EACCESS: %T %#[1]v", err)
+		}
+		if !errors.Is(err, internal.SyscallEACCES) {
+			t.Errorf("not syscall.EACCESS: %T %#[1]v", err)
 		}
 	})
 }
