@@ -22,8 +22,8 @@ type testCase struct {
 func (tt testCase) run(t *testing.T) {
 	t.Helper()
 	t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
 		t.Helper()
+		t.Parallel()
 		tmp := t.TempDir()
 
 		w := newCollector(t)
