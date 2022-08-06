@@ -6,8 +6,11 @@ package fsnotify
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -15,6 +18,15 @@ import (
 
 	"github.com/fsnotify/fsnotify/internal"
 )
+
+// Set soft open file limit to the maximum; on e.g. OpenBSD it's 512/1024.
+//
+// Go 1.19 will always do this when the os package is imported.
+//
+// https://go-review.googlesource.com/c/go/+/393354/
+func init() {
+	internal.SetRlimit()
+}
 
 func TestWatch(t *testing.T) {
 	tests := []testCase{
@@ -73,6 +85,12 @@ func TestWatch(t *testing.T) {
 			remove /sub
 			remove /file
 
+			# TODO: not sure why the REMOVE /sub is dropped.
+			dragonfly:
+                create    /sub
+                create    /file
+                remove    /file
+
 			# Windows includes a write for the /sub dir too, two of them even(?)
 			windows:
 				create /sub
@@ -106,6 +124,33 @@ func TestWatch(t *testing.T) {
 			kqueue:
                 WRITE    "/file"
                 REMOVE   "/file"
+		`},
+
+		{"watch same dir twice", func(t *testing.T, w *Watcher, tmp string) {
+			addWatch(t, w, tmp)
+			addWatch(t, w, tmp)
+
+			touch(t, tmp, "file")
+			cat(t, "hello", tmp, "file")
+			rm(t, tmp, "file")
+			mkdir(t, tmp, "dir")
+		}, `
+			create   /file
+			write    /file
+			remove   /file
+			create   /dir
+		`},
+
+		{"watch same file twice", func(t *testing.T, w *Watcher, tmp string) {
+			file := filepath.Join(tmp, "file")
+			touch(t, file)
+
+			addWatch(t, w, file)
+			addWatch(t, w, file)
+
+			cat(t, "hello", tmp, "file")
+		}, `
+			write    /file
 		`},
 	}
 
@@ -184,6 +229,10 @@ func TestWatchRename(t *testing.T) {
 			# No remove event for inotify; inotify just sends MOVE_SELF.
 			linux:
 				create /renamed
+
+			# TODO: this is broken.
+			dragonfly:
+                REMOVE|WRITE         "/"
 		`},
 
 		{"rename watched directory", func(t *testing.T, w *Watcher, tmp string) {
@@ -235,6 +284,11 @@ func TestWatchSymlink(t *testing.T) {
 			windows:
                 create    /link
                 write     /link
+
+			# No events at all on Dragonfly
+			# TODO: should fix this.
+            dragonfly:
+				empty
 		`},
 
 		{"cyclic symlink", func(t *testing.T, w *Watcher, tmp string) {
@@ -327,6 +381,47 @@ func TestWatchAttrib(t *testing.T) {
 
 func TestWatchRm(t *testing.T) {
 	tests := []testCase{
+		{"remove watched file", func(t *testing.T, w *Watcher, tmp string) {
+			file := filepath.Join(tmp, "file")
+			touch(t, file)
+
+			addWatch(t, w, file)
+			rm(t, file)
+		}, `
+			REMOVE   "/file"
+
+			# unlink always emits a CHMOD on Linux.
+			linux:
+				CHMOD    "/file"
+				REMOVE   "/file"
+		`},
+
+		{"remove watched file with open fd", func(t *testing.T, w *Watcher, tmp string) {
+			if runtime.GOOS == "windows" {
+				t.Skip("Windows hard-locks open files so this will never work")
+			}
+
+			file := filepath.Join(tmp, "file")
+			touch(t, file)
+
+			// Intentionally don't close the descriptor here so it stays around.
+			_, err := os.Open(file)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			addWatch(t, w, file)
+			rm(t, file)
+		}, `
+			REMOVE   "/file"
+
+			# inotify will just emit a CHMOD for the unlink, but won't actually
+			# emit a REMOVE until the descriptor is closed. Bit odd, but not much
+			# we can do about it. The REMOVE is tested in TestInotifyDeleteOpenFile()
+			linux:
+				CHMOD    "/file"
+		`},
+
 		{"remove watched directory", func(t *testing.T, w *Watcher, tmp string) {
 			if runtime.GOOS == "openbsd" || runtime.GOOS == "netbsd" {
 				t.Skip("behaviour is inconsistent on OpenBSD and NetBSD, and this test is flaky")
@@ -366,6 +461,34 @@ func TestWatchRm(t *testing.T) {
 }
 
 func TestClose(t *testing.T) {
+	chanClosed := func(t *testing.T, w *Watcher) {
+		t.Helper()
+
+		// Need a small sleep as Close() on kqueue does all sorts of things,
+		// which may take a little bit.
+		switch runtime.GOOS {
+		case "freebsd", "openbsd", "netbsd", "dragonfly", "darwin":
+			time.Sleep(5 * time.Millisecond)
+		}
+
+		select {
+		default:
+			t.Fatal("blocking on Events")
+		case _, ok := <-w.Events:
+			if ok {
+				t.Fatal("Events not closed")
+			}
+		}
+		select {
+		default:
+			t.Fatal("blocking on Errors")
+		case _, ok := <-w.Errors:
+			if ok {
+				t.Fatal("Errors not closed")
+			}
+		}
+	}
+
 	t.Run("close", func(t *testing.T) {
 		t.Parallel()
 
@@ -373,6 +496,7 @@ func TestClose(t *testing.T) {
 		if err := w.Close(); err != nil {
 			t.Fatal(err)
 		}
+		chanClosed(t, w)
 
 		var done int32
 		go func() {
@@ -402,6 +526,12 @@ func TestClose(t *testing.T) {
 		rm(t, tmp, "file")
 		if err := w.Close(); err != nil {
 			t.Fatal(err)
+		}
+
+		// TODO: windows backend doesn't work well here; can't easily fix it.
+		//       Need to rewrite things a bit.
+		if runtime.GOOS != "windows" {
+			chanClosed(t, w)
 		}
 	})
 
@@ -471,6 +601,23 @@ func TestClose(t *testing.T) {
 			go w.Close()
 		}
 	})
+
+	t.Run("closes channels after read", func(t *testing.T) {
+		t.Parallel()
+
+		tmp := t.TempDir()
+
+		w := newCollector(t, tmp)
+		w.collect(t)
+		touch(t, tmp, "qwe")
+		touch(t, tmp, "asd")
+
+		if err := w.w.Close(); err != nil {
+			t.Fatal(err)
+		}
+
+		chanClosed(t, w.w)
+	})
 }
 
 func TestAdd(t *testing.T) {
@@ -532,6 +679,8 @@ func TestRemove(t *testing.T) {
 	})
 
 	t.Run("remove same dir twice", func(t *testing.T) {
+		t.Parallel()
+
 		tmp := t.TempDir()
 
 		touch(t, tmp, "file")
@@ -544,8 +693,12 @@ func TestRemove(t *testing.T) {
 		if err := w.Remove(tmp); err != nil {
 			t.Fatal(err)
 		}
-		if err := w.Remove(tmp); err == nil {
+		err := w.Remove(tmp)
+		if err == nil {
 			t.Fatal("no error")
+		}
+		if !errors.Is(err, ErrNonExistentWatch) {
+			t.Fatalf("wrong error: %T", err)
 		}
 	})
 
@@ -602,5 +755,190 @@ func TestEventString(t *testing.T) {
 				t.Errorf("\nhave: %q\nwant: %q", have, tt.want)
 			}
 		})
+	}
+}
+
+func isKqueue() bool {
+	switch runtime.GOOS {
+	case "linux", "windows":
+		return false
+	}
+	return true
+}
+
+// Verify the watcher can keep up with file creations/deletions when under load.
+func TestWatchStress(t *testing.T) {
+	// On NetBSD ioutil.ReadDir in sendDirectoryChangeEvents() returns EINVAL
+	// ~80% of the time:
+	//
+	//    readdirent /tmp/TestWatchStress3584363325/001: invalid argument
+	//
+	// This ends up calling getdents(), the manpage says:
+	//
+	// [EINVAL]  A directory was being read on NFS, but it was modified on the
+	//           server while it was being read.
+	//
+	// Which is, eh, odd? Maybe I read the code wrong and it's calling another
+	// function too(?)
+	//
+	// Because this happens on the Errors channel we can't "skip" it like with
+	// other kqueue platorms, so just skip the entire test for now.
+	//
+	// TODO: fix this.
+	if runtime.GOOS == "netbsd" {
+		t.Skip("broken on NetBSD")
+	}
+
+	Errorf := func(t *testing.T, msg string, args ...interface{}) {
+		if !isKqueue() {
+			t.Errorf(msg, args...)
+			return
+		}
+
+		// On kqueue platforms it doesn't seem to sync properly; see comment for
+		// the sleep below.
+		//
+		// TODO: fix this.
+		t.Logf(msg, args...)
+		t.Skip("flaky on kqueue; allowed to fail")
+	}
+
+	tmp := t.TempDir()
+	w := newCollector(t, tmp)
+	w.collect(t)
+
+	fmtNum := func(n int) string {
+		s := fmt.Sprintf("%09d", n)
+		return s[:3] + "_" + s[3:6] + "_" + s[6:]
+	}
+
+	var (
+		numFiles = 1_500_000
+		runFor   = 30 * time.Second
+	)
+	if testing.Short() {
+		runFor = time.Second
+	}
+
+	// Otherwise platforms with low limits such as as OpenBSD and NetBSD will
+	// fail, since every watched file uses a file descriptor. Need superuser
+	// permissions and twiddling with /etc/login.conf to adjust them, so we
+	// can't "just increase it".
+	if isKqueue() && uint64(numFiles) > internal.Maxfiles() {
+		numFiles = int(internal.Maxfiles()) - 100
+		t.Logf("limiting files to %d due to max open files limit", numFiles)
+	}
+
+	var (
+		prefix = "xyz-prefix-"
+		done   = make(chan struct{})
+	)
+	// testing.Short()
+	go func() {
+		numFiles = createFiles(t, tmp, prefix, numFiles, runFor)
+
+		// TODO: this shouldn't be needed; and if this is too short some very
+		//       odd events happen:
+		//
+		//         fsnotify_test.go:837: saw 42 unexpected events:
+		//             REMOVE               ""
+		//             CREATE               "."
+		//             REMOVE               ""
+		//             CREATE               "."
+		//             REMOVE               ""
+		//             ...
+		//
+		//         fsnotify_test.go:848: expected the following 3175 events, but didn't see them (showing first 100 only)
+		//             REMOVE               "/xyz-prefix-000_015_080"
+		//             REMOVE               "/xyz-prefix-000_014_536"
+		//             CREATE               "/xyz-prefix-000_015_416"
+		//             CREATE               "/xyz-prefix-000_015_406"
+		//             ...
+		//
+		// Should really add a Sync() method which processes all outstanding
+		// events.
+		if isKqueue() {
+			time.Sleep(1000 * time.Millisecond)
+			if !testing.Short() {
+				time.Sleep(1000 * time.Millisecond)
+			}
+		}
+
+		for i := 0; i < numFiles; i++ {
+			rm(t, tmp, prefix+fmtNum(i), noWait)
+		}
+		close(done)
+	}()
+	<-done
+
+	have := w.stopWait(t, 10*time.Second)
+
+	// Do some work to get reasonably nice error reports; what cmpEvents() gives
+	// us is nice if you have just a few events, but with thousands it qiuckly
+	// gets unwieldy.
+
+	want := make(map[Event]struct{})
+	for i := 0; i < numFiles; i++ {
+		n := "/" + prefix + fmtNum(i)
+		want[Event{Name: n, Op: Remove}] = struct{}{}
+		want[Event{Name: n, Op: Create}] = struct{}{}
+	}
+
+	var extra Events
+	for _, h := range have {
+		h.Name = filepath.ToSlash(strings.TrimPrefix(h.Name, tmp))
+		_, ok := want[h]
+		if ok {
+			delete(want, h)
+		} else {
+			extra = append(extra, h)
+		}
+	}
+
+	if len(extra) > 0 {
+		if len(extra) > 100 {
+			Errorf(t, "saw %d unexpected events (showing first 100 only):\n%s", len(extra), extra[:100])
+		} else {
+			Errorf(t, "saw %d unexpected events:\n%s", len(extra), extra)
+		}
+	}
+
+	if len(want) != 0 {
+		wantE := make(Events, 0, len(want))
+		for k := range want {
+			wantE = append(wantE, k)
+		}
+
+		if len(wantE) > 100 {
+			Errorf(t, "expected the following %d events, but didn't see them (showing first 100 only)\n%s", len(wantE), wantE[:100])
+		} else {
+			Errorf(t, "expected the following %d events, but didn't see them\n%s", len(wantE), wantE)
+		}
+	}
+}
+
+func TestWatchList(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// TODO: probably should I guess...
+		t.Skip("WatchList has always beek broken on Windows and I don't feel like fixing it")
+	}
+
+	t.Parallel()
+
+	tmp := t.TempDir()
+	file := filepath.Join(tmp, "file")
+	other := filepath.Join(tmp, "other")
+
+	touch(t, file)
+	touch(t, other)
+
+	w := newWatcher(t, file, tmp)
+	defer w.Close()
+
+	have := w.WatchList()
+	sort.Strings(have)
+	want := []string{tmp, file}
+	if !reflect.DeepEqual(have, want) {
+		t.Errorf("\nhave: %s\nwant: %s", have, want)
 	}
 }

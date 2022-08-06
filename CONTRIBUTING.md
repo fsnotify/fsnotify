@@ -18,7 +18,8 @@ Just `go test ./...` runs all the tests; the CI runs this on all supported
 platforms. Testing different platforms locally can be done with something like
 [goon] or [Vagrant], but this isn't super-easy to set up at the moment.
 
-The main tests are in [integration_test.go].
+Use the `-short` flag to make the "stress test" run faster.
+
 
 [goon]: https://github.com/arp242/goon
 [Vagrant]: https://www.vagrantup.com/

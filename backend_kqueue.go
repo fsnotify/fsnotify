@@ -132,15 +132,14 @@ func (w *Watcher) Close() error {
 	for name := range w.watches {
 		pathsToRemove = append(pathsToRemove, name)
 	}
-	w.mu.Unlock()
-	// unlock before calling Remove, which also locks
-
+	w.mu.Unlock() // Unlock before calling Remove, which also locks
 	for _, name := range pathsToRemove {
 		w.Remove(name)
 	}
 
 	// Send "quit" message to the reader goroutine.
 	unix.Close(w.closepipe[1])
+	close(w.done)
 
 	return nil
 }
@@ -174,6 +173,7 @@ func (w *Watcher) Remove(name string) error {
 	w.mu.Lock()
 	isDir := w.paths[watchfd].isDir
 	delete(w.watches, name)
+	delete(w.userWatches, name)
 
 	parentName := filepath.Dir(name)
 	delete(w.watchesByDir[parentName], watchfd)
@@ -184,6 +184,7 @@ func (w *Watcher) Remove(name string) error {
 
 	delete(w.paths, watchfd)
 	delete(w.dirFlags, name)
+	delete(w.fileExists, name)
 	w.mu.Unlock()
 
 	// Find all watched paths that are in this directory that are not external.
@@ -213,8 +214,8 @@ func (w *Watcher) WatchList() []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	entries := make([]string, 0, len(w.watches))
-	for pathname := range w.watches {
+	entries := make([]string, 0, len(w.userWatches))
+	for pathname := range w.userWatches {
 		entries = append(entries, pathname)
 	}
 
@@ -344,23 +345,22 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 // readEvents reads from kqueue and converts the received kevents into
 // Event values that it sends down the Events channel.
 func (w *Watcher) readEvents() {
-	eventBuffer := make([]unix.Kevent_t, 10)
 	defer func() {
 		err := unix.Close(w.kq)
 		if err != nil {
 			w.Errors <- err
 		}
 		unix.Close(w.closepipe[0])
-		close(w.done)
 		close(w.Events)
 		close(w.Errors)
 	}()
 
+	eventBuffer := make([]unix.Kevent_t, 10)
 	for closed := false; !closed; {
 		kevents, err := w.read(eventBuffer)
 		// EINTR is okay, the syscall was interrupted before timeout expired.
 		if err != nil && err != unix.EINTR {
-			if !w.sendError(err) {
+			if !w.sendError(fmt.Errorf("fsnotify.readEvents: %w", err)) {
 				closed = true
 			}
 			continue
@@ -491,23 +491,22 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 	return nil
 }
 
-// sendDirectoryEvents searches the directory for newly created files
-// and sends them over the event channel. This functionality is to have
-// the BSD version of fsnotify match Linux inotify which provides a
-// create event for files created in a watched directory.
-func (w *Watcher) sendDirectoryChangeEvents(dirPath string) {
+// Search the directory for new files and send an event for them.
+//
+// This functionality is to have the BSD watcher match the inotify, which sends
+// a create event for files created in a watched directory.
+func (w *Watcher) sendDirectoryChangeEvents(dir string) {
 	// Get all files
-	files, err := ioutil.ReadDir(dirPath)
+	files, err := ioutil.ReadDir(dir)
 	if err != nil {
-		if !w.sendError(err) {
+		if !w.sendError(fmt.Errorf("fsnotify.sendDirectoryChangeEvents: %w", err)) {
 			return
 		}
 	}
 
 	// Search for new files
-	for _, fileInfo := range files {
-		filePath := filepath.Join(dirPath, fileInfo.Name())
-		err := w.sendFileCreatedEventIfNew(filePath, fileInfo)
+	for _, fi := range files {
+		err := w.sendFileCreatedEventIfNew(filepath.Join(dir, fi.Name()), fi)
 		if err != nil {
 			return
 		}
@@ -520,7 +519,6 @@ func (w *Watcher) sendFileCreatedEventIfNew(filePath string, fileInfo os.FileInf
 	_, doesExist := w.fileExists[filePath]
 	w.mu.Unlock()
 	if !doesExist {
-		// Send create event
 		if !w.sendEvent(Event{Name: filePath, Op: Create}) {
 			return
 		}
