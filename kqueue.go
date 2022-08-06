@@ -199,13 +199,8 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 			return "", err
 		}
 
-		// Don't watch sockets.
-		if fi.Mode()&os.ModeSocket == os.ModeSocket {
-			return "", nil
-		}
-
-		// Don't watch named pipes.
-		if fi.Mode()&os.ModeNamedPipe == os.ModeNamedPipe {
+		// Don't watch sockets or named pipes
+		if (fi.Mode()&os.ModeSocket == os.ModeSocket) || (fi.Mode()&os.ModeNamedPipe == os.ModeNamedPipe) {
 			return "", nil
 		}
 
@@ -427,14 +422,24 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 	}
 
 	for _, fileInfo := range files {
-		filePath := filepath.Join(dirPath, fileInfo.Name())
-		filePath, err = w.internalWatch(filePath, fileInfo)
+		path := filepath.Join(dirPath, fileInfo.Name())
+
+		cleanPath, err := w.internalWatch(path, fileInfo)
 		if err != nil {
-			return fmt.Errorf("%q: %w", filepath.Join(dirPath, fileInfo.Name()), err)
+			// No permission to read the file; that's not a problem: just skip.
+			// But do add it to w.fileExists to prevent it from being picked up
+			// as a "new" file later (it still shows up in the directory
+			// listing).
+			switch {
+			case errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM):
+				cleanPath = filepath.Clean(path)
+			default:
+				return fmt.Errorf("%q: %w", filepath.Join(dirPath, fileInfo.Name()), err)
+			}
 		}
 
 		w.mu.Lock()
-		w.fileExists[filePath] = struct{}{}
+		w.fileExists[cleanPath] = struct{}{}
 		w.mu.Unlock()
 	}
 
