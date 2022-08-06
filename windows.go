@@ -164,6 +164,7 @@ const (
 	sysFSMOVEDFROM  = 0x40
 	sysFSMOVEDTO    = 0x80
 	sysFSMOVESELF   = 0x800
+	sysFSIGNORED    = 0x8000
 )
 
 func (w *Watcher) newEvent(name string, mask uint32) Event {
@@ -361,11 +362,11 @@ func (w *Watcher) remWatch(pathname string) error {
 		return fmt.Errorf("%w: %s", ErrNonExistentWatch, pathname)
 	}
 	if pathname == dir {
-		w.sendEvent(watch.path, watch.mask)
+		w.sendEvent(watch.path, watch.mask&sysFSIGNORED)
 		watch.mask = 0
 	} else {
 		name := filepath.Base(pathname)
-		w.sendEvent(filepath.Join(watch.path, name), watch.names[name])
+		w.sendEvent(filepath.Join(watch.path, name), watch.names[name]&sysFSIGNORED)
 		delete(watch.names, name)
 	}
 	return w.startRead(watch)
@@ -375,13 +376,13 @@ func (w *Watcher) remWatch(pathname string) error {
 func (w *Watcher) deleteWatch(watch *watch) {
 	for name, mask := range watch.names {
 		if mask&provisional == 0 {
-			w.sendEvent(filepath.Join(watch.path, name), mask)
+			w.sendEvent(filepath.Join(watch.path, name), mask&sysFSIGNORED)
 		}
 		delete(watch.names, name)
 	}
 	if watch.mask != 0 {
 		if watch.mask&provisional == 0 {
-			w.sendEvent(watch.path, watch.mask)
+			w.sendEvent(watch.path, watch.mask&sysFSIGNORED)
 		}
 		watch.mask = 0
 	}
@@ -559,7 +560,7 @@ func (w *Watcher) readEvents() {
 				sendNameEvent()
 			}
 			if raw.Action == windows.FILE_ACTION_REMOVED {
-				w.sendEvent(fullname, watch.names[name])
+				w.sendEvent(fullname, watch.names[name]&sysFSIGNORED)
 				delete(watch.names, name)
 			}
 
