@@ -151,16 +151,11 @@ func (w *Watcher) WatchList() []string {
 // add various options to the watch. This has long since been removed.
 //
 // The "sys" in the name is misleading as they're not part of any "system".
+//
+// This should all be removed at some point, and just use windows.FILE_NOTIFY_*
 const (
-	// Options for AddWatch
-	sysFSONESHOT = 0x80000000
-	sysFSONLYDIR = 0x1000000
-
-	// Events
-	sysFSACCESS     = 0x1
 	sysFSALLEVENTS  = 0xfff
 	sysFSATTRIB     = 0x4
-	sysFSCLOSE      = 0x18
 	sysFSCREATE     = 0x100
 	sysFSDELETE     = 0x200
 	sysFSDELETESELF = 0x400
@@ -169,10 +164,7 @@ const (
 	sysFSMOVEDFROM  = 0x40
 	sysFSMOVEDTO    = 0x80
 	sysFSMOVESELF   = 0x800
-
-	// Special events
-	sysFSIGNORED   = 0x8000
-	sysFSQOVERFLOW = 0x4000
+	sysFSIGNORED    = 0x8000
 )
 
 func (w *Watcher) newEvent(name string, mask uint32) Event {
@@ -302,9 +294,6 @@ func (w *Watcher) addWatch(pathname string, flags uint64) error {
 	if err != nil {
 		return err
 	}
-	if flags&sysFSONLYDIR != 0 && pathname != dir {
-		return nil
-	}
 
 	ino, err := w.getIno(dir)
 	if err != nil {
@@ -427,11 +416,7 @@ func (w *Watcher) startRead(watch *watch) error {
 		err := os.NewSyscallError("ReadDirectoryChanges", rdErr)
 		if rdErr == windows.ERROR_ACCESS_DENIED && watch.mask&provisional == 0 {
 			// Watched directory was probably removed
-			if w.sendEvent(watch.path, watch.mask&sysFSDELETESELF) {
-				if watch.mask&sysFSONESHOT != 0 {
-					watch.mask = 0
-				}
-			}
+			w.sendEvent(watch.path, watch.mask&sysFSDELETESELF)
 			err = nil
 		}
 		w.deleteWatch(watch)
@@ -522,7 +507,6 @@ func (w *Watcher) readEvents() {
 		var offset uint32
 		for {
 			if n == 0 {
-				w.Events <- w.newEvent("", sysFSQOVERFLOW)
 				w.sendError(errors.New("short read in readEvents()"))
 				break
 			}
@@ -570,11 +554,7 @@ func (w *Watcher) readEvents() {
 			}
 
 			sendNameEvent := func() {
-				if w.sendEvent(fullname, watch.names[name]&mask) {
-					if watch.names[name]&sysFSONESHOT != 0 {
-						delete(watch.names, name)
-					}
-				}
+				w.sendEvent(fullname, watch.names[name]&mask)
 			}
 			if raw.Action != windows.FILE_ACTION_RENAMED_NEW_NAME {
 				sendNameEvent()
@@ -583,11 +563,8 @@ func (w *Watcher) readEvents() {
 				w.sendEvent(fullname, watch.names[name]&sysFSIGNORED)
 				delete(watch.names, name)
 			}
-			if w.sendEvent(fullname, watch.mask&w.toFSnotifyFlags(raw.Action)) {
-				if watch.mask&sysFSONESHOT != 0 {
-					watch.mask = 0
-				}
-			}
+
+			w.sendEvent(fullname, watch.mask&w.toFSnotifyFlags(raw.Action))
 			if raw.Action == windows.FILE_ACTION_RENAMED_NEW_NAME {
 				fullname = filepath.Join(watch.path, watch.rename)
 				sendNameEvent()
@@ -615,9 +592,6 @@ func (w *Watcher) readEvents() {
 
 func (w *Watcher) toWindowsFlags(mask uint64) uint32 {
 	var m uint32
-	if mask&sysFSACCESS != 0 {
-		m |= windows.FILE_NOTIFY_CHANGE_LAST_ACCESS
-	}
 	if mask&sysFSMODIFY != 0 {
 		m |= windows.FILE_NOTIFY_CHANGE_LAST_WRITE
 	}
