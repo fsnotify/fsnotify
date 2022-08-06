@@ -1,5 +1,5 @@
 fsnotify is a Go library to provide cross-platform filesystem notifications on
-Windows, Linux, macOS, BSD, illumos, and Solaris.
+Windows, Linux, macOS, BSD, and illumos.
 
 fsnotify requires Go 1.16 or newer.
 
@@ -7,18 +7,19 @@ API docs: https://pkg.go.dev/github.com/fsnotify/fsnotify
 
 Platform support:
 
-| Adapter               | OS               | Status                                                       |
-| --------------------- | -----------------| -------------------------------------------------------------|
-| inotify               | Linux 2.6.32+    | Supported                                                    |
-| kqueue                | BSD, macOS       | Supported                                                    |
-| ReadDirectoryChangesW | Windows          | Supported                                                    |
-| FSEvents              | macOS            | [Planned](https://github.com/fsnotify/fsnotify/issues/11)    |
-| FEN                   | illumos, Solaris | Supported                                                    |
-| fanotify              | Linux 5.9+       | [Maybe](https://github.com/fsnotify/fsnotify/issues/114)     |
-| USN Journals          | Windows          | [Maybe](https://github.com/fsnotify/fsnotify/issues/53)      |
-| Polling               | *All*            | [Maybe](https://github.com/fsnotify/fsnotify/issues/9)       |
+| Adapter               | OS             | Status                                                       |
+| --------------------- | -------------- | ------------------------------------------------------------ |
+| inotify               | Linux 2.6.32+  | Supported                                                    |
+| kqueue                | BSD, macOS     | Supported                                                    |
+| ReadDirectoryChangesW | Windows        | Supported                                                    |
+| FEN                   | illumos        | Supported                                                    |
+| FSEvents              | macOS          | [Planned](https://github.com/fsnotify/fsnotify/issues/11)    |
+| fanotify              | Linux 5.9+     | [Maybe](https://github.com/fsnotify/fsnotify/issues/114)     |
+| USN Journals          | Windows        | [Maybe](https://github.com/fsnotify/fsnotify/issues/53)      |
+| Polling               | *All*          | [Maybe](https://github.com/fsnotify/fsnotify/issues/9)       |
 
-Linux and macOS should include Android and iOS, but these are currently untested.
+Linux, macOS, and illumos should include Android, iOS, and Solaris, but these
+are currently untested.
 
 Usage
 -----
