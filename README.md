@@ -28,52 +28,55 @@ A basic example:
 package main
 
 import (
-	"log"
+    "log"
 
-	"github.com/fsnotify/fsnotify"
+    "github.com/fsnotify/fsnotify"
 )
 
 func main() {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer watcher.Close()
+    // Create new watcher.
+    watcher, err := fsnotify.NewWatcher()
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer watcher.Close()
 
-	done := make(chan bool)
-	go func() {
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				log.Println("event:", event)
-				if event.Has(fsnotify.Write) {
-					log.Println("modified file:", event.Name)
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				log.Println("error:", err)
-			}
-		}
-	}()
+    // Start listening for events.
+    go func() {
+        for {
+            select {
+            case event, ok := <-watcher.Events:
+                if !ok {
+                    return
+                }
+                log.Println("event:", event)
+                if event.Has(fsnotify.Write) {
+                    log.Println("modified file:", event.Name)
+                }
+            case err, ok := <-watcher.Errors:
+                if !ok {
+                    return
+                }
+                log.Println("error:", err)
+            }
+        }
+    }()
 
-	err = watcher.Add("/tmp")
-	if err != nil {
-		log.Fatal(err)
-	}
-	<-done
+    // Add a path.
+    err = watcher.Add("/tmp")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Block main goroutine forever.
+    <-make(chan struct{})
 }
 ```
 
-A slightly more expansive example can be found in [cmd/fsnotify](cmd/fsnotify),
-which can be run with:
+Some more examples can be found in [cmd/fsnotify](cmd/fsnotify), which can be
+run with:
 
-    # Watch the current directory (not recursive).
-    $ go run ./cmd/fsnotify .
+    % go run ./cmd/fsnotify
 
 FAQ
 ---
@@ -109,10 +112,10 @@ descriptors are closed. It will emit a CHMOD though:
     os.Remove("file")        // CHMOD
     fp.Close()               // REMOVE
 
-Linux: the `fs.inotify.max_user_watches` sysctl variable specifies the upper
-limit for the number of watches per user, and `fs.inotify.max_user_instances`
-specifies the maximum number of inotify instances per user. Every Watcher you
-create is an "instance", and every path you add is a "watch".
+The `fs.inotify.max_user_watches` sysctl variable specifies the upper limit for
+the number of watches per user, and `fs.inotify.max_user_instances` specifies
+the maximum number of inotify instances per user. Every Watcher you create is an
+"instance", and every path you add is a "watch".
 
 These are also exposed in /proc as `/proc/sys/fs/inotify/max_user_watches` and
 `/proc/sys/fs/inotify/max_user_instances`

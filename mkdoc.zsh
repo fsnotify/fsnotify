@@ -1,12 +1,11 @@
-//go:build solaris
-// +build solaris
+#!/usr/bin/env zsh
+[ "${ZSH_VERSION:-}" = "" ] && echo >&2 "Only works with zsh" && exit 1
+setopt err_exit no_unset pipefail extended_glob
 
-package fsnotify
+# Simple script to update the godoc comments on all watchers. Probably took me
+# more time to write this than doing it manually, but ah well 🙃
 
-import (
-	"errors"
-)
-
+watcher=$(<<EOF
 // Watcher watches a set of files, delivering events to a channel.
 //
 // A watcher should not be copied (e.g. pass it by pointer, rather than by
@@ -63,7 +62,64 @@ import (
 //
 // [#11]: https://github.com/fsnotify/fsnotify/issues/11
 // [#15]: https://github.com/fsnotify/fsnotify/issues/15
-type Watcher struct {
+EOF
+)
+
+new=$(<<EOF
+// NewWatcher creates a new Watcher.
+EOF
+)
+
+add=$(<<EOF
+// Add starts monitoring the path for changes.
+//
+// A path can only be watched once; attempting to watch it more than once will
+// return an error. Paths that do not yet exist on the filesystem cannot be
+// added. A watch will be automatically removed if the path is deleted.
+//
+// A path will remain watched if it gets renamed to somewhere else on the same
+// filesystem, but the monitor will get removed if the path gets deleted and
+// re-created.
+//
+// Notifications on network filesystems (NFS, SMB, FUSE, etc.) or special
+// filesystems (/proc, /sys, etc.) generally don't work.
+//
+// # Watching directories
+//
+// All files in a directory are monitored, including new files that are created
+// after the watcher is started. Subdirectories are not watched (i.e. it's
+// non-recursive).
+//
+// # Watching files
+//
+// Watching individual files (rather than directories) is generally not
+// recommended as many tools update files atomically. Instead of "just" writing
+// to the file a temporary file will be written to first, and if successful the
+// temporary file is moved to to destination, removing the original, or some
+// variant thereof. The watcher on the original file is now lost, as it no
+// longer exists.
+//
+// Instead, watch the parent directory and use [Event.Name] to filter out files
+// you're not interested in. There is an example of this in cmd/fsnotify/file.go
+EOF
+)
+
+remove=$(<<EOF
+// Remove stops monitoring the path for changes.
+//
+// Directories are always removed non-recursively. For example, if you added
+// /tmp/dir and /tmp/dir/subdir then you will need to remove both.
+//
+// Removing a path that has not yet been added returns [ErrNonExistentWatch].
+EOF
+)
+
+close=$(<<EOF
+// Close removes all watches and closes the events channel.
+EOF
+)
+
+events=$(<<EOF
 	// Events sends the filesystem change events.
 	//
 	// fsnotify can send the following events; a "path" here can refer to a
@@ -97,62 +153,46 @@ type Watcher struct {
 	//                      Linux this is also sent when a file is removed (or
 	//                      more accurately, when a link to an inode is
 	//                      removed), and on kqueue when a file is truncated.
-	Events chan Event
+EOF
+)
 
+errors=$(<<EOF
 	// Errors sends any errors.
-	Errors chan error
+EOF
+)
+
+set-cmt() {
+	local pat=$1
+	local cmt=$2
+
+	IFS=$'\n' local files=($(grep -n $pat backend_*~*_test.go))
+	for f in $files; do
+		IFS=':' local fields=($=f)
+		local file=$fields[1]
+		local end=$(( $fields[2] - 1 ))
+
+		# Find start of comment.
+		local start=0
+		IFS=$'\n' local lines=($(head -n$end $file))
+		for (( i = 1; i <= $#lines; i++ )); do
+			local line=$lines[-$i]
+			if ! grep -q '^[[:space:]]*//' <<<$line; then
+				start=$(( end - (i - 2) ))
+				break
+			fi
+		done
+
+		head -n $(( start - 1 )) $file  >/tmp/x
+		print -r -- $cmt                >>/tmp/x
+		tail -n+$(( end + 1 ))   $file  >>/tmp/x
+		mv /tmp/x $file
+	done
 }
 
-// NewWatcher creates a new Watcher.
-func NewWatcher() (*Watcher, error) {
-	return nil, errors.New("FEN based watcher not yet supported for fsnotify\n")
-}
-
-// Close removes all watches and closes the events channel.
-func (w *Watcher) Close() error {
-	return nil
-}
-
-// Add starts monitoring the path for changes.
-//
-// A path can only be watched once; attempting to watch it more than once will
-// return an error. Paths that do not yet exist on the filesystem cannot be
-// added. A watch will be automatically removed if the path is deleted.
-//
-// A path will remain watched if it gets renamed to somewhere else on the same
-// filesystem, but the monitor will get removed if the path gets deleted and
-// re-created.
-//
-// Notifications on network filesystems (NFS, SMB, FUSE, etc.) or special
-// filesystems (/proc, /sys, etc.) generally don't work.
-//
-// # Watching directories
-//
-// All files in a directory are monitored, including new files that are created
-// after the watcher is started. Subdirectories are not watched (i.e. it's
-// non-recursive).
-//
-// # Watching files
-//
-// Watching individual files (rather than directories) is generally not
-// recommended as many tools update files atomically. Instead of "just" writing
-// to the file a temporary file will be written to first, and if successful the
-// temporary file is moved to to destination, removing the original, or some
-// variant thereof. The watcher on the original file is now lost, as it no
-// longer exists.
-//
-// Instead, watch the parent directory and use [Event.Name] to filter out files
-// you're not interested in. There is an example of this in cmd/fsnotify/file.go
-func (w *Watcher) Add(name string) error {
-	return nil
-}
-
-// Remove stops monitoring the path for changes.
-//
-// Directories are always removed non-recursively. For example, if you added
-// /tmp/dir and /tmp/dir/subdir then you will need to remove both.
-//
-// Removing a path that has not yet been added returns [ErrNonExistentWatch].
-func (w *Watcher) Remove(name string) error {
-	return nil
-}
+set-cmt '^type Watcher struct '             $watcher
+set-cmt '^func NewWatcher('                 $new
+set-cmt '^func (w \*Watcher) Add('          $add
+set-cmt '^func (w \*Watcher) Remove('       $remove
+set-cmt '^func (w \*Watcher) Close('        $close
+set-cmt '^[[:space:]]*Events *chan Event$'  $events
+set-cmt '^[[:space:]]*Errors *chan error$'  $errors
