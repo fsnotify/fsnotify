@@ -12,3 +12,7 @@ var (
 	SyscallEACCES = errors.New("dummy")
 	UnixEACCES    = errors.New("dummy")
 )
+
+func SetRlimit() {}
+
+func Maxfiles() uint64 { return 1<<64 - 1 }

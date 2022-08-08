@@ -365,6 +365,7 @@ func (w *Watcher) remWatch(pathname string) error {
 		w.sendEvent(filepath.Join(watch.path, name), watch.names[name]&sysFSIGNORED)
 		delete(watch.names, name)
 	}
+
 	return w.startRead(watch)
 }
 
