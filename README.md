@@ -42,6 +42,7 @@ func main() {
 
 	done := make(chan bool)
 	go func() {
+	        defer close(done)
 		for {
 			select {
 			case event, ok := <-watcher.Events:
