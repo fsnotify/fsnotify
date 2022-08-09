@@ -4,14 +4,13 @@ on:
     paths: ['**.go', 'go.mod', '.github/workflows/*']
 
 jobs:
+  # Test Windows and Linux with the latest Go version and the oldest we support.
   test:
     strategy:
       fail-fast: false
       matrix:
         os:
           - ubuntu-latest
-          - macos-11
-          - macos-12
           - windows-latest
         go:
           - '1.16'
@@ -30,6 +29,35 @@ jobs:
         run: |
           go test -race ./...
 
+  # Test only the latest Go version on macOS; we use the macOS builders for BSD
+  # and illumos, and GitHub doesn't allow many of them to run concurrently. If
+  # it works on Windows and Linux with Go 1.16, then it probably does on macOS
+  # too.
+  testMacOS:
+    name: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-11
+          - macos-12
+        go:
+          - '1.19'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: checkout
+        uses: actions/checkout@v3
+
+      - name: test
+        run: |
+          go test -race ./...
+
+  # FreeBSD
   testFreeBSD:
     runs-on: macos-12
     name: test (freebsd, 1.18)
@@ -45,6 +73,13 @@ jobs:
             pw user add -n action -m
             su action -c 'go test -race ./...'
 
+  # OpenBSD; no -race as the VM doesn't include the comp set.
+  #
+  # TODO: should probably add this, but on my local machine the tests time out
+  #       with -race as the waits aren't long enough (OpenBSD is kind of slow),
+  #       so should probably look into that first. Go 1.19 is supposed to have a
+  #       much faster race detector, so maybe waiting until we have that is
+  #       enough.
   testOpenBSD:
     runs-on: macos-12
     name: test (openbsd, 1.17)
@@ -55,25 +90,17 @@ jobs:
         uses: vmactions/openbsd-vm@v0.0.6
         with:
           prepare: pkg_add go
-          # No -race as the VM doesn't include the comp set.
-          #
-          # TODO: should probably add this, but on my local machine the tests
-          #       time out with -race as the waits aren't long enough (OpenBSD
-          #       is kind of slow), so should probably look into that first.
-          #       Go 1.19 is supposed to have a much faster race detector, so
-          #       maybe waiting until we have that is enough.
           run: |
-            # Default of 512 leads to "too many open files".
-            ulimit -n 1024
             useradd -mG wheel action
             su action -c 'go test ./...'
 
+  # NetBSD
   testNetBSD:
     runs-on: macos-12
-    name: test (netbsd, 1.17)
+    name: test (netbsd, 1.18)
     steps:
       - uses: actions/checkout@v3
-      - name: test (netbsd, 1.17)
+      - name: test (netbsd, 1.18)
         id: test
         uses: vmactions/netbsd-vm@v0.0.4
         with:
@@ -81,8 +108,9 @@ jobs:
           # TODO: no -race for the same reason as OpenBSD (the timing; it does run).
           run: |
             useradd -mG wheel action
-            su action -c 'go117 test ./...'
+            su action -c 'go118 test ./...'
 
+  # illumos
   testillumos:
     runs-on: macos-12
     name: test (illumos, 1.17)
@@ -96,3 +124,39 @@ jobs:
           pkg install go-117
         run: |
           /opt/ooce/go-1.17/bin/go test ./...
+
+  # Older Debian 6, for old Linux kernels.
+  testDebian6:
+    runs-on: macos-12
+    name: test (debian6, 1.19)
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Cache Vagrant boxes
+        uses: actions/cache@v3
+        with:
+          path: ~/.vagrant.d/boxes
+          key: ${{ runner.os }}-vagrant-${{ hashFiles('Vagrantfile') }}
+          restore-keys: |
+            ${{ runner.os }}-vagrant-
+
+      - name: setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.19'
+
+      - name: test (debian6, 1.19)
+        id: test
+        run: |
+          cp -f .github/workflows/Vagrantfile.debian6 Vagrantfile
+          export GOOS=linux
+          export GOARCH=amd64
+          for p in $(go list ./...); do
+            go test -c -o ${p//\//-}.test $p
+          done
+          vagrant up
+          for t in *.test; do
+            vagrant ssh -c "/vagrant/$t"
+          done

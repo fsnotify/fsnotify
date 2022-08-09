@@ -1,5 +1,5 @@
-//go:build !windows && !darwin
-// +build !windows,!darwin
+//go:build darwin
+// +build darwin
 
 package internal
 
@@ -24,7 +24,15 @@ func SetRlimit() {
 		l.Cur = l.Max
 		syscall.Setrlimit(syscall.RLIMIT_NOFILE, &l)
 	}
-	maxfiles = uint64(l.Cur)
+	maxfiles = l.Cur
+
+	if n, err := syscall.SysctlUint32("kern.maxfiles"); err == nil && uint64(n) < maxfiles {
+		maxfiles = uint64(n)
+	}
+
+	if n, err := syscall.SysctlUint32("kern.maxfilesperproc"); err == nil && uint64(n) < maxfiles {
+		maxfiles = uint64(n)
+	}
 }
 
 func Maxfiles() uint64 { return maxfiles }

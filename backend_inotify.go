@@ -72,8 +72,8 @@ func (w *Watcher) sendError(err error) bool {
 	case w.Errors <- err:
 		return true
 	case <-w.done:
+		return false
 	}
-	return false
 }
 
 func (w *Watcher) isClosed() bool {
@@ -97,7 +97,8 @@ func (w *Watcher) Close() error {
 	close(w.done)
 	w.mu.Unlock()
 
-	// Causes any blocking reads to return with an error, provided the file still supports deadline operations
+	// Causes any blocking reads to return with an error, provided the file
+	// still supports deadline operations.
 	err := w.inotifyFile.Close()
 	if err != nil {
 		return err
@@ -170,12 +171,16 @@ func (w *Watcher) Remove(name string) error {
 	// by another thread and we have not received IN_IGNORE event.
 	success, errno := unix.InotifyRmWatch(w.fd, watch.wd)
 	if success == -1 {
-		// TODO: Perhaps it's not helpful to return an error here in every case.
-		// the only two possible errors are:
-		// EBADF, which happens when w.fd is not a valid file descriptor of any kind.
-		// EINVAL, which is when fd is not an inotify descriptor or wd is not a valid watch descriptor.
-		// Watch descriptors are invalidated when they are removed explicitly or implicitly;
-		// explicitly by inotify_rm_watch, implicitly when the file they are watching is deleted.
+		// TODO: Perhaps it's not helpful to return an error here in every case;
+		//       The only two possible errors are:
+		//
+		//       - EBADF, which happens when w.fd is not a valid file descriptor
+		//         of any kind.
+		//       - EINVAL, which is when fd is not an inotify descriptor or wd
+		//         is not a valid watch descriptor. Watch descriptors are
+		//         invalidated when they are removed explicitly or implicitly;
+		//         explicitly by inotify_rm_watch, implicitly when the file they
+		//         are watching is deleted.
 		return errno
 	}
 
@@ -203,15 +208,16 @@ type watch struct {
 // readEvents reads from the inotify file descriptor, converts the
 // received events into Event objects and sends them via the Events channel
 func (w *Watcher) readEvents() {
+	defer func() {
+		close(w.doneResp)
+		close(w.Errors)
+		close(w.Events)
+	}()
+
 	var (
 		buf   [unix.SizeofInotifyEvent * 4096]byte // Buffer for a maximum of 4096 raw events
 		errno error                                // Syscall errno
 	)
-
-	defer close(w.doneResp)
-	defer close(w.Errors)
-	defer close(w.Events)
-
 	for {
 		// See if we have been closed.
 		if w.isClosed() {

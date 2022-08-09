@@ -23,6 +23,7 @@ type Watcher struct {
 
 	mu   sync.Mutex
 	dirs map[string]struct{} // map of explicitly watched directories
+	watches map[string]struct{} //map of explicitly watched non-directories
 	port *unix.EventPort
 }
 
@@ -34,6 +35,7 @@ func NewWatcher() (*Watcher, error) {
 	w.Events = make(chan Event)
 	w.Errors = make(chan error)
 	w.dirs = make(map[string]struct{})
+	w.watches = make(map[string]struct{})
 	w.port, err = unix.NewEventPort()
 	if err != nil {
 		return nil, err
@@ -104,9 +106,21 @@ func (w *Watcher) Add(name string) error {
 		w.mu.Lock()
 		w.dirs[name] = struct{}{}
 		w.mu.Unlock()
-		return w.handleDirectory(name, stat, w.associateFile)
+		err = w.handleDirectory(name, stat, w.associateFile)
+		if err != nil {
+			w.mu.Lock()
+			delete(w.dirs, name)
+			w.mu.Unlock()
+		}
+		return err
 	default:
-		return w.associateFile(name, stat)
+		err = w.associateFile(name, stat)
+		if err != nil {
+			w.mu.Lock()
+			w.watches[name] = struct{}{}
+			w.mu.Unlock()
+		}
+		return err
 	}
 }
 
@@ -116,19 +130,28 @@ func (w *Watcher) Remove(name string) error {
 		return errors.New("FEN watcher already closed")
 	}
 	if !w.port.PathIsWatched(name) {
-		return fmt.Errorf("can't remove non-existent FEN watch for: %s", name)
+		return fmt.Errorf("%w: %s", ErrNonExistentWatch, name)
 	}
 	stat, err := os.Stat(name)
 	switch {
 	case err != nil:
 		return err
 	case stat.IsDir():
-		w.mu.Lock()
-		delete(w.dirs, name)
-		w.mu.Unlock()
-		return w.handleDirectory(name, stat, w.dissociateFile)
+		err = w.handleDirectory(name, stat, w.dissociateFile)
+		if err != nil {
+			w.mu.Lock()
+			delete(w.dirs, name)
+			w.mu.Unlock()
+		}
+		return err
 	default:
-		return w.port.DissociatePath(name)
+		err = w.port.DissociatePath(name)
+		if err != nil {
+			w.mu.Lock()
+			delete(w.watches, name)
+			w.mu.Unlock()
+		}
+		return err
 	}
 }
 
@@ -357,4 +380,20 @@ func (w *Watcher) dissociateFile(path string, stat os.FileInfo) error {
 		return nil
 	}
 	return w.port.DissociatePath(path)
+}
+
+// WatchList returns the directories and files that are being monitered.
+func (w *Watcher) WatchList() []string {
+        w.mu.Lock()
+        defer w.mu.Unlock()
+
+        entries := make([]string, 0, len(w.watches) + len(w.dirs))
+        for pathname := range w.dirs {
+                entries = append(entries, pathname)
+        }
+        for pathname := range w.watches {
+                entries = append(entries, pathname)
+        }
+
+        return entries
 }
