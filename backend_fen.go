@@ -119,18 +119,19 @@ type Watcher struct {
 
 // NewWatcher creates a new Watcher.
 func NewWatcher() (*Watcher, error) {
-	var err error
+	w := &Watcher{
+		Events:  make(chan Event),
+		Errors:  make(chan error),
+		dirs:    make(map[string]struct{}),
+		watches: make(map[string]struct{}),
+		done:    make(chan struct{}),
+	}
 
-	w := new(Watcher)
-	w.Events = make(chan Event)
-	w.Errors = make(chan error)
-	w.dirs = make(map[string]struct{})
-	w.watches = make(map[string]struct{})
+	var err error
 	w.port, err = unix.NewEventPort()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fsnotify.NewWatcher: %w", err)
 	}
-	w.done = make(chan struct{})
 
 	go w.readEvents()
 	return w, nil
