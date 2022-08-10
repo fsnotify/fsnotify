@@ -111,10 +111,10 @@ type Watcher struct {
 
 	done chan struct{} // Channel for sending a "quit message" to the reader goroutine
 
-	mu   sync.Mutex
-	dirs map[string]struct{} // map of explicitly watched directories
+	mu      sync.Mutex
+	dirs    map[string]struct{} // map of explicitly watched directories
 	watches map[string]struct{} //map of explicitly watched non-directories
-	port *unix.EventPort
+	port    *unix.EventPort
 }
 
 // NewWatcher creates a new Watcher.
@@ -508,16 +508,16 @@ func (w *Watcher) dissociateFile(path string, stat os.FileInfo) error {
 
 // WatchList returns the directories and files that are being monitered.
 func (w *Watcher) WatchList() []string {
-        w.mu.Lock()
-        defer w.mu.Unlock()
+	w.mu.Lock()
+	defer w.mu.Unlock()
 
-        entries := make([]string, 0, len(w.watches) + len(w.dirs))
-        for pathname := range w.dirs {
-                entries = append(entries, pathname)
-        }
-        for pathname := range w.watches {
-                entries = append(entries, pathname)
-        }
+	entries := make([]string, 0, len(w.watches)+len(w.dirs))
+	for pathname := range w.dirs {
+		entries = append(entries, pathname)
+	}
+	for pathname := range w.watches {
+		entries = append(entries, pathname)
+	}
 
-        return entries
+	return entries
 }

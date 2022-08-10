@@ -411,10 +411,10 @@ func TestWatchRename(t *testing.T) {
 				CREATE               "/dir"           # mkdir
 				CREATE               "/dir-renamed"   # mv
 				REMOVE|RENAME        "/dir"
-                        solaris:
-                                CREATE       "/dir"                 # mkdir
-                                RENAME       "/dir"                 # mv
-                                CREATE       "/dir-renamed"
+			solaris:
+					CREATE       "/dir"                 # mkdir
+					RENAME       "/dir"                 # mv
+					CREATE       "/dir-renamed"
 		`},
 
 		{"rename watched file", func(t *testing.T, w *Watcher, tmp string) {
