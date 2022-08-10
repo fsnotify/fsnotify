@@ -152,6 +152,61 @@ func TestWatch(t *testing.T) {
 		}, `
 			write    /file
 		`},
+
+		{"watch a symlink to a file", func(t *testing.T, w *Watcher, tmp string) {
+			if runtime.GOOS == "darwin" {
+				// TODO
+				// WRITE "/private/var/folders/.../TestWatchwatch_a_symlink_to_a_file183391030/001/file"
+				// Pretty sure this is caused by the broken symlink-follow
+				// behaviour too.
+				t.Skip("broken on macOS")
+			}
+
+			file := filepath.Join(tmp, "file")
+			link := filepath.Join(tmp, "link")
+			touch(t, file)
+			symlink(t, file, link)
+			addWatch(t, w, link)
+
+			cat(t, "hello", file)
+		}, `
+			write    /link
+
+			# TODO: Symlinks followed on kqueue; it shouldn't do this, but I'm
+			# afraid changing it will break stuff. See #227, #390
+			kqueue:
+				write    /file
+
+			# TODO: see if we can fix this.
+			windows:
+				empty
+		`},
+
+		{"watch a symlink to a dir", func(t *testing.T, w *Watcher, tmp string) {
+			if runtime.GOOS == "darwin" {
+				// TODO
+				// CREATE "/private/var/.../TestWatchwatch_a_symlink_to_a_dir2551725268/001/dir/file"
+				// Pretty sure this is caused by the broken symlink-follow
+				// behaviour too.
+
+				t.Skip("broken on macOS")
+			}
+
+			dir := filepath.Join(tmp, "dir")
+			link := filepath.Join(tmp, "link")
+			mkdir(t, dir)
+			symlink(t, dir, link)
+			addWatch(t, w, link)
+
+			touch(t, dir, "file")
+		}, `
+			create    /link/file
+
+			# TODO: Symlinks followed on kqueue; it shouldn't do this, but I'm
+			# afraid changing it will break stuff. See #227, #390
+			kqueue:
+				create /dir/file
+		`},
 	}
 
 	for _, tt := range tests {
