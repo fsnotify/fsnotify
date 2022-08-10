@@ -412,9 +412,9 @@ func TestWatchRename(t *testing.T) {
 				CREATE               "/dir-renamed"   # mv
 				REMOVE|RENAME        "/dir"
 			solaris:
-					CREATE       "/dir"                 # mkdir
-					RENAME       "/dir"                 # mv
-					CREATE       "/dir-renamed"
+				CREATE       "/dir"                 # mkdir
+				RENAME       "/dir"                 # mv
+				CREATE       "/dir-renamed"
 		`},
 
 		{"rename watched file", func(t *testing.T, w *Watcher, tmp string) {
@@ -433,7 +433,7 @@ func TestWatchRename(t *testing.T) {
 			rename /file  # mv rename rename-two
 
 			# TODO: seems to lose the watch?
-			kqueue:
+			kqueue, solaris:
 				rename     /file
 
 			# It's actually more correct on Windows.
