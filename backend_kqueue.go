@@ -332,7 +332,7 @@ func (w *Watcher) Remove(name string) error {
 	return nil
 }
 
-// WatchList returns the directories and files that are being monitered.
+// WatchList returns all paths added with Add() (and are not yet removed).
 func (w *Watcher) WatchList() []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()

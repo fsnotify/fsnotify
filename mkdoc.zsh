@@ -119,6 +119,11 @@ close=$(<<EOF
 EOF
 )
 
+watchlist=$(<<EOF
+// WatchList returns all paths added with Add() (and are not yet removed).
+EOF
+)
+
 events=$(<<EOF
 	// Events sends the filesystem change events.
 	//
@@ -194,5 +199,6 @@ set-cmt '^func NewWatcher('                 $new
 set-cmt '^func (w \*Watcher) Add('          $add
 set-cmt '^func (w \*Watcher) Remove('       $remove
 set-cmt '^func (w \*Watcher) Close('        $close
+set-cmt '^func (w \*Watcher) WatchList('    $watchlist
 set-cmt '^[[:space:]]*Events *chan Event$'  $events
 set-cmt '^[[:space:]]*Errors *chan error$'  $errors
