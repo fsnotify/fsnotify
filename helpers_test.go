@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/fsnotify/fsnotify/internal"
 )
 
 type testCase struct {
@@ -161,6 +163,36 @@ func symlink(t *testing.T, target string, link ...string) {
 		t.Fatalf("symlink(%q, %q): %s", target, filepath.Join(link...), err)
 	}
 	if shouldWait(link...) {
+		eventSeparator()
+	}
+}
+
+// mkfifo
+func mkfifo(t *testing.T, path ...string) {
+	t.Helper()
+	if len(path) < 1 {
+		t.Fatalf("mkfifo: path must have at least one element: %s", path)
+	}
+	err := internal.Mkfifo(filepath.Join(path...), 0o644)
+	if err != nil {
+		t.Fatalf("mkfifo(%q): %s", filepath.Join(path...), err)
+	}
+	if shouldWait(path...) {
+		eventSeparator()
+	}
+}
+
+// mknod
+func mknod(t *testing.T, dev int, path ...string) {
+	t.Helper()
+	if len(path) < 1 {
+		t.Fatalf("mknod: path must have at least one element: %s", path)
+	}
+	err := internal.Mknod(filepath.Join(path...), 0o644, dev)
+	if err != nil {
+		t.Fatalf("mknod(%d, %q): %s", dev, filepath.Join(path...), err)
+	}
+	if shouldWait(path...) {
 		eventSeparator()
 	}
 }

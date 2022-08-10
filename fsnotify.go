@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// Event represents a single file system notification.
+// Event represents a file system notification.
 type Event struct {
 	// Path to the file or directory.
 	//
@@ -23,14 +23,15 @@ type Event struct {
 	// File operation that triggered the event.
 	//
 	// This is a bitmask as some systems may send multiple operations at once.
-	// Use the Op.Has() or Event.Has() method instead of comparing with ==.
+	// Use the Event.Has() method instead of comparing with ==.
 	Op Op
 }
 
 // Op describes a set of file operations.
 type Op uint32
 
-// These are the generalized file operations that can trigger a notification.
+// The operations fsnotify can trigger; see the documentation on [Watcher] for a
+// full description, and check them with [Event.Has].
 const (
 	Create Op = 1 << iota
 	Write
@@ -63,7 +64,7 @@ func (op Op) String() string {
 		b.WriteString("|CHMOD")
 	}
 	if b.Len() == 0 {
-		return ""
+		return "[no events]"
 	}
 	return b.String()[1:]
 }
@@ -74,8 +75,7 @@ func (o Op) Has(h Op) bool { return o&h == h }
 // Has reports if this event has the given operation.
 func (e Event) Has(op Op) bool { return e.Op.Has(op) }
 
-// String returns a string representation of the event in the form
-// "file: REMOVE|WRITE|..."
+// String returns a string representation of the event with their path.
 func (e Event) String() string {
-	return fmt.Sprintf("%q: %s", e.Name, e.Op.String())
+	return fmt.Sprintf("%-13s %q", e.Op.String(), e.Name)
 }
