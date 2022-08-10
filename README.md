@@ -5,6 +5,12 @@ fsnotify requires Go 1.16 or newer.
 
 API docs: https://pkg.go.dev/github.com/fsnotify/fsnotify
 
+It's best to read the documentation at pkg.go.dev, as it's pinned to the last
+released version, whereas this README is for the last development version which
+may include additions/changes.
+
+---
+
 Platform support:
 
 | Adapter               | OS             | Status                                                       |
