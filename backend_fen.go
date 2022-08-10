@@ -109,12 +109,11 @@ type Watcher struct {
 	// Errors sends any errors.
 	Errors chan error
 
-	done chan struct{} // Channel for sending a "quit message" to the reader goroutine
-
 	mu      sync.Mutex
-	dirs    map[string]struct{} // map of explicitly watched directories
-	watches map[string]struct{} //map of explicitly watched non-directories
 	port    *unix.EventPort
+	done    chan struct{}       // Channel for sending a "quit message" to the reader goroutine
+	dirs    map[string]struct{} // Explicitly watched directories
+	watches map[string]struct{} // Explicitly watched non-directories
 }
 
 // NewWatcher creates a new Watcher.
@@ -226,25 +225,25 @@ func (w *Watcher) Add(name string) error {
 
 	// Associate all files in the directory.
 	if stat.IsDir() {
+		err := w.handleDirectory(name, stat, w.associateFile)
+		if err != nil {
+			return err
+		}
+
 		w.mu.Lock()
 		w.dirs[name] = struct{}{}
 		w.mu.Unlock()
-
-		err := w.handleDirectory(name, stat, w.associateFile)
-		if err != nil {
-			w.mu.Lock()
-			delete(w.dirs, name)
-			w.mu.Unlock()
-		}
 		return nil
 	}
 
 	err = w.associateFile(name, stat)
 	if err != nil {
-		w.mu.Lock()
-		w.watches[name] = struct{}{}
-		w.mu.Unlock()
+		return err
 	}
+
+	w.mu.Lock()
+	w.watches[name] = struct{}{}
+	w.mu.Unlock()
 	return nil
 }
 
@@ -271,19 +270,23 @@ func (w *Watcher) Remove(name string) error {
 	if stat.IsDir() {
 		err := w.handleDirectory(name, stat, w.dissociateFile)
 		if err != nil {
-			w.mu.Lock()
-			delete(w.dirs, name)
-			w.mu.Unlock()
+			return err
 		}
+
+		w.mu.Lock()
+		delete(w.dirs, name)
+		w.mu.Unlock()
 		return nil
 	}
 
 	err = w.port.DissociatePath(name)
 	if err != nil {
-		w.mu.Lock()
-		delete(w.watches, name)
-		w.mu.Unlock()
+		return err
 	}
+
+	w.mu.Lock()
+	delete(w.watches, name)
+	w.mu.Unlock()
 	return nil
 }
 
