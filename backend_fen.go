@@ -218,30 +218,34 @@ func (w *Watcher) Add(name string) error {
 	if w.port.PathIsWatched(name) {
 		return nil
 	}
+
 	stat, err := os.Stat(name)
-	switch {
-	case err != nil:
+	if err != nil {
 		return err
-	case stat.IsDir():
+	}
+
+	// Associate all files in the directory.
+	if stat.IsDir() {
 		w.mu.Lock()
 		w.dirs[name] = struct{}{}
 		w.mu.Unlock()
-		err = w.handleDirectory(name, stat, w.associateFile)
+
+		err := w.handleDirectory(name, stat, w.associateFile)
 		if err != nil {
 			w.mu.Lock()
 			delete(w.dirs, name)
 			w.mu.Unlock()
 		}
-		return err
-	default:
-		err = w.associateFile(name, stat)
-		if err != nil {
-			w.mu.Lock()
-			w.watches[name] = struct{}{}
-			w.mu.Unlock()
-		}
-		return err
+		return nil
 	}
+
+	err = w.associateFile(name, stat)
+	if err != nil {
+		w.mu.Lock()
+		w.watches[name] = struct{}{}
+		w.mu.Unlock()
+	}
+	return nil
 }
 
 // Remove stops monitoring the path for changes.
@@ -257,46 +261,51 @@ func (w *Watcher) Remove(name string) error {
 	if !w.port.PathIsWatched(name) {
 		return fmt.Errorf("%w: %s", ErrNonExistentWatch, name)
 	}
+
 	stat, err := os.Stat(name)
-	switch {
-	case err != nil:
+	if err != nil {
 		return err
-	case stat.IsDir():
-		err = w.handleDirectory(name, stat, w.dissociateFile)
+	}
+
+	// Remove associations for every file in the directory.
+	if stat.IsDir() {
+		err := w.handleDirectory(name, stat, w.dissociateFile)
 		if err != nil {
 			w.mu.Lock()
 			delete(w.dirs, name)
 			w.mu.Unlock()
 		}
-		return err
-	default:
-		err = w.port.DissociatePath(name)
-		if err != nil {
-			w.mu.Lock()
-			delete(w.watches, name)
-			w.mu.Unlock()
-		}
-		return err
+		return nil
 	}
+
+	err = w.port.DissociatePath(name)
+	if err != nil {
+		w.mu.Lock()
+		delete(w.watches, name)
+		w.mu.Unlock()
+	}
+	return nil
 }
 
 // readEvents contains the main loop that runs in a goroutine watching for events.
 func (w *Watcher) readEvents() {
 	// If this function returns, the watcher has been closed and we can
 	// close these channels
-	defer close(w.Errors)
-	defer close(w.Events)
+	defer func() {
+		close(w.Errors)
+		close(w.Events)
+	}()
 
 	pevents := make([]unix.PortEvent, 8, 8)
 	for {
 		count, err := w.port.Get(pevents, 1, nil)
 		if err != nil && err != unix.ETIME {
 			// Interrupted system call (count should be 0) ignore and continue
-			if err == unix.EINTR && count == 0 {
+			if errors.Is(err, unix.EINTR) && count == 0 {
 				continue
 			}
 			// Get failed because we called w.Close()
-			if err == unix.EBADF && w.isClosed() {
+			if errors.Is(err, unix.EBADF) && w.isClosed() {
 				return
 			}
 			// There was an error not caused by calling w.Close()
@@ -351,27 +360,25 @@ func (w *Watcher) handleDirectory(path string, stat os.FileInfo, handler func(st
 // attributes changed between when the association
 // was created and the when event was returned)
 func (w *Watcher) handleEvent(event *unix.PortEvent) error {
-	events := event.Events
-	path := event.Path
-	fmode := event.Cookie.(os.FileMode)
-
-	var toSend *Event
-	reRegister := true
+	var (
+		events     = event.Events
+		path       = event.Path
+		fmode      = event.Cookie.(os.FileMode)
+		reRegister = true
+	)
 
 	w.mu.Lock()
 	_, watchedDir := w.dirs[path]
 	w.mu.Unlock()
 
 	if events&unix.FILE_DELETE == unix.FILE_DELETE {
-		toSend = &Event{path, Remove}
-		if !w.sendEvent(*toSend) {
+		if !w.sendEvent(Event{path, Remove}) {
 			return nil
 		}
 		reRegister = false
 	}
 	if events&unix.FILE_RENAME_FROM == unix.FILE_RENAME_FROM {
-		toSend = &Event{path, Rename}
-		if !w.sendEvent(*toSend) {
+		if !w.sendEvent(Event{path, Rename}) {
 			return nil
 		}
 		// Don't keep watching the new file name
@@ -386,8 +393,7 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 
 		// inotify reports a Remove event in this case, so we simulate
 		// this here.
-		toSend = &Event{path, Remove}
-		if !w.sendEvent(*toSend) {
+		if !w.sendEvent(Event{path, Remove}) {
 			return nil
 		}
 		// Don't keep watching the file that was removed
@@ -421,8 +427,7 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 				}
 			}
 		} else {
-			toSend = &Event{path, Write}
-			if !w.sendEvent(*toSend) {
+			if !w.sendEvent(Event{path, Write}) {
 				return nil
 			}
 		}
@@ -430,8 +435,7 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 	if events&unix.FILE_ATTRIB == unix.FILE_ATTRIB {
 		// Only send Chmod if perms changed
 		if stat.Mode().Perm() != fmode.Perm() {
-			toSend = &Event{path, Chmod}
-			if !w.sendEvent(*toSend) {
+			if !w.sendEvent(Event{path, Chmod}) {
 				return nil
 			}
 		}
@@ -490,7 +494,8 @@ func (w *Watcher) associateFile(path string, stat os.FileInfo) error {
 		// have cleared up that discrepancy. The most likely
 		// cause is that the event has fired but we haven't
 		// processed it yet.
-		if err := w.port.DissociatePath(path); err != nil && err != unix.ENOENT {
+		err := w.port.DissociatePath(path)
+		if err != nil && err != unix.ENOENT {
 			return err
 		}
 	}
