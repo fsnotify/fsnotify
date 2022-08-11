@@ -263,6 +263,8 @@ func (w *Watcher) Remove(name string) error {
 
 	stat, err := os.Stat(name)
 	if err != nil {
+		// TODO If we get here, what if name is still in w.dirs or w.watches?
+		// TODO Can that happen?
 		return err
 	}
 
@@ -345,11 +347,9 @@ func (w *Watcher) handleDirectory(path string, stat os.FileInfo, handler func(st
 
 	// Handle all children of the directory.
 	for _, finfo := range files {
-		if !finfo.IsDir() {
-			err := handler(filepath.Join(path, finfo.Name()), finfo)
-			if err != nil {
-				return err
-			}
+		err := handler(filepath.Join(path, finfo.Name()), finfo)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -419,6 +419,17 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 
 	stat, err := os.Stat(path)
 	if err != nil {
+		// This is unexpected, but we should still emit an event
+		// This happens most often on "rm -r" of a subdirectory inside a watched directory
+		// We get a modify event of something happening inside, but by the time
+		// we get here, the sudirectory is already gone. Clearly we were watching this path
+		// but now it is gone. Let's tell the user that it was removed.
+		if !w.sendEvent(Event{path, Remove}) {
+			return nil
+		}
+		// TODO I'm not totally convinced we should actually return and thus emit this error.
+		// If we don't return here, we will continue and also emit the Write event after the fact
+		// on a directory that is now gone. Maybe we should just return nil?
 		return err
 	}
 
@@ -428,6 +439,10 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 				if err := w.updateDirectory(path); err != nil {
 					return err
 				}
+			} else {
+				if !w.sendEvent(Event{path, Write}) {
+					return nil
+				}
 			}
 		} else {
 			if !w.sendEvent(Event{path, Write}) {
@@ -435,7 +450,7 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 			}
 		}
 	}
-	if events&unix.FILE_ATTRIB == unix.FILE_ATTRIB {
+	if events&unix.FILE_ATTRIB == unix.FILE_ATTRIB && stat != nil {
 		// Only send Chmod if perms changed
 		if stat.Mode().Perm() != fmode.Perm() {
 			if !w.sendEvent(Event{path, Chmod}) {
@@ -444,9 +459,12 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 		}
 	}
 
-	// If we get here, it means we've hit an event above that requires us to
-	// continue watching the file or directory
-	return w.associateFile(path, stat)
+	if stat != nil {
+		// If we get here, it means we've hit an event above that requires us to
+		// continue watching the file or directory
+		return w.associateFile(path, stat)
+	}
+	return nil
 }
 
 func (w *Watcher) updateDirectory(path string) error {

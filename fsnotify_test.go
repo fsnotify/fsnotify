@@ -90,7 +90,12 @@ func TestWatch(t *testing.T) {
 				create    /sub
 				create    /file
 				remove    /file
-
+			solaris:
+				create /sub
+				create /file
+				write  /sub
+				remove /sub
+				remove /file
 			# Windows includes a write for the /sub dir too, two of them even(?)
 			windows:
 				create /sub
@@ -161,6 +166,10 @@ func TestWatch(t *testing.T) {
 				// behaviour too.
 				t.Skip("broken on macOS")
 			}
+			if runtime.GOOS == "solaris" {
+				// TODO solaris
+				t.Skip("broken on solaris")
+			}
 
 			file := filepath.Join(tmp, "file")
 			link := filepath.Join(tmp, "link")
@@ -190,6 +199,10 @@ func TestWatch(t *testing.T) {
 				// behaviour too.
 
 				t.Skip("broken on macOS")
+			}
+			if runtime.GOOS == "solaris" {
+				// TODO solaris
+				t.Skip("broken on solaris")
 			}
 
 			dir := filepath.Join(tmp, "dir")
@@ -470,6 +483,7 @@ func TestWatchRename(t *testing.T) {
 				CREATE       "/dir"                 # mkdir
 				RENAME       "/dir"                 # mv
 				CREATE       "/dir-renamed"
+				WRITE        "/dir-renamed"         # touch
 		`},
 
 		{"rename watched file", func(t *testing.T, w *Watcher, tmp string) {
@@ -1160,10 +1174,6 @@ func TestWatchList(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		// TODO: probably should I guess...
 		t.Skip("WatchList has always beek broken on Windows and I don't feel like fixing it")
-	}
-	if runtime.GOOS == "solaris" {
-		// TODO: Decide on correct solution for this
-		t.Skip("backend_fen currently starts watching 'other' because it's a child of tmp")
 	}
 
 	t.Parallel()
