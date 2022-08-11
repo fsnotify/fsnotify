@@ -87,9 +87,9 @@ func TestWatch(t *testing.T) {
 
 			# TODO: not sure why the REMOVE /sub is dropped.
 			dragonfly:
-                create    /sub
-                create    /file
-                remove    /file
+				create    /sub
+				create    /file
+				remove    /file
 
 			# Windows includes a write for the /sub dir too, two of them even(?)
 			windows:
@@ -122,8 +122,8 @@ func TestWatch(t *testing.T) {
 			# We never set up a watcher on the unreadable file, so we don't get
 			# the REMOVE.
 			kqueue:
-                WRITE    "/file"
-                REMOVE   "/file"
+				WRITE    "/file"
+				REMOVE   "/file"
 		`},
 
 		{"watch same dir twice", func(t *testing.T, w *Watcher, tmp string) {
@@ -152,6 +152,61 @@ func TestWatch(t *testing.T) {
 		}, `
 			write    /file
 		`},
+
+		{"watch a symlink to a file", func(t *testing.T, w *Watcher, tmp string) {
+			if runtime.GOOS == "darwin" {
+				// TODO
+				// WRITE "/private/var/folders/.../TestWatchwatch_a_symlink_to_a_file183391030/001/file"
+				// Pretty sure this is caused by the broken symlink-follow
+				// behaviour too.
+				t.Skip("broken on macOS")
+			}
+
+			file := filepath.Join(tmp, "file")
+			link := filepath.Join(tmp, "link")
+			touch(t, file)
+			symlink(t, file, link)
+			addWatch(t, w, link)
+
+			cat(t, "hello", file)
+		}, `
+			write    /link
+
+			# TODO: Symlinks followed on kqueue; it shouldn't do this, but I'm
+			# afraid changing it will break stuff. See #227, #390
+			kqueue:
+				write    /file
+
+			# TODO: see if we can fix this.
+			windows:
+				empty
+		`},
+
+		{"watch a symlink to a dir", func(t *testing.T, w *Watcher, tmp string) {
+			if runtime.GOOS == "darwin" {
+				// TODO
+				// CREATE "/private/var/.../TestWatchwatch_a_symlink_to_a_dir2551725268/001/dir/file"
+				// Pretty sure this is caused by the broken symlink-follow
+				// behaviour too.
+
+				t.Skip("broken on macOS")
+			}
+
+			dir := filepath.Join(tmp, "dir")
+			link := filepath.Join(tmp, "link")
+			mkdir(t, dir)
+			symlink(t, dir, link)
+			addWatch(t, w, link)
+
+			touch(t, dir, "file")
+		}, `
+			create    /link/file
+
+			# TODO: Symlinks followed on kqueue; it shouldn't do this, but I'm
+			# afraid changing it will break stuff. See #227, #390
+			kqueue:
+				create /dir/file
+		`},
 	}
 
 	for _, tt := range tests {
@@ -160,22 +215,168 @@ func TestWatch(t *testing.T) {
 	}
 }
 
+func TestWatchCreate(t *testing.T) {
+	tests := []testCase{
+		// Files
+		{"create empty file", func(t *testing.T, w *Watcher, tmp string) {
+			addWatch(t, w, tmp)
+			touch(t, tmp, "file")
+		}, `
+			create  /file
+		`},
+		{"create file with data", func(t *testing.T, w *Watcher, tmp string) {
+			addWatch(t, w, tmp)
+			cat(t, "data", tmp, "file")
+		}, `
+			create  /file
+			write   /file
+		`},
+
+		// Directories
+		{"create new directory", func(t *testing.T, w *Watcher, tmp string) {
+			addWatch(t, w, tmp)
+			mkdir(t, tmp, "dir")
+		}, `
+			create  /dir
+		`},
+
+		// Links
+		{"create new symlink to file", func(t *testing.T, w *Watcher, tmp string) {
+			touch(t, tmp, "file")
+			addWatch(t, w, tmp)
+			symlink(t, filepath.Join(tmp, "file"), tmp, "link")
+		}, `
+			create  /link
+
+			windows:
+				create   /link
+				write    /link
+		`},
+		{"create new symlink to directory", func(t *testing.T, w *Watcher, tmp string) {
+			addWatch(t, w, tmp)
+			symlink(t, tmp, tmp, "link")
+		}, `
+			create  /link
+
+			windows:
+				create  /link
+				write  /link
+		`},
+
+		// FIFO
+		{"create new named pipe", func(t *testing.T, w *Watcher, tmp string) {
+			if runtime.GOOS == "windows" {
+				t.Skip("no named pipes on windows")
+			}
+			touch(t, tmp, "file")
+			addWatch(t, w, tmp)
+			mkfifo(t, tmp, "fifo")
+		}, `
+			create  /fifo
+		`},
+		// Device node
+		{"create new device node pipe", func(t *testing.T, w *Watcher, tmp string) {
+			if runtime.GOOS == "windows" {
+				t.Skip("no device nodes on windows")
+			}
+			if isKqueue() {
+				t.Skip("needs root on BSD")
+			}
+			touch(t, tmp, "file")
+			addWatch(t, w, tmp)
+
+			mknod(t, 0, tmp, "dev")
+		}, `
+			create  /dev
+		`},
+	}
+	for _, tt := range tests {
+		tt := tt
+		tt.run(t)
+	}
+}
+
+func TestWatchWrite(t *testing.T) {
+	tests := []testCase{
+		// Files
+		{"truncate file", func(t *testing.T, w *Watcher, tmp string) {
+			file := filepath.Join(tmp, "file")
+			cat(t, "data", file)
+			addWatch(t, w, tmp)
+
+			fp, err := os.Create(file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := fp.Sync(); err != nil {
+				t.Fatal(err)
+			}
+			eventSeparator()
+			if _, err := fp.Write([]byte("X")); err != nil {
+				t.Fatal(err)
+			}
+			if err := fp.Close(); err != nil {
+				t.Fatal(err)
+			}
+		}, `
+			write  /file  # truncate
+			write  /file  # write
+
+			# Truncate is chmod on kqueue, except NetBSD
+			netbsd:
+				write  /file
+			kqueue:
+				chmod     /file
+				write     /file
+		`},
+
+		{"multiple writes to a file", func(t *testing.T, w *Watcher, tmp string) {
+			file := filepath.Join(tmp, "file")
+			cat(t, "data", file)
+			addWatch(t, w, tmp)
+
+			fp, err := os.OpenFile(file, os.O_RDWR, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := fp.Write([]byte("X")); err != nil {
+				t.Fatal(err)
+			}
+			if err := fp.Sync(); err != nil {
+				t.Fatal(err)
+			}
+			eventSeparator()
+			if _, err := fp.Write([]byte("Y")); err != nil {
+				t.Fatal(err)
+			}
+			if err := fp.Close(); err != nil {
+				t.Fatal(err)
+			}
+		}, `
+			write  /file  # write X
+			write  /file  # write Y
+		`},
+	}
+	for _, tt := range tests {
+		tt := tt
+		tt.run(t)
+	}
+}
+
 func TestWatchRename(t *testing.T) {
 	tests := []testCase{
-		{"rename file", func(t *testing.T, w *Watcher, tmp string) {
+		{"rename file in watched dir", func(t *testing.T, w *Watcher, tmp string) {
 			file := filepath.Join(tmp, "file")
+			cat(t, "asd", file)
 
 			addWatch(t, w, tmp)
-			cat(t, "asd", file)
 			mv(t, file, tmp, "renamed")
 		}, `
-			create /file
-			write  /file
 			rename /file
 			create /renamed
 		`},
 
-		{"rename from unwatched directory", func(t *testing.T, w *Watcher, tmp string) {
+		{"rename from unwatched dir", func(t *testing.T, w *Watcher, tmp string) {
 			unwatched := t.TempDir()
 
 			addWatch(t, w, tmp)
@@ -185,7 +386,7 @@ func TestWatchRename(t *testing.T) {
 			create /file
 		`},
 
-		{"rename to unwatched directory", func(t *testing.T, w *Watcher, tmp string) {
+		{"rename to unwatched dir", func(t *testing.T, w *Watcher, tmp string) {
 			if runtime.GOOS == "netbsd" && isCI() {
 				t.Skip("fails in CI; see #488")
 			}
@@ -215,14 +416,16 @@ func TestWatchRename(t *testing.T) {
 		`},
 
 		{"rename overwriting existing file", func(t *testing.T, w *Watcher, tmp string) {
-			touch(t, tmp, "renamed")
-			addWatch(t, w, tmp)
-
 			unwatched := t.TempDir()
 			file := filepath.Join(unwatched, "file")
+
+			touch(t, tmp, "renamed")
 			touch(t, file)
+
+			addWatch(t, w, tmp)
 			mv(t, file, tmp, "renamed")
 		}, `
+			# TODO: this should really be RENAME.
 			remove /renamed
 			create /renamed
 
@@ -232,7 +435,7 @@ func TestWatchRename(t *testing.T) {
 
 			# TODO: this is broken.
 			dragonfly:
-                REMOVE|WRITE         "/"
+				REMOVE|WRITE         "/"
 		`},
 
 		{"rename watched directory", func(t *testing.T, w *Watcher, tmp string) {
@@ -263,10 +466,35 @@ func TestWatchRename(t *testing.T) {
 				CREATE               "/dir"           # mkdir
 				CREATE               "/dir-renamed"   # mv
 				REMOVE|RENAME        "/dir"
-                        solaris:
-                                CREATE       "/dir"                 # mkdir
-                                RENAME       "/dir"                 # mv
-                                CREATE       "/dir-renamed"
+			solaris:
+				CREATE       "/dir"                 # mkdir
+				RENAME       "/dir"                 # mv
+				CREATE       "/dir-renamed"
+		`},
+
+		{"rename watched file", func(t *testing.T, w *Watcher, tmp string) {
+			file := filepath.Join(tmp, "file")
+			rename := filepath.Join(tmp, "rename-one")
+			touch(t, file)
+
+			addWatch(t, w, file)
+
+			mv(t, file, rename)
+			mv(t, rename, tmp, "rename-two")
+		}, `
+			# TODO: this should update the path. And even then, not clear what
+			# go renamed to what.
+			rename /file  # mv file rename
+			rename /file  # mv rename rename-two
+
+			# TODO: seems to lose the watch?
+			kqueue, solaris:
+				rename     /file
+
+			# It's actually more correct on Windows.
+			windows:
+				rename     /file
+				rename     /rename-one
 		`},
 	}
 
@@ -286,12 +514,12 @@ func TestWatchSymlink(t *testing.T) {
 			create /link
 
 			windows:
-                create    /link
-                write     /link
+				create    /link
+				write     /link
 
 			# No events at all on Dragonfly
 			# TODO: should fix this.
-            dragonfly:
+			dragonfly:
 				empty
 		`},
 
@@ -610,6 +838,10 @@ func TestClose(t *testing.T) {
 	})
 
 	t.Run("closes channels after read", func(t *testing.T) {
+		if runtime.GOOS == "netbsd" {
+			t.Skip("flaky") // TODO
+		}
+
 		t.Parallel()
 
 		tmp := t.TempDir()
@@ -742,17 +974,17 @@ func TestEventString(t *testing.T) {
 		in   Event
 		want string
 	}{
-		{Event{}, `"": `},
-		{Event{"/file", 0}, `"/file": `},
+		{Event{}, `[no events]   ""`},
+		{Event{"/file", 0}, `[no events]   "/file"`},
 
 		{Event{"/file", Chmod | Create},
-			`"/file": CREATE|CHMOD`},
+			`CREATE|CHMOD  "/file"`},
 		{Event{"/file", Rename},
-			`"/file": RENAME`},
+			`RENAME        "/file"`},
 		{Event{"/file", Remove},
-			`"/file": REMOVE`},
+			`REMOVE        "/file"`},
 		{Event{"/file", Write | Chmod},
-			`"/file": WRITE|CHMOD`},
+			`WRITE|CHMOD   "/file"`},
 	}
 
 	for _, tt := range tests {
