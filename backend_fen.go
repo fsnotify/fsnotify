@@ -6,7 +6,6 @@ package fsnotify
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -301,7 +300,7 @@ func (w *Watcher) readEvents() {
 		close(w.Events)
 	}()
 
-	pevents := make([]unix.PortEvent, 8, 8)
+	pevents := make([]unix.PortEvent, 8)
 	for {
 		count, err := w.port.Get(pevents, 1, nil)
 		if err != nil && err != unix.ETIME {
@@ -340,14 +339,18 @@ func (w *Watcher) readEvents() {
 }
 
 func (w *Watcher) handleDirectory(path string, stat os.FileInfo, handler func(string, os.FileInfo) error) error {
-	files, err := ioutil.ReadDir(path)
+	files, err := os.ReadDir(path)
 	if err != nil {
 		return err
 	}
 
 	// Handle all children of the directory.
-	for _, finfo := range files {
-		err := handler(filepath.Join(path, finfo.Name()), finfo)
+	for _, entry := range files {
+		finfo, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		err = handler(filepath.Join(path, finfo.Name()), finfo)
 		if err != nil {
 			return err
 		}
@@ -372,22 +375,24 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 
 	w.mu.Lock()
 	_, watchedDir := w.dirs[path]
+	_, watchedPath := w.watches[path]
 	w.mu.Unlock()
+	isWatched := watchedDir || watchedPath
 
-	if events&unix.FILE_DELETE == unix.FILE_DELETE {
+	if events&unix.FILE_DELETE != 0 {
 		if !w.sendEvent(Event{path, Remove}) {
 			return nil
 		}
 		reRegister = false
 	}
-	if events&unix.FILE_RENAME_FROM == unix.FILE_RENAME_FROM {
+	if events&unix.FILE_RENAME_FROM != 0 {
 		if !w.sendEvent(Event{path, Rename}) {
 			return nil
 		}
 		// Don't keep watching the new file name
 		reRegister = false
 	}
-	if events&unix.FILE_RENAME_TO == unix.FILE_RENAME_TO {
+	if events&unix.FILE_RENAME_TO != 0 {
 		// We don't report a Rename event for this case, because
 		// Rename events are interpreted as referring to the _old_ name
 		// of the file, and in this case the event would refer to the
@@ -410,6 +415,11 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 			delete(w.dirs, path)
 			w.mu.Unlock()
 		}
+		if watchedPath {
+			w.mu.Lock()
+			delete(w.watches, path)
+			w.mu.Unlock()
+		}
 		return nil
 	}
 
@@ -417,7 +427,7 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 	// Let's Stat it now so that we can compare permissions and have what we need
 	// to continue watching the file
 
-	stat, err := os.Stat(path)
+	lstat, err := os.Lstat(path)
 	if err != nil {
 		// This is unexpected, but we should still emit an event
 		// This happens most often on "rm -r" of a subdirectory inside a watched directory
@@ -433,7 +443,21 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 		return err
 	}
 
-	if events&unix.FILE_MODIFIED == unix.FILE_MODIFIED {
+	// resolve symlinks that were explicitly watched
+	// this helps suppress spurious Chmod events on watched symlinks
+	stat := lstat
+	if isWatched {
+		stat, err = os.Stat(path)
+		if err != nil {
+			if !w.sendEvent(Event{path, Remove}) {
+				return nil
+			}
+		}
+		// The symlink still exists, but the target is gone.
+		// Don't return the error
+	}
+
+	if events&unix.FILE_MODIFIED != 0 {
 		if fmode.IsDir() {
 			if watchedDir {
 				if err := w.updateDirectory(path); err != nil {
@@ -450,7 +474,7 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 			}
 		}
 	}
-	if events&unix.FILE_ATTRIB == unix.FILE_ATTRIB && stat != nil {
+	if events&unix.FILE_ATTRIB != 0 && stat != nil {
 		// Only send Chmod if perms changed
 		if stat.Mode().Perm() != fmode.Perm() {
 			if !w.sendEvent(Event{path, Chmod}) {
@@ -471,18 +495,22 @@ func (w *Watcher) updateDirectory(path string) error {
 	// The directory was modified, so we must find unwatched entities and
 	// watch them. If something was removed from the directory, nothing will
 	// happen, as everything else should still be watched.
-	files, err := ioutil.ReadDir(path)
+	files, err := os.ReadDir(path)
 	if err != nil {
 		return err
 	}
 
-	for _, finfo := range files {
-		path := filepath.Join(path, finfo.Name())
+	for _, entry := range files {
+		path := filepath.Join(path, entry.Name())
 		if w.port.PathIsWatched(path) {
 			continue
 		}
 
-		err := w.associateFile(path, finfo)
+		finfo, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		err = w.associateFile(path, finfo)
 		if err != nil {
 			if !w.sendError(err) {
 				return nil
