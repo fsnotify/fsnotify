@@ -166,10 +166,6 @@ func TestWatch(t *testing.T) {
 				// behaviour too.
 				t.Skip("broken on macOS")
 			}
-			if runtime.GOOS == "solaris" {
-				// TODO solaris
-				t.Skip("broken on solaris")
-			}
 
 			file := filepath.Join(tmp, "file")
 			link := filepath.Join(tmp, "link")
@@ -199,10 +195,6 @@ func TestWatch(t *testing.T) {
 				// behaviour too.
 
 				t.Skip("broken on macOS")
-			}
-			if runtime.GOOS == "solaris" {
-				// TODO solaris
-				t.Skip("broken on solaris")
 			}
 
 			dir := filepath.Join(tmp, "dir")

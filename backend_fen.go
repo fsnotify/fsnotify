@@ -217,6 +217,8 @@ func (w *Watcher) Add(name string) error {
 		return nil
 	}
 
+	// Currently we resolve symlinks that were explicitly requested to be
+	// watched. Otherwise we would use LStat here.
 	stat, err := os.Stat(name)
 	if err != nil {
 		return err
@@ -224,7 +226,7 @@ func (w *Watcher) Add(name string) error {
 
 	// Associate all files in the directory.
 	if stat.IsDir() {
-		err := w.handleDirectory(name, stat, w.associateFile)
+		err := w.handleDirectory(name, stat, true, w.associateFile)
 		if err != nil {
 			return err
 		}
@@ -235,7 +237,7 @@ func (w *Watcher) Add(name string) error {
 		return nil
 	}
 
-	err = w.associateFile(name, stat)
+	err = w.associateFile(name, stat, true)
 	if err != nil {
 		return err
 	}
@@ -275,7 +277,7 @@ func (w *Watcher) Remove(name string) error {
 
 	// Remove associations for every file in the directory.
 	if stat.IsDir() {
-		err := w.handleDirectory(name, stat, w.dissociateFile)
+		err := w.handleDirectory(name, stat, false, w.dissociateFile)
 		if err != nil {
 			return err
 		}
@@ -337,7 +339,7 @@ func (w *Watcher) readEvents() {
 	}
 }
 
-func (w *Watcher) handleDirectory(path string, stat os.FileInfo, handler func(string, os.FileInfo) error) error {
+func (w *Watcher) handleDirectory(path string, stat os.FileInfo, follow bool, handler func(string, os.FileInfo, bool) error) error {
 	files, err := os.ReadDir(path)
 	if err != nil {
 		return err
@@ -349,14 +351,14 @@ func (w *Watcher) handleDirectory(path string, stat os.FileInfo, handler func(st
 		if err != nil {
 			return err
 		}
-		err = handler(filepath.Join(path, finfo.Name()), finfo)
+		err = handler(filepath.Join(path, finfo.Name()), finfo, false)
 		if err != nil {
 			return err
 		}
 	}
 
 	// And finally handle the directory itself.
-	return handler(path, stat)
+	return handler(path, stat, follow)
 }
 
 // handleEvent might need to emit more than one fsnotify event
@@ -426,7 +428,7 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 	// Let's Stat it now so that we can compare permissions and have what we need
 	// to continue watching the file
 
-	lstat, err := os.Lstat(path)
+	stat, err := os.Lstat(path)
 	if err != nil {
 		// This is unexpected, but we should still emit an event
 		// This happens most often on "rm -r" of a subdirectory inside a watched directory
@@ -441,18 +443,17 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 		return nil
 	}
 
-	// resolve symlinks that were explicitly watched
+	// resolve symlinks that were explicitly watched as we would have at Add() time.
 	// this helps suppress spurious Chmod events on watched symlinks
-	stat := lstat
 	if isWatched {
 		stat, err = os.Stat(path)
 		if err != nil {
+			// The symlink still exists, but the target is gone. Report the Remove similar to above.
 			if !w.sendEvent(Event{path, Remove}) {
 				return nil
 			}
+			// Don't return the error
 		}
-		// The symlink still exists, but the target is gone.
-		// Don't return the error
 	}
 
 	if events&unix.FILE_MODIFIED != 0 {
@@ -484,7 +485,7 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 	if stat != nil {
 		// If we get here, it means we've hit an event above that requires us to
 		// continue watching the file or directory
-		return w.associateFile(path, stat)
+		return w.associateFile(path, stat, isWatched)
 	}
 	return nil
 }
@@ -508,7 +509,7 @@ func (w *Watcher) updateDirectory(path string) error {
 		if err != nil {
 			return err
 		}
-		err = w.associateFile(path, finfo)
+		err = w.associateFile(path, finfo, false)
 		if err != nil {
 			if !w.sendError(err) {
 				return nil
@@ -521,7 +522,7 @@ func (w *Watcher) updateDirectory(path string) error {
 	return nil
 }
 
-func (w *Watcher) associateFile(path string, stat os.FileInfo) error {
+func (w *Watcher) associateFile(path string, stat os.FileInfo, follow bool) error {
 	if w.isClosed() {
 		return errors.New("FEN watcher already closed")
 	}
@@ -547,12 +548,17 @@ func (w *Watcher) associateFile(path string, stat os.FileInfo) error {
 		}
 	}
 	// FILE_NOFOLLOW means we watch symlinks themselves rather than their targets
+	events := unix.FILE_MODIFIED|unix.FILE_ATTRIB|unix.FILE_NOFOLLOW
+	if follow {
+		// We *DO* follow symlinks for explicitly watched entries
+		events = unix.FILE_MODIFIED|unix.FILE_ATTRIB
+	}
 	return w.port.AssociatePath(path, stat,
-		unix.FILE_MODIFIED|unix.FILE_ATTRIB|unix.FILE_NOFOLLOW,
+		events,
 		stat.Mode())
 }
 
-func (w *Watcher) dissociateFile(path string, stat os.FileInfo) error {
+func (w *Watcher) dissociateFile(path string, stat os.FileInfo, unused bool) error {
 	if !w.port.PathIsWatched(path) {
 		return nil
 	}
