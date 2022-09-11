@@ -260,10 +260,16 @@ func (w *Watcher) Remove(name string) error {
 		return fmt.Errorf("%w: %s", ErrNonExistentWatch, name)
 	}
 
+	// The user has expressed an intent. Immediately remove this name
+	// from whichever watch list it might be in. If it's not in there
+	// the delete doesn't cause harm.
+	w.mu.Lock()
+	delete(w.watches, name)
+	delete(w.dirs, name)
+	w.mu.Unlock()
+
 	stat, err := os.Stat(name)
 	if err != nil {
-		// TODO If we get here, what if name is still in w.dirs or w.watches?
-		// TODO Can that happen?
 		return err
 	}
 
@@ -273,10 +279,6 @@ func (w *Watcher) Remove(name string) error {
 		if err != nil {
 			return err
 		}
-
-		w.mu.Lock()
-		delete(w.dirs, name)
-		w.mu.Unlock()
 		return nil
 	}
 
@@ -285,9 +287,6 @@ func (w *Watcher) Remove(name string) error {
 		return err
 	}
 
-	w.mu.Lock()
-	delete(w.watches, name)
-	w.mu.Unlock()
 	return nil
 }
 
@@ -437,10 +436,9 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 		if !w.sendEvent(Event{path, Remove}) {
 			return nil
 		}
-		// TODO I'm not totally convinced we should actually return and thus emit this error.
-		// If we don't return here, we will continue and also emit the Write event after the fact
-		// on a directory that is now gone. Maybe we should just return nil?
-		return err
+		// Suppress extra write events on removed directories; they are not informative
+		// and can be confusing.
+		return nil
 	}
 
 	// resolve symlinks that were explicitly watched
