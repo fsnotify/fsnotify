@@ -113,17 +113,17 @@ jobs:
   # illumos
   testillumos:
     runs-on: macos-12
-    name: test (illumos, 1.17)
+    name: test (illumos, 1.19)
     steps:
     - uses: actions/checkout@v2
-    - name: test (illumos, 1.17)
+    - name: test (illumos, 1.19)
       id: test
       uses: papertigers/illumos-vm@r38
       with:
         prepare: |
-          pkg install go-117
+          pkg install go-119
         run: |
-          /opt/ooce/go-1.17/bin/go test ./...
+          /opt/ooce/go-1.19/bin/go test ./...
 
   # Older Debian 6, for old Linux kernels.
   testDebian6:
