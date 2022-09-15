@@ -492,6 +492,35 @@ func TestWatchRename(t *testing.T) {
 				rename     /file
 				rename     /rename-one
 		`},
+
+		{"re-add renamed file", func(t *testing.T, w *Watcher, tmp string) {
+			file := filepath.Join(tmp, "file")
+			rename := filepath.Join(tmp, "rename")
+			touch(t, file)
+
+			addWatch(t, w, file)
+
+			mv(t, file, rename)
+			touch(t, file)
+			addWatch(t, w, file)
+			cat(t, "hello", rename)
+			cat(t, "hello", file)
+		}, `
+			rename /file    # mv file rename
+			write  /rename  # cat hello >rename
+			write  /file    # cat hello >file
+
+			# TODO: wrong.
+			linux:
+			    RENAME     "/file"
+			    WRITE      "/file"
+			    WRITE      ""
+
+			# TODO: wrong.
+			kqueue:
+			   RENAME      "/file"
+			   WRITE       "/file"
+		`},
 	}
 
 	for _, tt := range tests {
