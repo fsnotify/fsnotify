@@ -90,7 +90,7 @@ func TestWatch(t *testing.T) {
 				create    /sub
 				create    /file
 				remove    /file
-			solaris:
+			fen:
 				create /sub
 				create /file
 				write  /sub
@@ -471,7 +471,7 @@ func TestWatchRename(t *testing.T) {
 				CREATE               "/dir"           # mkdir
 				CREATE               "/dir-renamed"   # mv
 				REMOVE|RENAME        "/dir"
-			solaris:
+			fen:
 				CREATE       "/dir"                 # mkdir
 				RENAME       "/dir"                 # mv
 				CREATE       "/dir-renamed"
@@ -494,7 +494,7 @@ func TestWatchRename(t *testing.T) {
 			rename /file  # mv rename rename-two
 
 			# TODO: seems to lose the watch?
-			kqueue, solaris:
+			kqueue, fen:
 				rename     /file
 
 			# It's actually more correct on Windows.
@@ -527,7 +527,7 @@ func TestWatchRename(t *testing.T) {
 			    WRITE      ""
 
 			# TODO: wrong.
-			kqueue, solaris:
+			kqueue, fen:
 			   RENAME      "/file"
 			   WRITE       "/file"
 		`},
@@ -583,7 +583,7 @@ func TestWatchSymlink(t *testing.T) {
 			write  /link
 			create /link
 
-			linux, windows, solaris:
+			linux, windows, fen:
 				remove    /link
 				create    /link
 				write     /link
@@ -715,7 +715,7 @@ func TestWatchRm(t *testing.T) {
 			linux:
 				remove         /file
 				remove         /
-			solaris:
+			fen:
 				remove         /
 				remove         /file
 			windows:
@@ -737,7 +737,7 @@ func TestClose(t *testing.T) {
 		// Need a small sleep as Close() on kqueue does all sorts of things,
 		// which may take a little bit.
 		switch runtime.GOOS {
-		case "freebsd", "openbsd", "netbsd", "dragonfly", "darwin", "solaris":
+		case "freebsd", "openbsd", "netbsd", "dragonfly", "darwin", "solaris", "illumos":
 			time.Sleep(5 * time.Millisecond)
 		}
 

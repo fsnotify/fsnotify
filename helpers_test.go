@@ -521,13 +521,9 @@ func newEvents(t *testing.T, s string) Events {
 		if e, ok := events["kqueue"]; ok {
 			return e
 		}
-	// Fall back to solaris for illumos, and vice versa.
-	case "solaris":
-		if e, ok := events["illumos"]; ok {
-			return e
-		}
-	case "illumos":
-		if e, ok := events["solaris"]; ok {
+	// fen shortcut
+	case "solaris", "illumos":
+		if e, ok := events["fen"]; ok {
 			return e
 		}
 	}
