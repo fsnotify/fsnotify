@@ -527,7 +527,7 @@ func TestWatchRename(t *testing.T) {
 			    WRITE      ""
 
 			# TODO: wrong.
-			kqueue:
+			kqueue, solaris:
 			   RENAME      "/file"
 			   WRITE       "/file"
 		`},
