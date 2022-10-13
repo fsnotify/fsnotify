@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Additions
+
+- Add FEN backend to support illumos and Solaris. ([#371])
+
+[#371]: https://github.com/fsnotify/fsnotify/pull/371
 
 ## [1.6.0] - 2022-10-13
 

@@ -569,7 +569,7 @@ func (w *Watcher) dissociateFile(path string, stat os.FileInfo, unused bool) err
 	return w.port.DissociatePath(path)
 }
 
-// WatchList returns all paths added with Add() (and are not yet removed).
+// WatchList returns all paths added with [Add] (and are not yet removed).
 func (w *Watcher) WatchList() []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
