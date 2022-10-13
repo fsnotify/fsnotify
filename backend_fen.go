@@ -141,9 +141,9 @@ func NewWatcher() (*Watcher, error) {
 
 // sendEvent attempts to send an event to the user, returning true if the event
 // was put in the channel successfully and false if the watcher has been closed.
-func (w *Watcher) sendEvent(e Event) (sent bool) {
+func (w *Watcher) sendEvent(name string, op Op) (sent bool) {
 	select {
-	case w.Events <- e:
+	case w.Events <- Event{Name: name, Op: op}:
 		return true
 	case <-w.done:
 		return false
@@ -385,13 +385,13 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 	isWatched := watchedDir || watchedPath
 
 	if events&unix.FILE_DELETE != 0 {
-		if !w.sendEvent(Event{path, Remove}) {
+		if !w.sendEvent(path, Remove) {
 			return nil
 		}
 		reRegister = false
 	}
 	if events&unix.FILE_RENAME_FROM != 0 {
-		if !w.sendEvent(Event{path, Rename}) {
+		if !w.sendEvent(path, Rename) {
 			return nil
 		}
 		// Don't keep watching the new file name
@@ -406,7 +406,7 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 
 		// inotify reports a Remove event in this case, so we simulate
 		// this here.
-		if !w.sendEvent(Event{path, Remove}) {
+		if !w.sendEvent(path, Remove) {
 			return nil
 		}
 		// Don't keep watching the file that was removed
@@ -439,7 +439,7 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 		// We get a modify event of something happening inside, but by the time
 		// we get here, the sudirectory is already gone. Clearly we were watching this path
 		// but now it is gone. Let's tell the user that it was removed.
-		if !w.sendEvent(Event{path, Remove}) {
+		if !w.sendEvent(path, Remove) {
 			return nil
 		}
 		// Suppress extra write events on removed directories; they are not informative
@@ -453,7 +453,7 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 		stat, err = os.Stat(path)
 		if err != nil {
 			// The symlink still exists, but the target is gone. Report the Remove similar to above.
-			if !w.sendEvent(Event{path, Remove}) {
+			if !w.sendEvent(path, Remove) {
 				return nil
 			}
 			// Don't return the error
@@ -467,12 +467,12 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 					return err
 				}
 			} else {
-				if !w.sendEvent(Event{path, Write}) {
+				if !w.sendEvent(path, Write) {
 					return nil
 				}
 			}
 		} else {
-			if !w.sendEvent(Event{path, Write}) {
+			if !w.sendEvent(path, Write) {
 				return nil
 			}
 		}
@@ -480,7 +480,7 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 	if events&unix.FILE_ATTRIB != 0 && stat != nil {
 		// Only send Chmod if perms changed
 		if stat.Mode().Perm() != fmode.Perm() {
-			if !w.sendEvent(Event{path, Chmod}) {
+			if !w.sendEvent(path, Chmod) {
 				return nil
 			}
 		}
@@ -519,7 +519,7 @@ func (w *Watcher) updateDirectory(path string) error {
 				return nil
 			}
 		}
-		if !w.sendEvent(Event{path, Create}) {
+		if !w.sendEvent(path, Create) {
 			return nil
 		}
 	}
@@ -552,10 +552,10 @@ func (w *Watcher) associateFile(path string, stat os.FileInfo, follow bool) erro
 		}
 	}
 	// FILE_NOFOLLOW means we watch symlinks themselves rather than their targets
-	events := unix.FILE_MODIFIED|unix.FILE_ATTRIB|unix.FILE_NOFOLLOW
+	events := unix.FILE_MODIFIED | unix.FILE_ATTRIB | unix.FILE_NOFOLLOW
 	if follow {
 		// We *DO* follow symlinks for explicitly watched entries
-		events = unix.FILE_MODIFIED|unix.FILE_ATTRIB
+		events = unix.FILE_MODIFIED | unix.FILE_ATTRIB
 	}
 	return w.port.AssociatePath(path, stat,
 		events,

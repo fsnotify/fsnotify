@@ -46,21 +46,21 @@ var (
 	ErrEventOverflow    = errors.New("fsnotify queue overflow")
 )
 
-func (op Op) String() string {
+func (o Op) String() string {
 	var b strings.Builder
-	if op.Has(Create) {
+	if o.Has(Create) {
 		b.WriteString("|CREATE")
 	}
-	if op.Has(Remove) {
+	if o.Has(Remove) {
 		b.WriteString("|REMOVE")
 	}
-	if op.Has(Write) {
+	if o.Has(Write) {
 		b.WriteString("|WRITE")
 	}
-	if op.Has(Rename) {
+	if o.Has(Rename) {
 		b.WriteString("|RENAME")
 	}
-	if op.Has(Chmod) {
+	if o.Has(Chmod) {
 		b.WriteString("|CHMOD")
 	}
 	if b.Len() == 0 {
