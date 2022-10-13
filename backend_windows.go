@@ -294,7 +294,6 @@ func (w *Watcher) WatchList() []string {
 // This should all be removed at some point, and just use windows.FILE_NOTIFY_*
 const (
 	sysFSALLEVENTS  = 0xfff
-	sysFSATTRIB     = 0x4
 	sysFSCREATE     = 0x100
 	sysFSDELETE     = 0x200
 	sysFSDELETESELF = 0x400
@@ -319,9 +318,6 @@ func (w *Watcher) newEvent(name string, mask uint32) Event {
 	}
 	if mask&sysFSMOVE == sysFSMOVE || mask&sysFSMOVESELF == sysFSMOVESELF || mask&sysFSMOVEDFROM == sysFSMOVEDFROM {
 		e.Op |= Rename
-	}
-	if mask&sysFSATTRIB == sysFSATTRIB {
-		e.Op |= Chmod
 	}
 	return e
 }
@@ -734,9 +730,6 @@ func (w *Watcher) toWindowsFlags(mask uint64) uint32 {
 	var m uint32
 	if mask&sysFSMODIFY != 0 {
 		m |= windows.FILE_NOTIFY_CHANGE_LAST_WRITE
-	}
-	if mask&sysFSATTRIB != 0 {
-		m |= windows.FILE_NOTIFY_CHANGE_ATTRIBUTES
 	}
 	if mask&(sysFSMOVE|sysFSCREATE|sysFSDELETE) != 0 {
 		m |= windows.FILE_NOTIFY_CHANGE_FILE_NAME | windows.FILE_NOTIFY_CHANGE_DIR_NAME

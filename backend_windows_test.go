@@ -50,3 +50,18 @@ func TestRemoveState(t *testing.T) {
 	}
 	check(0)
 }
+
+func TestWindowsNoAttributeChanges(t *testing.T) {
+	tmp := t.TempDir()
+	file := filepath.Join(tmp, "TestFsnotifyEventsExisting.testfile")
+
+	touch(t, file) // Create a file before watching directory
+	w := newCollector(t, tmp)
+	w.collect(t)
+	chmod(t, 0o400, file) // Make the file read-only, which is an attribute change
+
+	have := w.stop(t)
+	if len(have) != 0 {
+		t.Fatalf("should not have received any events, received:\n%s", have)
+	}
+}
