@@ -123,7 +123,10 @@ jobs:
         prepare: |
           pkg install go-119
         run: |
-          /opt/ooce/go-1.19/bin/go test ./...
+          useradd action
+          export GOCACHE=/tmp/go-cache
+          export GOPATH=/tmp/go-path
+          su action -c '/opt/ooce/go-1.19/bin/go test ./...'
 
   # Older Debian 6, for old Linux kernels.
   testDebian6:
