@@ -42,8 +42,9 @@ const (
 
 // Common errors that can be reported by a watcher
 var (
-	ErrNonExistentWatch = errors.New("can't remove non-existent watcher")
-	ErrEventOverflow    = errors.New("fsnotify queue overflow")
+	ErrNonExistentWatch = errors.New("fsnotify: can't remove non-existent watcher")
+	ErrEventOverflow    = errors.New("fsnotify: queue overflow")
+	ErrClosed           = errors.New("fsnotify: watcher already closed")
 )
 
 func (op Op) String() string {

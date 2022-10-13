@@ -250,6 +250,8 @@ func (w *Watcher) Close() error {
 // Notifications on network filesystems (NFS, SMB, FUSE, etc.) or special
 // filesystems (/proc, /sys, etc.) generally don't work.
 //
+// Returns [ErrClosed] if [Watcher.Close] was called.
+//
 // # Watching directories
 //
 // All files in a directory are monitored, including new files that are created
@@ -284,6 +286,10 @@ func (w *Watcher) Add(name string) error {
 func (w *Watcher) Remove(name string) error {
 	name = filepath.Clean(name)
 	w.mu.Lock()
+	if w.isClosed {
+		w.mu.Unlock()
+		return nil
+	}
 	watchfd, ok := w.watches[name]
 	w.mu.Unlock()
 	if !ok {
@@ -337,9 +343,14 @@ func (w *Watcher) Remove(name string) error {
 }
 
 // WatchList returns all paths added with [Add] (and are not yet removed).
+//
+// Returns nil if [Watcher.Close] was called.
 func (w *Watcher) WatchList() []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if w.isClosed {
+		return nil
+	}
 
 	entries := make([]string, 0, len(w.userWatches))
 	for pathname := range w.userWatches {
@@ -363,7 +374,7 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 	w.mu.Lock()
 	if w.isClosed {
 		w.mu.Unlock()
-		return "", errors.New("kevent instance already closed")
+		return "", ErrClosed
 	}
 	watchfd, alreadyWatching := w.watches[name]
 	// We already have a watch, but we can still override flags.

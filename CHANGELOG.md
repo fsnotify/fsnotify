@@ -9,9 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Additions
 
-- Add FEN backend to support illumos and Solaris. ([#371])
+- illumos: add FEN backend to support illumos and Solaris. ([#371])
+
+### Changes and fixes
+
+- all: return ErrClosed on Add() when the watcher is closed ([#516])
 
 [#371]: https://github.com/fsnotify/fsnotify/pull/371
+[#516]: https://github.com/fsnotify/fsnotify/pull/516
 
 ## [1.6.0] - 2022-10-13
 
