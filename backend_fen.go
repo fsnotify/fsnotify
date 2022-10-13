@@ -196,6 +196,8 @@ func (w *Watcher) Close() error {
 // Notifications on network filesystems (NFS, SMB, FUSE, etc.) or special
 // filesystems (/proc, /sys, etc.) generally don't work.
 //
+// Returns [ErrClosed] if [Watcher.Close] was called.
+//
 // # Watching directories
 //
 // All files in a directory are monitored, including new files that are created
@@ -215,7 +217,7 @@ func (w *Watcher) Close() error {
 // you're not interested in. There is an example of this in [cmd/fsnotify/file.go].
 func (w *Watcher) Add(name string) error {
 	if w.isClosed() {
-		return errors.New("FEN watcher already closed")
+		return ErrClosed
 	}
 	if w.port.PathIsWatched(name) {
 		return nil
@@ -260,7 +262,7 @@ func (w *Watcher) Add(name string) error {
 // Removing a path that has not yet been added returns [ErrNonExistentWatch].
 func (w *Watcher) Remove(name string) error {
 	if w.isClosed() {
-		return errors.New("FEN watcher already closed")
+		return nil
 	}
 	if !w.port.PathIsWatched(name) {
 		return fmt.Errorf("%w: %s", ErrNonExistentWatch, name)
@@ -528,7 +530,7 @@ func (w *Watcher) updateDirectory(path string) error {
 
 func (w *Watcher) associateFile(path string, stat os.FileInfo, follow bool) error {
 	if w.isClosed() {
-		return errors.New("FEN watcher already closed")
+		return ErrClosed
 	}
 	// This is primarily protecting the call to AssociatePath
 	// but it is important and intentional that the call to
@@ -570,7 +572,13 @@ func (w *Watcher) dissociateFile(path string, stat os.FileInfo, unused bool) err
 }
 
 // WatchList returns all paths added with [Add] (and are not yet removed).
+//
+// Returns nil if [Watcher.Close] was called.
 func (w *Watcher) WatchList() []string {
+	if w.isClosed() {
+		return nil
+	}
+
 	w.mu.Lock()
 	defer w.mu.Unlock()
 

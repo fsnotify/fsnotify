@@ -218,6 +218,8 @@ func (w *Watcher) Close() error {
 // Notifications on network filesystems (NFS, SMB, FUSE, etc.) or special
 // filesystems (/proc, /sys, etc.) generally don't work.
 //
+// Returns [ErrClosed] if [Watcher.Close] was called.
+//
 // # Watching directories
 //
 // All files in a directory are monitored, including new files that are created
@@ -238,7 +240,7 @@ func (w *Watcher) Close() error {
 func (w *Watcher) Add(name string) error {
 	name = filepath.Clean(name)
 	if w.isClosed() {
-		return errors.New("inotify instance already closed")
+		return ErrClosed
 	}
 
 	var flags uint32 = unix.IN_MOVED_TO | unix.IN_MOVED_FROM |
@@ -274,6 +276,10 @@ func (w *Watcher) Add(name string) error {
 //
 // Removing a path that has not yet been added returns [ErrNonExistentWatch].
 func (w *Watcher) Remove(name string) error {
+	if w.isClosed() {
+		return nil
+	}
+
 	name = filepath.Clean(name)
 
 	// Fetch the watch.
@@ -317,7 +323,13 @@ func (w *Watcher) Remove(name string) error {
 }
 
 // WatchList returns all paths added with [Add] (and are not yet removed).
+//
+// Returns nil if [Watcher.Close] was called.
 func (w *Watcher) WatchList() []string {
+	if w.isClosed() {
+		return nil
+	}
+
 	w.mu.Lock()
 	defer w.mu.Unlock()
 

@@ -120,9 +120,9 @@ type Watcher struct {
 	input chan *input    // Inputs to the reader are sent on this channel
 	quit  chan chan<- error
 
-	mu       sync.Mutex // Protects access to watches, isClosed
-	watches  watchMap   // Map of watches (key: i-number)
-	isClosed bool       // Set to true when Close() is first called
+	mu      sync.Mutex // Protects access to watches, closed
+	watches watchMap   // Map of watches (key: i-number)
+	closed  bool       // Set to true when Close() is first called
 }
 
 // NewWatcher creates a new Watcher.
@@ -141,6 +141,12 @@ func NewWatcher() (*Watcher, error) {
 	}
 	go w.readEvents()
 	return w, nil
+}
+
+func (w *Watcher) isClosed() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.closed
 }
 
 func (w *Watcher) sendEvent(name string, mask uint64) bool {
@@ -169,12 +175,12 @@ func (w *Watcher) sendError(err error) bool {
 
 // Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error {
-	w.mu.Lock()
-	if w.isClosed {
-		w.mu.Unlock()
+	if w.isClosed() {
 		return nil
 	}
-	w.isClosed = true
+
+	w.mu.Lock()
+	w.closed = true
 	w.mu.Unlock()
 
 	// Send "quit" message to the reader goroutine
@@ -199,6 +205,8 @@ func (w *Watcher) Close() error {
 // Notifications on network filesystems (NFS, SMB, FUSE, etc.) or special
 // filesystems (/proc, /sys, etc.) generally don't work.
 //
+// Returns [ErrClosed] if [Watcher.Close] was called.
+//
 // # Watching directories
 //
 // All files in a directory are monitored, including new files that are created
@@ -217,12 +225,9 @@ func (w *Watcher) Close() error {
 // Instead, watch the parent directory and use Event.Name to filter out files
 // you're not interested in. There is an example of this in [cmd/fsnotify/file.go].
 func (w *Watcher) Add(name string) error {
-	w.mu.Lock()
-	if w.isClosed {
-		w.mu.Unlock()
-		return errors.New("watcher already closed")
+	if w.isClosed() {
+		return ErrClosed
 	}
-	w.mu.Unlock()
 
 	in := &input{
 		op:    opAddWatch,
@@ -244,6 +249,10 @@ func (w *Watcher) Add(name string) error {
 //
 // Removing a path that has not yet been added returns [ErrNonExistentWatch].
 func (w *Watcher) Remove(name string) error {
+	if w.isClosed() {
+		return nil
+	}
+
 	in := &input{
 		op:    opRemoveWatch,
 		path:  filepath.Clean(name),
@@ -257,7 +266,13 @@ func (w *Watcher) Remove(name string) error {
 }
 
 // WatchList returns all paths added with [Add] (and are not yet removed).
+//
+// Returns nil if [Watcher.Close] was called.
 func (w *Watcher) WatchList() []string {
+	if w.isClosed() {
+		return nil
+	}
+
 	w.mu.Lock()
 	defer w.mu.Unlock()
 

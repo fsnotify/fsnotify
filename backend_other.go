@@ -34,6 +34,8 @@ func (w *Watcher) Close() error {
 // Notifications on network filesystems (NFS, SMB, FUSE, etc.) or special
 // filesystems (/proc, /sys, etc.) generally don't work.
 //
+// Returns [ErrClosed] if [Watcher.Close] was called.
+//
 // # Watching directories
 //
 // All files in a directory are monitored, including new files that are created

@@ -892,6 +892,28 @@ func TestClose(t *testing.T) {
 
 		chanClosed(t, w.w)
 	})
+
+	t.Run("error after closed", func(t *testing.T) {
+		t.Parallel()
+
+		tmp := t.TempDir()
+		w := newWatcher(t, tmp)
+		if err := w.Close(); err != nil {
+			t.Fatal(err)
+		}
+
+		file := filepath.Join(tmp, "file")
+		touch(t, file)
+		if err := w.Add(file); !errors.Is(err, ErrClosed) {
+			t.Fatalf("wrong error for Add: %#v", err)
+		}
+		if err := w.Remove(file); err != nil {
+			t.Fatalf("wrong error for Remove: %#v", err)
+		}
+		if l := w.WatchList(); l != nil { // Should return an error, but meh :-/
+			t.Fatalf("WatchList not nil: %#v", l)
+		}
+	})
 }
 
 func TestAdd(t *testing.T) {
