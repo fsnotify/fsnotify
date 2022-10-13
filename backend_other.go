@@ -29,7 +29,7 @@ func (w *Watcher) Close() error {
 //
 // A path will remain watched if it gets renamed to somewhere else on the same
 // filesystem, but the monitor will get removed if the path gets deleted and
-// re-created.
+// re-created, or if it's moved to a different filesystem.
 //
 // Notifications on network filesystems (NFS, SMB, FUSE, etc.) or special
 // filesystems (/proc, /sys, etc.) generally don't work.
@@ -45,12 +45,12 @@ func (w *Watcher) Close() error {
 // Watching individual files (rather than directories) is generally not
 // recommended as many tools update files atomically. Instead of "just" writing
 // to the file a temporary file will be written to first, and if successful the
-// temporary file is moved to to destination, removing the original, or some
+// temporary file is moved to to destination removing the original, or some
 // variant thereof. The watcher on the original file is now lost, as it no
 // longer exists.
 //
-// Instead, watch the parent directory and use [Event.Name] to filter out files
-// you're not interested in. There is an example of this in cmd/fsnotify/file.go
+// Instead, watch the parent directory and use Event.Name to filter out files
+// you're not interested in. There is an example of this in [cmd/fsnotify/file.go].
 func (w *Watcher) Add(name string) error {
 	return nil
 }

@@ -9,7 +9,8 @@ import (
 )
 
 // Depending on the system, a single "write" can generate many Write events; for
-// example compiling a large Go program can generate hundreds of Write events.
+// example compiling a large Go program can generate hundreds of Write events on
+// the binary.
 //
 // The general strategy to deal with this is to wait a short time for more write
 // events, resetting the wait period for every new event.
@@ -28,7 +29,7 @@ func dedup(paths ...string) {
 	// Start listening for events.
 	go dedupLoop(w)
 
-	// Add all paths.
+	// Add all paths from the commandline.
 	for _, p := range paths {
 		err = w.Add(p)
 		if err != nil {

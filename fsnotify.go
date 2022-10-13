@@ -22,7 +22,7 @@ type Event struct {
 
 	// File operation that triggered the event.
 	//
-	// This is a bitmask as some systems may send multiple operations at once.
+	// This is a bitmask and some systems may send multiple operations at once.
 	// Use the Event.Has() method instead of comparing with ==.
 	Op Op
 }

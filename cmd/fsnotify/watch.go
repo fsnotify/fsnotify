@@ -19,7 +19,7 @@ func watch(paths ...string) {
 	// Start listening for events.
 	go watchLoop(w)
 
-	// Add all paths.
+	// Add all paths from the commandline.
 	for _, p := range paths {
 		err = w.Add(p)
 		if err != nil {

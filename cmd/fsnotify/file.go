@@ -7,6 +7,9 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
+// Watch one or more files, but instead of watching the file directly it watches
+// the parent directory. This solves various issues where files are frequently
+// renamed, such as editors saving them.
 func file(files ...string) {
 	if len(files) < 1 {
 		exit("must specify at least one file to watch")
@@ -22,7 +25,7 @@ func file(files ...string) {
 	// Start listening for events.
 	go fileLoop(w, files)
 
-	// Add all files.
+	// Add all files from the commandline.
 	for _, p := range files {
 		st, err := os.Lstat(p)
 		if err != nil {

@@ -1,3 +1,4 @@
+// Command fsnotify provides example usage of the fsnotify library.
 package main
 
 import (
@@ -8,8 +9,8 @@ import (
 )
 
 var usage = `
-fsnotify is a library to provide cross-platform file system notifications for
-Go. This utility serves as an example and debugging tool.
+fsnotify is a Go library to provide cross-platform file system notifications.
+This command serves as an example and debugging tool.
 
 https://github.com/fsnotify/fsnotify
 

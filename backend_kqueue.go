@@ -14,7 +14,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// Watcher watches a set of files, delivering events to a channel.
+// Watcher watches a set of paths, delivering events on a channel.
 //
 // A watcher should not be copied (e.g. pass it by pointer, rather than by
 // value).
@@ -27,6 +27,8 @@ import (
 //     fp := os.Open("file")
 //     os.Remove("file")        // Triggers Chmod
 //     fp.Close()               // Triggers Remove
+//
+// This is the event that inotify sends, so not much can be changed about this.
 //
 // The fs.inotify.max_user_watches sysctl variable specifies the upper limit
 // for the number of watches per user, and fs.inotify.max_user_instances
@@ -43,7 +45,8 @@ import (
 //     sysctl fs.inotify.max_user_instances=128
 //
 // To make the changes persist on reboot edit /etc/sysctl.conf or
-// /usr/lib/sysctl.d/50-default.conf (on some systemd systems):
+// /usr/lib/sysctl.d/50-default.conf (details differ per Linux distro; check
+// your distro's documentation):
 //
 //     fs.inotify.max_user_watches=124983
 //     fs.inotify.max_user_instances=128
@@ -74,7 +77,7 @@ type Watcher struct {
 	// Events sends the filesystem change events.
 	//
 	// fsnotify can send the following events; a "path" here can refer to a
-	// file, directory, symbolic link, or special files like a FIFO.
+	// file, directory, symbolic link, or special file like a FIFO.
 	//
 	//   fsnotify.Create    A new path was created; this may be followed by one
 	//                      or more Write events if data also gets written to a
@@ -83,7 +86,7 @@ type Watcher struct {
 	//   fsnotify.Remove    A path was removed.
 	//
 	//   fsnotify.Rename    A path was renamed. A rename is always sent with the
-	//                      old path as [Event.Name], and a Create event will be
+	//                      old path as Event.Name, and a Create event will be
 	//                      sent with the new name. Renames are only sent for
 	//                      paths that are currently watched; e.g. moving an
 	//                      unmonitored file into a monitored directory will
@@ -100,10 +103,11 @@ type Watcher struct {
 	//                      probably want to wait until you've stopped receiving
 	//                      them (see the dedup example in cmd/fsnotify).
 	//
-	//   fsnotify.Chmod     Attributes were changes (never sent on Windows). On
-	//                      Linux this is also sent when a file is removed (or
-	//                      more accurately, when a link to an inode is
-	//                      removed), and on kqueue when a file is truncated.
+	//   fsnotify.Chmod     Attributes were changed. On Linux this is also sent
+	//                      when a file is removed (or more accurately, when a
+	//                      link to an inode is removed). On kqueue it's sent
+	//                      and on kqueue when a file is truncated. On Windows
+	//                      it's never sent.
 	Events chan Event
 
 	// Errors sends any errors.
@@ -241,7 +245,7 @@ func (w *Watcher) Close() error {
 //
 // A path will remain watched if it gets renamed to somewhere else on the same
 // filesystem, but the monitor will get removed if the path gets deleted and
-// re-created.
+// re-created, or if it's moved to a different filesystem.
 //
 // Notifications on network filesystems (NFS, SMB, FUSE, etc.) or special
 // filesystems (/proc, /sys, etc.) generally don't work.
@@ -257,12 +261,12 @@ func (w *Watcher) Close() error {
 // Watching individual files (rather than directories) is generally not
 // recommended as many tools update files atomically. Instead of "just" writing
 // to the file a temporary file will be written to first, and if successful the
-// temporary file is moved to to destination, removing the original, or some
+// temporary file is moved to to destination removing the original, or some
 // variant thereof. The watcher on the original file is now lost, as it no
 // longer exists.
 //
-// Instead, watch the parent directory and use [Event.Name] to filter out files
-// you're not interested in. There is an example of this in cmd/fsnotify/file.go
+// Instead, watch the parent directory and use Event.Name to filter out files
+// you're not interested in. There is an example of this in [cmd/fsnotify/file.go].
 func (w *Watcher) Add(name string) error {
 	w.mu.Lock()
 	w.userWatches[name] = struct{}{}
@@ -332,7 +336,7 @@ func (w *Watcher) Remove(name string) error {
 	return nil
 }
 
-// WatchList returns all paths added with Add() (and are not yet removed).
+// WatchList returns all paths added with [Add] (and are not yet removed).
 func (w *Watcher) WatchList() []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()

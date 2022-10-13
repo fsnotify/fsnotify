@@ -1,13 +1,12 @@
 fsnotify is a Go library to provide cross-platform filesystem notifications on
 Windows, Linux, macOS, and BSD systems.
 
-fsnotify requires Go 1.16 or newer.
+Go 1.16 or newer is required; the full documentation is at
+https://pkg.go.dev/github.com/fsnotify/fsnotify
 
-API docs: https://pkg.go.dev/github.com/fsnotify/fsnotify
-
-It's best to read the documentation at pkg.go.dev, as it's pinned to the last
+**It's best to read the documentation at pkg.go.dev, as it's pinned to the last
 released version, whereas this README is for the last development version which
-may include additions/changes.
+may include additions/changes.**
 
 ---
 
@@ -89,15 +88,15 @@ FAQ
 ### Will a file still be watched when it's moved to another directory?
 No, not unless you are watching the location it was moved to.
 
-### Are all subdirectories watched too?
+### Are subdirectories watched too?
 No, you must add watches for any directory you want to watch (a recursive
 watcher is on the roadmap: [#18]).
 
 [#18]: https://github.com/fsnotify/fsnotify/issues/18
 
-### Do I have to watch the Error and Event channels in a separate goroutine?
-As of now, yes (you can read both channels in the same goroutine, you don't need
-a separate goroutine for both channels; see the example).
+### Do I have to watch the Error and Event channels in a goroutine?
+As of now, yes (you can read both channels in the same goroutine using `select`,
+you don't need a separate goroutine for both channels; see the example).
 
 ### Why don't notifications work with NFS, SMB, FUSE, /proc, or /sys?
 fsnotify requires support from underlying OS to work. The current NFS and SMB
@@ -112,18 +111,20 @@ Platform-specific notes
 -----------------------
 ### Linux
 When a file is removed a REMOVE event won't be emitted until all file
-descriptors are closed. It will emit a CHMOD though:
+descriptors are closed; it will emit a CHMOD instead:
 
     fp := os.Open("file")
     os.Remove("file")        // CHMOD
     fp.Close()               // REMOVE
+
+This is the event that inotify sends, so not much can be changed about this.
 
 The `fs.inotify.max_user_watches` sysctl variable specifies the upper limit for
 the number of watches per user, and `fs.inotify.max_user_instances` specifies
 the maximum number of inotify instances per user. Every Watcher you create is an
 "instance", and every path you add is a "watch".
 
-These are also exposed in /proc as `/proc/sys/fs/inotify/max_user_watches` and
+These are also exposed in `/proc` as `/proc/sys/fs/inotify/max_user_watches` and
 `/proc/sys/fs/inotify/max_user_instances`
 
 To increase them you can use `sysctl` or write the value to proc file:
@@ -133,7 +134,8 @@ To increase them you can use `sysctl` or write the value to proc file:
     sysctl fs.inotify.max_user_instances=128
 
 To make the changes persist on reboot edit `/etc/sysctl.conf` or
-`/usr/lib/sysctl.d/50-default.conf` (some systemd systems):
+`/usr/lib/sysctl.d/50-default.conf` (details differ per Linux distro; check your
+distro's documentation):
 
     fs.inotify.max_user_watches=124983
     fs.inotify.max_user_instances=128
@@ -157,8 +159,3 @@ have a native FSEvents implementation (see [#11]).
 
 [#11]: https://github.com/fsnotify/fsnotify/issues/11
 [#15]: https://github.com/fsnotify/fsnotify/issues/15
-
-Related Projects
-----------------
-- [notify](https://github.com/rjeczalik/notify)
-- [fsevents](https://github.com/fsnotify/fsevents)
