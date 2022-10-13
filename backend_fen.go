@@ -187,11 +187,11 @@ func (w *Watcher) Close() error {
 //
 // A path can only be watched once; attempting to watch it more than once will
 // return an error. Paths that do not yet exist on the filesystem cannot be
-// added. A watch will be automatically removed if the path is deleted.
+// added.
 //
-// A path will remain watched if it gets renamed to somewhere else on the same
-// filesystem, but the monitor will get removed if the path gets deleted and
-// re-created, or if it's moved to a different filesystem.
+// A watch will be automatically removed if the watched path is deleted or
+// renamed. The exception is the Windows backend, which doesn't remove the
+// watcher on renames.
 //
 // Notifications on network filesystems (NFS, SMB, FUSE, etc.) or special
 // filesystems (/proc, /sys, etc.) generally don't work.
