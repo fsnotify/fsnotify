@@ -1,5 +1,5 @@
-//go:build !plan9 && !solaris
-// +build !plan9,!solaris
+//go:build !plan9
+// +build !plan9
 
 package fsnotify
 
@@ -90,7 +90,12 @@ func TestWatch(t *testing.T) {
 				create    /sub
 				create    /file
 				remove    /file
-
+			fen:
+				create /sub
+				create /file
+				write  /sub
+				remove /sub
+				remove /file
 			# Windows includes a write for the /sub dir too, two of them even(?)
 			windows:
 				create /sub
@@ -466,6 +471,11 @@ func TestWatchRename(t *testing.T) {
 				CREATE               "/dir"           # mkdir
 				CREATE               "/dir-renamed"   # mv
 				REMOVE|RENAME        "/dir"
+			fen:
+				CREATE       "/dir"                 # mkdir
+				RENAME       "/dir"                 # mv
+				CREATE       "/dir-renamed"
+				WRITE        "/dir-renamed"         # touch
 		`},
 
 		{"rename watched file", func(t *testing.T, w *Watcher, tmp string) {
@@ -484,7 +494,7 @@ func TestWatchRename(t *testing.T) {
 			rename /file  # mv rename rename-two
 
 			# TODO: seems to lose the watch?
-			kqueue:
+			kqueue, fen:
 				rename     /file
 
 			# It's actually more correct on Windows.
@@ -517,7 +527,7 @@ func TestWatchRename(t *testing.T) {
 			    WRITE      ""
 
 			# TODO: wrong.
-			kqueue:
+			kqueue, fen:
 			   RENAME      "/file"
 			   WRITE       "/file"
 		`},
@@ -573,7 +583,7 @@ func TestWatchSymlink(t *testing.T) {
 			write  /link
 			create /link
 
-			linux, windows:
+			linux, windows, fen:
 				remove    /link
 				create    /link
 				write     /link
@@ -705,6 +715,9 @@ func TestWatchRm(t *testing.T) {
 			linux:
 				remove         /file
 				remove         /
+			fen:
+				remove         /
+				remove         /file
 			windows:
 				remove         /file
 				remove         /
@@ -724,7 +737,7 @@ func TestClose(t *testing.T) {
 		// Need a small sleep as Close() on kqueue does all sorts of things,
 		// which may take a little bit.
 		switch runtime.GOOS {
-		case "freebsd", "openbsd", "netbsd", "dragonfly", "darwin":
+		case "freebsd", "openbsd", "netbsd", "dragonfly", "darwin", "solaris", "illumos":
 			time.Sleep(5 * time.Millisecond)
 		}
 
