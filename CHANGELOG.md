@@ -7,12 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.6.0] - 2022-10-13
+
 This version of fsnotify needs Go 1.16 (this was already the case since 1.5.1,
 but not documented). It also increases the minimum Linux version to 2.6.32.
 
 ### Additions
 
-- all: add `Event.Has()` and `Op.Has()` (#477)
+- all: add `Event.Has()` and `Op.Has()` ([#477])
 
   This makes checking events a lot easier; for example:
 
@@ -24,13 +28,13 @@ but not documented). It also increases the minimum Linux version to 2.6.32.
 	    if event.Has(Write) && !event.Has(Remove) {
 	    }
 
-- all: add cmd/fsnotify (#463)
+- all: add cmd/fsnotify ([#463])
 
-  A command-line utility for testing and as an example.
+  A command-line utility for testing and some examples.
 
 ### Changes and fixes
 
-- inotify: don't ignore events for files that don't exist (#260, #470)
+- inotify: don't ignore events for files that don't exist ([#260], [#470])
 
   Previously the inotify watcher would call `os.Lstat()` to check if a file
   still exists before emitting events.
@@ -41,40 +45,56 @@ but not documented). It also increases the minimum Linux version to 2.6.32.
   longer exists.
 
 - all: return `ErrNonExistentWatch` when `Remove()` is called on a path that's
-  not watched (#460)
+  not watched ([#460])
 
-- inotify: replace epoll() with non-blocking inotify #434
+- inotify: replace epoll() with non-blocking inotify ([#434])
 
   Non-blocking inotify was not generally available at the time this library was
   written in 2014, but now it is. As a result, the minimum Linux version is
   bumped from 2.6.27 to 2.6.32. This hugely simplifies the code and is faster.
 
-- kqueue: don't check for events every 100ms (#480)
+- kqueue: don't check for events every 100ms ([#480])
 
   The watcher would wake up every 100ms, even when there was nothing to do. Now
   it waits until there is something to do.
 
-- macos: retry opening files on EINTR (#475)
+- macos: retry opening files on EINTR ([#475])
 
-- kqueue: skip unreadable files (#479)
+- kqueue: skip unreadable files ([#479])
 
   kqueue requires a file descriptor for every file in a directory; this would
   fail if a file was unreadable by the current user. Now these files are simply
   skipped.
 
-- windows: fix renaming a watched directory if the parent is also watched (#370)
+- windows: fix renaming a watched directory if the parent is also watched ([#370])
 
-- windows: increase buffer size from 4K to 64K (#485)
+- windows: increase buffer size from 4K to 64K ([#485])
 
-- windows: close file handle on Remove() (#288)
+- windows: close file handle on Remove() ([#288])
 
-- kqueue: put pathname in the error if watching a file fails (#471)
+- kqueue: put pathname in the error if watching a file fails ([#471])
 
-- inotify, windows: calling Close() more than once could race (#465)
+- inotify, windows: calling Close() more than once could race ([#465])
 
-- kqueue: improve Close() performance (#233)
+- kqueue: improve Close() performance ([#233])
 
 - all: various documentation additions and clarifications.
+
+[#233]: https://github.com/fsnotify/fsnotify/pull/233
+[#260]: https://github.com/fsnotify/fsnotify/pull/260
+[#288]: https://github.com/fsnotify/fsnotify/pull/288
+[#370]: https://github.com/fsnotify/fsnotify/pull/370
+[#434]: https://github.com/fsnotify/fsnotify/pull/434
+[#460]: https://github.com/fsnotify/fsnotify/pull/460
+[#463]: https://github.com/fsnotify/fsnotify/pull/463
+[#465]: https://github.com/fsnotify/fsnotify/pull/465
+[#470]: https://github.com/fsnotify/fsnotify/pull/470
+[#471]: https://github.com/fsnotify/fsnotify/pull/471
+[#475]: https://github.com/fsnotify/fsnotify/pull/475
+[#477]: https://github.com/fsnotify/fsnotify/pull/477
+[#479]: https://github.com/fsnotify/fsnotify/pull/479
+[#480]: https://github.com/fsnotify/fsnotify/pull/480
+[#485]: https://github.com/fsnotify/fsnotify/pull/485
 
 ## [1.5.4] - 2022-04-25
 
