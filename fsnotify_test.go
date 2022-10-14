@@ -1,6 +1,3 @@
-//go:build !plan9
-// +build !plan9
-
 package fsnotify
 
 import (
@@ -108,7 +105,7 @@ func TestWatch(t *testing.T) {
 
 		{"file in directory is not readable", func(t *testing.T, w *Watcher, tmp string) {
 			if runtime.GOOS == "windows" {
-				t.Skip("attributes don't work on Windows")
+				t.Skip("attributes don't work on Windows") // Figure out how to make a file unreadable
 			}
 
 			touch(t, tmp, "file-unreadable")
@@ -129,6 +126,9 @@ func TestWatch(t *testing.T) {
 			kqueue:
 				WRITE    "/file"
 				REMOVE   "/file"
+
+			windows:
+				empty
 		`},
 
 		{"watch same dir twice", func(t *testing.T, w *Watcher, tmp string) {
@@ -193,7 +193,6 @@ func TestWatch(t *testing.T) {
 				// CREATE "/private/var/.../TestWatchwatch_a_symlink_to_a_dir2551725268/001/dir/file"
 				// Pretty sure this is caused by the broken symlink-follow
 				// behaviour too.
-
 				t.Skip("broken on macOS")
 			}
 
@@ -263,7 +262,7 @@ func TestWatchCreate(t *testing.T) {
 		// FIFO
 		{"create new named pipe", func(t *testing.T, w *Watcher, tmp string) {
 			if runtime.GOOS == "windows" {
-				t.Skip("no named pipes on windows")
+				t.Skip() // No named pipes on Windows.
 			}
 			touch(t, tmp, "file")
 			addWatch(t, w, tmp)
@@ -274,10 +273,16 @@ func TestWatchCreate(t *testing.T) {
 		// Device node
 		{"create new device node pipe", func(t *testing.T, w *Watcher, tmp string) {
 			if runtime.GOOS == "windows" {
-				t.Skip("no device nodes on windows")
+				t.Skip() // No device nodes on Windows.
 			}
 			if isKqueue() {
+				// Don't want to use os/user to check uid, since that pulls in
+				// cgo by default and stuff that uses fsnotify won't be
+				// statically linked by default.
 				t.Skip("needs root on BSD")
+			}
+			if isSolaris() {
+				t.Skip(`"mknod fails with "not owner"`)
 			}
 			touch(t, tmp, "file")
 			addWatch(t, w, tmp)
@@ -530,7 +535,7 @@ func TestWatchSymlink(t *testing.T) {
 				// kqueue.go does a lot of weird things with symlinks that I
 				// don't think are necessarily correct, but need to test a bit
 				// more.
-				t.Skip()
+				t.Skip("broken on macOS")
 			}
 
 			symlink(t, ".", tmp, "link")
@@ -554,7 +559,7 @@ func TestWatchSymlink(t *testing.T) {
 				// TODO: fix it; this seems a bit hard though; the entire way
 				//       kqueue backend deals with symlinks is meh, and need to
 				//       be careful not to break compatibility.
-				t.Skip("broken")
+				t.Skip("broken on kqueue")
 			}
 
 			touch(t, tmp, "file1")
@@ -585,10 +590,6 @@ func TestWatchSymlink(t *testing.T) {
 }
 
 func TestWatchAttrib(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("attributes don't work on Windows")
-	}
-
 	tests := []testCase{
 		{"chmod", func(t *testing.T, w *Watcher, tmp string) {
 			file := filepath.Join(tmp, "file")
@@ -598,6 +599,9 @@ func TestWatchAttrib(t *testing.T) {
 			chmod(t, 0o700, file)
 		}, `
 			CHMOD   "/file"
+
+			windows:
+				empty
 		`},
 
 		{"write does not trigger CHMOD", func(t *testing.T, w *Watcher, tmp string) {
@@ -606,11 +610,13 @@ func TestWatchAttrib(t *testing.T) {
 			cat(t, "data", file)
 			addWatch(t, w, file)
 			chmod(t, 0o700, file)
-
 			cat(t, "more data", file)
 		}, `
 			CHMOD   "/file"
 			WRITE   "/file"
+
+			windows:
+				write /file
 		`},
 
 		{"chmod after write", func(t *testing.T, w *Watcher, tmp string) {
@@ -625,6 +631,9 @@ func TestWatchAttrib(t *testing.T) {
 			CHMOD   "/file"
 			WRITE   "/file"
 			CHMOD   "/file"
+
+			windows:
+				write /file
 		`},
 	}
 
@@ -862,7 +871,7 @@ func TestClose(t *testing.T) {
 
 	t.Run("closes channels after read", func(t *testing.T) {
 		if runtime.GOOS == "netbsd" {
-			t.Skip("flaky") // TODO
+			t.Skip("flaky")
 		}
 
 		t.Parallel()
@@ -907,7 +916,7 @@ func TestClose(t *testing.T) {
 func TestAdd(t *testing.T) {
 	t.Run("permission denied", func(t *testing.T) {
 		if runtime.GOOS == "windows" {
-			t.Skip("attributes don't work on Windows")
+			t.Skip("chmod doesn't work on Windows") // See if we can make a file unreadable
 		}
 
 		t.Parallel()
@@ -1040,14 +1049,6 @@ func TestEventString(t *testing.T) {
 			}
 		})
 	}
-}
-
-func isKqueue() bool {
-	switch runtime.GOOS {
-	case "linux", "windows":
-		return false
-	}
-	return true
 }
 
 // Verify the watcher can keep up with file creations/deletions when under load.
@@ -1208,7 +1209,7 @@ func TestWatchStress(t *testing.T) {
 func TestWatchList(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		// TODO: probably should I guess...
-		t.Skip("WatchList has always beek broken on Windows and I don't feel like fixing it")
+		t.Skip("WatchList has always been broken on Windows and I don't feel like fixing it")
 	}
 
 	t.Parallel()

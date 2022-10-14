@@ -1,6 +1,3 @@
-//go:build !plan9
-// +build !plan9
-
 // Package fsnotify provides a cross-platform interface for file system
 // notifications.
 package fsnotify

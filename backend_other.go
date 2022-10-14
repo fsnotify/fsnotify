@@ -17,9 +17,12 @@ func NewWatcher() (*Watcher, error) {
 }
 
 // Close removes all watches and closes the events channel.
-func (w *Watcher) Close() error {
-	return nil
-}
+func (w *Watcher) Close() error { return nil }
+
+// WatchList returns all paths added with [Add] (and are not yet removed).
+//
+// Returns nil if [Watcher.Close] was called.
+func (w *Watcher) WatchList() []string { return nil }
 
 // Add starts monitoring the path for changes.
 //
@@ -53,9 +56,7 @@ func (w *Watcher) Close() error {
 //
 // Instead, watch the parent directory and use Event.Name to filter out files
 // you're not interested in. There is an example of this in [cmd/fsnotify/file.go].
-func (w *Watcher) Add(name string) error {
-	return nil
-}
+func (w *Watcher) Add(name string) error { return nil }
 
 // Remove stops monitoring the path for changes.
 //
@@ -63,6 +64,4 @@ func (w *Watcher) Add(name string) error {
 // /tmp/dir and /tmp/dir/subdir then you will need to remove both.
 //
 // Removing a path that has not yet been added returns [ErrNonExistentWatch].
-func (w *Watcher) Remove(name string) error {
-	return nil
-}
+func (w *Watcher) Remove(name string) error { return nil }

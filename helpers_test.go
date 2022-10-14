@@ -557,3 +557,19 @@ func isCI() bool {
 	_, ok := os.LookupEnv("CI")
 	return ok
 }
+
+func isKqueue() bool {
+	switch runtime.GOOS {
+	case "darwin", "freebsd", "openbsd", "netbsd", "dragonfly":
+		return true
+	}
+	return false
+}
+
+func isSolaris() bool {
+	switch runtime.GOOS {
+	case "illumos", "solaris":
+		return true
+	}
+	return false
+}
