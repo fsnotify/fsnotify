@@ -1242,10 +1242,15 @@ func TestWithEvents(t *testing.T) {
 
 	tests := []testCase{
 		{"create", func(t *testing.T, w *Watcher, tmp string) { do(t, w, tmp, Create) }, `create /file`},
-		{"chmod", func(t *testing.T, w *Watcher, tmp string) { do(t, w, tmp, Chmod) }, `chmod /file`},
 		{"write", func(t *testing.T, w *Watcher, tmp string) { do(t, w, tmp, Write) }, `write /file`},
 		{"remove", func(t *testing.T, w *Watcher, tmp string) { do(t, w, tmp, Remove) }, `remove /rename`},
+		// windows is RENAME /old + CREATE /new; this may actually make sense?
 		{"rename", func(t *testing.T, w *Watcher, tmp string) { do(t, w, tmp, Rename) }, `rename /file`},
+		{"chmod", func(t *testing.T, w *Watcher, tmp string) { do(t, w, tmp, Chmod) }, `
+			chmod /file
+			windows:
+				empty
+		`},
 	}
 	for _, tt := range tests {
 		tt := tt
