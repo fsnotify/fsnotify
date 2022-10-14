@@ -114,6 +114,12 @@ type Watcher struct {
 	Events chan Event
 
 	// Errors sends any errors.
+	//
+	// [ErrEventOverflow] is used to indicate ther are too many events:
+	//
+	//  - inotify: there are too many queued events (fs.inotify.max_queued_events sysctl)
+	//  - windows: The buffer size is too small; [WithBufferSize] can be used to increase it.
+	//  - kqueue, fen: not used.
 	Errors chan error
 
 	port  windows.Handle // Handle to completion port
@@ -665,7 +671,7 @@ func (w *Watcher) readEvents() {
 		var offset uint32
 		for {
 			if n == 0 {
-				w.sendError(errors.New("short read in readEvents()"))
+				w.sendError(ErrEventOverflow)
 				break
 			}
 

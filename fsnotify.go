@@ -40,8 +40,8 @@ const (
 // Common errors that can be reported by a watcher
 var (
 	ErrNonExistentWatch = errors.New("fsnotify: can't remove non-existent watcher")
-	ErrEventOverflow    = errors.New("fsnotify: queue overflow")
 	ErrClosed           = errors.New("fsnotify: watcher already closed")
+	ErrEventOverflow    = errors.New("fsnotify: queue or buffer overflow")
 )
 
 func (o Op) String() string {
@@ -101,7 +101,8 @@ func getOptions(opts ...addOpt) withOpts {
 // for other backends.
 //
 // The default value is 64K (65536 bytes) which should be enough for most
-// applications, but you can increase it if you're hitting "short read" errors.
+// applications, but you can increase it if you're hitting "queue or buffer
+// overflow" errors ([ErrEventOverflow]).
 func WithBufferSize(bytes int) addOpt {
 	return func(opt *withOpts) { opt.bufsize = bytes }
 }
