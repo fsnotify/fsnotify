@@ -21,11 +21,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   On Windows this does work, and remains working.
 
+- windows: don't listen for file attribute changes ([#520])
+
+  File attribute changes are sent as FILE_ACTION_MODIFIED by the Windows API,
+  with no way to see if they're a file write or attribute change, so would show
+  up as a fsnotify.Write event. This is never useful, and could result in many
+  spurious Write events.
+
 - all: return ErrClosed on Add() when the watcher is closed ([#516])
+
 
 [#371]: https://github.com/fsnotify/fsnotify/pull/371
 [#516]: https://github.com/fsnotify/fsnotify/pull/516
 [#518]: https://github.com/fsnotify/fsnotify/pull/518
+[#520]: https://github.com/fsnotify/fsnotify/pull/520
 
 ## [1.6.0] - 2022-10-13
 
