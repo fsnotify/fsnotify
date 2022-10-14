@@ -1,5 +1,12 @@
 // Package fsnotify provides a cross-platform interface for file system
 // notifications.
+//
+// Currently supported systems:
+//
+//    Linux 2.6.32+    via inotify
+//    BSD, macOS       via kqueue
+//    Windows          via ReadDirectoryChangesW
+//    illumos          via FEN
 package fsnotify
 
 import (
@@ -37,7 +44,7 @@ const (
 	Chmod
 )
 
-// Common errors that can be reported by a watcher
+// Common errors that can be reported.
 var (
 	ErrNonExistentWatch = errors.New("fsnotify: can't remove non-existent watcher")
 	ErrEventOverflow    = errors.New("fsnotify: queue overflow")

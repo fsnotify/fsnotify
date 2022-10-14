@@ -4,24 +4,20 @@ Windows, Linux, macOS, BSD, and illumos.
 Go 1.16 or newer is required; the full documentation is at
 https://pkg.go.dev/github.com/fsnotify/fsnotify
 
-**It's best to read the documentation at pkg.go.dev, as it's pinned to the last
-released version, whereas this README is for the last development version which
-may include additions/changes.**
-
 ---
 
 Platform support:
 
-| Adapter               | OS             | Status                                                       |
-| --------------------- | -------------- | ------------------------------------------------------------ |
+| Backend               | OS             | Status                                                       |
+| :-------------------- | :------------- | :----------------------------------------------------------- |
 | inotify               | Linux 2.6.32+  | Supported                                                    |
 | kqueue                | BSD, macOS     | Supported                                                    |
 | ReadDirectoryChangesW | Windows        | Supported                                                    |
 | FEN                   | illumos        | Supported in main branch                                     |
-| FSEvents              | macOS          | [Planned](https://github.com/fsnotify/fsnotify/issues/11)    |
-| fanotify              | Linux 5.9+     | [Maybe](https://github.com/fsnotify/fsnotify/issues/114)     |
+| FSEvents              | macOS          | [Not yet](https://github.com/fsnotify/fsnotify/issues/11)    |
+| fanotify              | Linux 5.9+     | [Not yet](https://github.com/fsnotify/fsnotify/issues/114)   |
 | USN Journals          | Windows        | [Maybe](https://github.com/fsnotify/fsnotify/issues/53)      |
-| Polling               | *All*          | [Maybe](https://github.com/fsnotify/fsnotify/issues/9)       |
+| Polling               | *All*          | [Not yet](https://github.com/fsnotify/fsnotify/issues/9)     |
 
 Linux, macOS, and illumos should include Android, iOS, and Solaris, but these
 are currently untested.
