@@ -588,6 +588,35 @@ func TestWatchSymlink(t *testing.T) {
 				create    /link
 				write     /link
 		`},
+
+		// Bug #277
+		{"277", func(t *testing.T, w *Watcher, tmp string) {
+			if isKqueue() {
+				// TODO: fix it; this seems a bit hard though; the entire way
+				//       kqueue backend deals with symlinks is meh, and need to
+				//       be careful not to break compatibility.
+				t.Skip("broken")
+			}
+
+			touch(t, tmp, "file1")
+			touch(t, tmp, "file2")
+			symlink(t, filepath.Join(tmp, "file1"), tmp, "link1")
+			symlink(t, filepath.Join(tmp, "file2"), tmp, "link2")
+
+			addWatch(t, w, tmp)
+			touch(t, tmp, "foo")
+			rm(t, tmp, "foo")
+			mkdir(t, tmp, "apple")
+			mv(t, filepath.Join(tmp, "apple"), tmp, "pear")
+			rmAll(t, tmp, "pear")
+		}, `
+			create   /foo     # touch foo
+			remove   /foo     # rm foo
+			create   /apple   # mkdir apple
+			rename   /apple   # mv apple pear
+			create   /pear
+			remove   /pear    # rm -r pear
+		`},
 	}
 
 	for _, tt := range tests {
