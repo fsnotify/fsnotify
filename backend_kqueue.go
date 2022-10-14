@@ -295,7 +295,7 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 	w.mu.Lock()
 	w.userWatches[name] = struct{}{}
 	w.mu.Unlock()
-	_, err := w.addWatch(name, eventFlags(with.events))
+	_, err = w.addWatch(name, eventFlags(with.events))
 	return err
 }
 
@@ -382,9 +382,9 @@ func (w *Watcher) WatchList() []string {
 	return entries
 }
 
-func eventFlags(event Op) int {
-	var flags int
-	if with.events.Has(Create) {
+func eventFlags(events Op) uint32 {
+	var flags uint32
+	if events.Has(Create) {
 		// No NOTE_ for this; we diff the directory contents on directory
 		// NOTE_WRITE.
 		//
@@ -392,17 +392,17 @@ func eventFlags(event Op) int {
 		//       add NOTE_WRITE on directories and then filter that out later if
 		//       Write isn't in the event list.
 	}
-	if with.events.Has(Write) {
+	if events.Has(Write) {
 		flags |= unix.NOTE_WRITE
 	}
-	if with.events.Has(Remove) {
+	if events.Has(Remove) {
 		flags |= unix.NOTE_DELETE
 	}
-	if with.events.Has(Rename) {
-		flags |= unox.NOTE_RENAME
+	if events.Has(Rename) {
+		flags |= unix.NOTE_RENAME
 	}
-	if with.events.Has(Chmod) {
-		flags |= unox.NOTE_ATTRIB
+	if events.Has(Chmod) {
+		flags |= unix.NOTE_ATTRIB
 	}
 	return flags
 }

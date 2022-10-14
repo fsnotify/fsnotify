@@ -251,7 +251,7 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 		return err
 	}
 
-	var flags int
+	var flags uint32
 	if with.events.Has(Create) {
 		flags |= sysFSCREATE
 	}

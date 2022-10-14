@@ -258,7 +258,7 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 
 	// Associate all files in the directory.
 	if stat.IsDir() {
-		err := w.handleDirectory(name, stat, true, w.associateFile, with.events)
+		err := w.handleDirectory(name, stat, true, with.events, w.associateFile)
 		if err != nil {
 			return err
 		}
@@ -309,7 +309,7 @@ func (w *Watcher) Remove(name string) error {
 
 	// Remove associations for every file in the directory.
 	if stat.IsDir() {
-		err := w.handleDirectory(name, stat, false, w.dissociateFile)
+		err := w.handleDirectory(name, stat, false, 0, w.dissociateFile)
 		if err != nil {
 			return err
 		}
@@ -371,7 +371,13 @@ func (w *Watcher) readEvents() {
 	}
 }
 
-func (w *Watcher) handleDirectory(path string, stat os.FileInfo, follow bool, handler func(string, os.FileInfo, bool) error) error {
+func (w *Watcher) handleDirectory(
+	path string,
+	stat os.FileInfo,
+	follow bool,
+	events Op,
+	handler func(string, os.FileInfo, bool, Op) error,
+) error {
 	files, err := os.ReadDir(path)
 	if err != nil {
 		return err
@@ -383,14 +389,14 @@ func (w *Watcher) handleDirectory(path string, stat os.FileInfo, follow bool, ha
 		if err != nil {
 			return err
 		}
-		err = handler(filepath.Join(path, finfo.Name()), finfo, false)
+		err = handler(filepath.Join(path, finfo.Name()), finfo, false, events)
 		if err != nil {
 			return err
 		}
 	}
 
 	// And finally handle the directory itself.
-	return handler(path, stat, follow)
+	return handler(path, stat, follow, events)
 }
 
 // handleEvent might need to emit more than one fsnotify event if the events
@@ -523,7 +529,7 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 	if stat != nil {
 		// If we get here, it means we've hit an event above that requires us to
 		// continue watching the file or directory
-		return w.associateFile(path, stat, isWatched, watch)
+		return w.associateFile(path, stat, isWatched, watch.events)
 	}
 	return nil
 }
@@ -588,20 +594,20 @@ func (w *Watcher) associateFile(path string, stat os.FileInfo, follow bool, even
 		}
 	}
 
-	var events int
+	var flags int
 	if events.Has(Create) {
 		// No flag.
 	}
 	if events.Has(Write) {
-		events |= unix.FILE_MODIFIED
+		flags |= unix.FILE_MODIFIED
 	}
 	if events.Has(Remove) {
 		// Wasn't added before?
-		// events |= FILE_DELETE
+		// flags |= FILE_DELETE
 	}
 	if events.Has(Rename) {
 		// Wasn't added before?
-		//events |= unix.FILE_RENAME_TO|unix.FILE_RENAME_FROM
+		//flags |= unix.FILE_RENAME_TO|unix.FILE_RENAME_FROM
 	}
 	if events.Has(Chmod) {
 		flags |= unix.FILE_ATTRIB
@@ -609,16 +615,14 @@ func (w *Watcher) associateFile(path string, stat os.FileInfo, follow bool, even
 
 	// FILE_NOFOLLOW means we watch symlinks themselves rather than their
 	// targets; only follow symlinks for explicitly watched entries.
-	if !folow {
-		events |= unix.FILE_NOFOLLOW
+	if !follow {
+		flags |= unix.FILE_NOFOLLOW
 	}
 
-	return w.port.AssociatePath(path, stat,
-		events,
-		stat.Mode())
+	return w.port.AssociatePath(path, stat, flags, stat.Mode())
 }
 
-func (w *Watcher) dissociateFile(path string, stat os.FileInfo, unused bool) error {
+func (w *Watcher) dissociateFile(path string, stat os.FileInfo, unused bool, _ Op) error {
 	if !w.port.PathIsWatched(path) {
 		return nil
 	}
