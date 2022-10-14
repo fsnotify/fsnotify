@@ -120,8 +120,8 @@ type Watcher struct {
 	fd          int
 	mu          sync.Mutex // Map access
 	inotifyFile *os.File
-	watches     map[string]*watch // Map of inotify watches (key: path)
-	paths       map[int]string    // Map of watched paths (key: watch descriptor)
+	watches     map[string]*watch // Map of inotify watches (path → watch)
+	paths       map[int]string    // Map of watched paths (watch descriptor → path)
 	done        chan struct{}     // Channel for sending a "quit message" to the reader goroutine
 	doneResp    chan struct{}     // Channel to respond to Close
 }
@@ -209,11 +209,11 @@ func (w *Watcher) Close() error {
 //
 // A path can only be watched once; attempting to watch it more than once will
 // return an error. Paths that do not yet exist on the filesystem cannot be
-// added. A watch will be automatically removed if the path is deleted.
+// added.
 //
-// A path will remain watched if it gets renamed to somewhere else on the same
-// filesystem, but the monitor will get removed if the path gets deleted and
-// re-created, or if it's moved to a different filesystem.
+// A watch will be automatically removed if the watched path is deleted or
+// renamed. The exception is the Windows backend, which doesn't remove the
+// watcher on renames.
 //
 // Notifications on network filesystems (NFS, SMB, FUSE, etc.) or special
 // filesystems (/proc, /sys, etc.) generally don't work.
@@ -285,25 +285,20 @@ func (w *Watcher) Remove(name string) error {
 	// Fetch the watch.
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	watch, ok := w.watches[name]
 
-	// Remove it from inotify.
+	watch, ok := w.watches[name]
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrNonExistentWatch, name)
 	}
 
-	// We successfully removed the watch if InotifyRmWatch doesn't return an
-	// error, we need to clean up our internal state to ensure it matches
-	// inotify's kernel state.
+	return w.remove(name, watch)
+}
+
+// Unlocked!
+func (w *Watcher) remove(name string, watch *watch) error {
 	delete(w.paths, int(watch.wd))
 	delete(w.watches, name)
 
-	// inotify_rm_watch will return EINVAL if the file has been deleted;
-	// the inotify will already have been removed.
-	// watches and pathes are deleted in ignoreLinux() implicitly and asynchronously
-	// by calling inotify_rm_watch() below. e.g. readEvents() goroutine receives IN_IGNORE
-	// so that EINVAL means that the wd is being rm_watch()ed or its file removed
-	// by another thread and we have not received IN_IGNORE event.
 	success, errno := unix.InotifyRmWatch(w.fd, watch.wd)
 	if success == -1 {
 		// TODO: Perhaps it's not helpful to return an error here in every case;
@@ -318,7 +313,6 @@ func (w *Watcher) Remove(name string) error {
 		//         are watching is deleted.
 		return errno
 	}
-
 	return nil
 }
 
@@ -417,13 +411,22 @@ func (w *Watcher) readEvents() {
 			// the "paths" map.
 			w.mu.Lock()
 			name, ok := w.paths[int(raw.Wd)]
-			// IN_DELETE_SELF occurs when the file/directory being watched is removed.
-			// This is a sign to clean up the maps, otherwise we are no longer in sync
-			// with the inotify kernel state which has already deleted the watch
-			// automatically.
+			// inotify will automatically remove the watch on deletes; just need
+			// to clean our state here.
 			if ok && mask&unix.IN_DELETE_SELF == unix.IN_DELETE_SELF {
 				delete(w.paths, int(raw.Wd))
 				delete(w.watches, name)
+			}
+			// We can't really update the state when a watched path is moved;
+			// only IN_MOVE_SELF is sent and not IN_MOVED_{FROM,TO}. So remove
+			// the watch.
+			if ok && mask&unix.IN_MOVE_SELF == unix.IN_MOVE_SELF {
+				err := w.remove(name, w.watches[name])
+				if err != nil {
+					if !w.sendError(err) {
+						return
+					}
+				}
 			}
 			w.mu.Unlock()
 

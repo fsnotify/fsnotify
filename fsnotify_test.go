@@ -444,8 +444,6 @@ func TestWatchRename(t *testing.T) {
 		`},
 
 		{"rename watched directory", func(t *testing.T, w *Watcher, tmp string) {
-			addWatch(t, w, tmp)
-
 			dir := filepath.Join(tmp, "dir")
 			mkdir(t, dir)
 			addWatch(t, w, dir)
@@ -453,29 +451,14 @@ func TestWatchRename(t *testing.T) {
 			mv(t, dir, tmp, "dir-renamed")
 			touch(t, tmp, "dir-renamed/file")
 		}, `
-			CREATE   "/dir"           # mkdir
-			RENAME   "/dir"           # mv
-			CREATE   "/dir-renamed"
-			RENAME   "/dir"
-			CREATE   "/dir/file"      # touch
+			rename   /dir
 
-			windows:
-				CREATE       "/dir"                 # mkdir
-				RENAME       "/dir"                 # mv
-				CREATE       "/dir-renamed"
-				CREATE       "/dir-renamed/file"    # touch
-
-			# TODO: no results for the touch; this is probably a bug; windows
-			# was fixed in #370.
 			kqueue:
-				CREATE               "/dir"           # mkdir
-				CREATE               "/dir-renamed"   # mv
-				REMOVE|RENAME        "/dir"
-			fen:
-				CREATE       "/dir"                 # mkdir
-				RENAME       "/dir"                 # mv
-				CREATE       "/dir-renamed"
-				WRITE        "/dir-renamed"         # touch
+				remove|rename /dir
+
+			# TODO(v2): Windows should behave the same by default. See #518
+			windows:
+				create   /dir/file
 		`},
 
 		{"rename watched file", func(t *testing.T, w *Watcher, tmp string) {
@@ -488,19 +471,12 @@ func TestWatchRename(t *testing.T) {
 			mv(t, file, rename)
 			mv(t, rename, tmp, "rename-two")
 		}, `
-			# TODO: this should update the path. And even then, not clear what
-			# go renamed to what.
-			rename /file  # mv file rename
-			rename /file  # mv rename rename-two
+			rename     /file
 
-			# TODO: seems to lose the watch?
-			kqueue, fen:
-				rename     /file
-
-			# It's actually more correct on Windows.
+			# TODO(v2): Windows should behave the same by default. See #518
 			windows:
-				rename     /file
-				rename     /rename-one
+				rename   /file
+				rename   /rename-one
 		`},
 
 		{"re-add renamed file", func(t *testing.T, w *Watcher, tmp string) {
@@ -517,19 +493,14 @@ func TestWatchRename(t *testing.T) {
 			cat(t, "hello", file)
 		}, `
 			rename /file    # mv file rename
-			write  /rename  # cat hello >rename
+			                # Watcher gets removed on rename, so no write for /rename
 			write  /file    # cat hello >file
 
-			# TODO: wrong.
-			linux:
-			    RENAME     "/file"
-			    WRITE      "/file"
-			    WRITE      ""
-
-			# TODO: wrong.
-			kqueue, fen:
-			   RENAME      "/file"
-			   WRITE       "/file"
+			# TODO(v2): Windows should behave the same by default. See #518
+			windows:
+				rename    /file
+				write     /rename
+				write     /file
 		`},
 	}
 

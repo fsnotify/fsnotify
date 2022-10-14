@@ -13,10 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changes and fixes
 
+- inotify: remove watcher if a watched path is renamed ([#518])
+
+  After a rename the reported name wasn't updated, or even an empty string.
+  Inotify doesn't provide any good facilities to update it, so just remove the
+  watcher. This is already how it worked on kqueue and FEN.
+
+  On Windows this does work, and remains working.
+
 - all: return ErrClosed on Add() when the watcher is closed ([#516])
 
 [#371]: https://github.com/fsnotify/fsnotify/pull/371
 [#516]: https://github.com/fsnotify/fsnotify/pull/516
+[#518]: https://github.com/fsnotify/fsnotify/pull/518
 
 ## [1.6.0] - 2022-10-13
 
