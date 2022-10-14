@@ -198,6 +198,8 @@ func (w *Watcher) Close() error {
 //
 // Returns [ErrClosed] if [Watcher.Close] was called.
 //
+// See [AddWith] for a version that allows adding options.
+//
 // # Watching directories
 //
 // All files in a directory are monitored, including new files that are created
@@ -215,13 +217,24 @@ func (w *Watcher) Close() error {
 //
 // Instead, watch the parent directory and use Event.Name to filter out files
 // you're not interested in. There is an example of this in [cmd/fsnotify/file.go].
-func (w *Watcher) Add(name string) error {
+func (w *Watcher) Add(name string) error { return w.AddWith(name) }
+
+// AddWith is like [Add], but has the possibility to add options. When using
+// Add() the defaults described below are used.
+//
+// Possible options are:
+//
+//   - [WithBufferSize] sets the buffer size for the Windows backend; no-op on
+//     other platforms. The default is 64K (65536 bytes).
+func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 	if w.isClosed() {
 		return ErrClosed
 	}
 	if w.port.PathIsWatched(name) {
 		return nil
 	}
+
+	_ = getOptions(opts...)
 
 	// Currently we resolve symlinks that were explicitly requested to be
 	// watched. Otherwise we would use LStat here.
