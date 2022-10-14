@@ -120,9 +120,13 @@ type Watcher struct {
 
 	mu      sync.Mutex
 	port    *unix.EventPort
-	done    chan struct{}       // Channel for sending a "quit message" to the reader goroutine
-	dirs    map[string]struct{} // Explicitly watched directories
-	watches map[string]struct{} // Explicitly watched non-directories
+	done    chan struct{}    // Channel for sending a "quit message" to the reader goroutine
+	dirs    map[string]watch // Explicitly watched directories
+	watches map[string]watch // Explicitly watched non-directories
+}
+
+type watch struct {
+	events Op
 }
 
 // NewWatcher creates a new Watcher.
@@ -130,8 +134,8 @@ func NewWatcher() (*Watcher, error) {
 	w := &Watcher{
 		Events:  make(chan Event),
 		Errors:  make(chan error),
-		dirs:    make(map[string]struct{}),
-		watches: make(map[string]struct{}),
+		dirs:    make(map[string]watch),
+		watches: make(map[string]watch),
 		done:    make(chan struct{}),
 	}
 
@@ -240,7 +244,10 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 		return nil
 	}
 
-	_ = getOptions(opts...)
+	with, err := getOptions(opts...)
+	if err != nil {
+		return err
+	}
 
 	// Currently we resolve symlinks that were explicitly requested to be
 	// watched. Otherwise we would use LStat here.
@@ -251,24 +258,24 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 
 	// Associate all files in the directory.
 	if stat.IsDir() {
-		err := w.handleDirectory(name, stat, true, w.associateFile)
+		err := w.handleDirectory(name, stat, true, w.associateFile, with.events)
 		if err != nil {
 			return err
 		}
 
 		w.mu.Lock()
-		w.dirs[name] = struct{}{}
+		w.dirs[name] = watch{events: with.events}
 		w.mu.Unlock()
 		return nil
 	}
 
-	err = w.associateFile(name, stat, true)
+	err = w.associateFile(name, stat, true, with.events)
 	if err != nil {
 		return err
 	}
 
 	w.mu.Lock()
-	w.watches[name] = struct{}{}
+	w.watches[name] = watch{events: with.events}
 	w.mu.Unlock()
 	return nil
 }
@@ -386,11 +393,10 @@ func (w *Watcher) handleDirectory(path string, stat os.FileInfo, follow bool, ha
 	return handler(path, stat, follow)
 }
 
-// handleEvent might need to emit more than one fsnotify event
-// if the events bitmap matches more than one event type
-// (e.g. the file was both modified and had the
-// attributes changed between when the association
-// was created and the when event was returned)
+// handleEvent might need to emit more than one fsnotify event if the events
+// bitmap matches more than one event type (e.g. the file was both modified and
+// had the attributes changed between when the association was created and the
+// when event was returned)
 func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 	var (
 		events     = event.Events
@@ -400,10 +406,17 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 	)
 
 	w.mu.Lock()
-	_, watchedDir := w.dirs[path]
-	_, watchedPath := w.watches[path]
+	watch, watchedDir := w.dirs[path]
+	var watchedPath bool
+	if !watchedDir {
+		watch, watchedPath = w.watches[path]
+	}
 	w.mu.Unlock()
 	isWatched := watchedDir || watchedPath
+
+	// TODO: probably want to filter some things based on WithEvents()
+	//       (watch.events) here; there don't seem to be flags in FEN to control
+	//       all of them.
 
 	if events&unix.FILE_DELETE != 0 {
 		if !w.sendEvent(path, Remove) {
@@ -510,7 +523,7 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 	if stat != nil {
 		// If we get here, it means we've hit an event above that requires us to
 		// continue watching the file or directory
-		return w.associateFile(path, stat, isWatched)
+		return w.associateFile(path, stat, isWatched, watch)
 	}
 	return nil
 }
@@ -524,6 +537,8 @@ func (w *Watcher) updateDirectory(path string) error {
 		return err
 	}
 
+	watch := w.dirs[path]
+
 	for _, entry := range files {
 		path := filepath.Join(path, entry.Name())
 		if w.port.PathIsWatched(path) {
@@ -534,7 +549,7 @@ func (w *Watcher) updateDirectory(path string) error {
 		if err != nil {
 			return err
 		}
-		err = w.associateFile(path, finfo, false)
+		err = w.associateFile(path, finfo, false, watch.events)
 		if err != nil {
 			if !w.sendError(err) {
 				return nil
@@ -547,7 +562,7 @@ func (w *Watcher) updateDirectory(path string) error {
 	return nil
 }
 
-func (w *Watcher) associateFile(path string, stat os.FileInfo, follow bool) error {
+func (w *Watcher) associateFile(path string, stat os.FileInfo, follow bool, events Op) error {
 	if w.isClosed() {
 		return ErrClosed
 	}
@@ -572,12 +587,32 @@ func (w *Watcher) associateFile(path string, stat os.FileInfo, follow bool) erro
 			return err
 		}
 	}
-	// FILE_NOFOLLOW means we watch symlinks themselves rather than their targets
-	events := unix.FILE_MODIFIED | unix.FILE_ATTRIB | unix.FILE_NOFOLLOW
-	if follow {
-		// We *DO* follow symlinks for explicitly watched entries
-		events = unix.FILE_MODIFIED | unix.FILE_ATTRIB
+
+	var events int
+	if events.Has(Create) {
+		// No flag.
 	}
+	if events.Has(Write) {
+		events |= unix.FILE_MODIFIED
+	}
+	if events.Has(Remove) {
+		// Wasn't added before?
+		// events |= FILE_DELETE
+	}
+	if events.Has(Rename) {
+		// Wasn't added before?
+		//events |= unix.FILE_RENAME_TO|unix.FILE_RENAME_FROM
+	}
+	if events.Has(Chmod) {
+		flags |= unix.FILE_ATTRIB
+	}
+
+	// FILE_NOFOLLOW means we watch symlinks themselves rather than their
+	// targets; only follow symlinks for explicitly watched entries.
+	if !folow {
+		events |= unix.FILE_NOFOLLOW
+	}
+
 	return w.port.AssociatePath(path, stat,
 		events,
 		stat.Mode())

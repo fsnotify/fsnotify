@@ -1227,3 +1227,28 @@ func TestWatchList(t *testing.T) {
 		t.Errorf("\nhave: %s\nwant: %s", have, want)
 	}
 }
+
+func TestWithEvents(t *testing.T) {
+	do := func(t *testing.T, w *Watcher, tmp string, event Op) {
+		w.AddWith(tmp, WithEvents(event))
+
+		touch(t, tmp, "file")
+		chmod(t, 0o777, tmp, "file")
+		cat(t, "hello", tmp, "file")
+
+		mv(t, filepath.Join(tmp, "file"), tmp, "rename")
+		rm(t, tmp, "rename")
+	}
+
+	tests := []testCase{
+		{"create", func(t *testing.T, w *Watcher, tmp string) { do(t, w, tmp, Create) }, `create /file`},
+		{"chmod", func(t *testing.T, w *Watcher, tmp string) { do(t, w, tmp, Chmod) }, `chmod /file`},
+		{"write", func(t *testing.T, w *Watcher, tmp string) { do(t, w, tmp, Write) }, `write /file`},
+		{"remove", func(t *testing.T, w *Watcher, tmp string) { do(t, w, tmp, Remove) }, `remove /rename`},
+		{"rename", func(t *testing.T, w *Watcher, tmp string) { do(t, w, tmp, Rename) }, `rename /file`},
+	}
+	for _, tt := range tests {
+		tt := tt
+		tt.run(t)
+	}
+}

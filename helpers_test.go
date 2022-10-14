@@ -44,13 +44,17 @@ func waitForEvents()  { time.Sleep(500 * time.Millisecond) }
 
 // newWatcher initializes an fsnotify Watcher instance.
 func newWatcher(t *testing.T, add ...string) *Watcher {
+	return newWatcherWith(t, nil, add...)
+}
+
+func newWatcherWith(t *testing.T, opt []addOpt, add ...string) *Watcher {
 	t.Helper()
 	w, err := NewWatcher()
 	if err != nil {
 		t.Fatalf("newWatcher: %s", err)
 	}
 	for _, a := range add {
-		err := w.Add(a)
+		err := w.AddWith(a, opt...)
 		if err != nil {
 			t.Fatalf("newWatcher: add %q: %s", a, err)
 		}
@@ -327,8 +331,12 @@ type eventCollector struct {
 }
 
 func newCollector(t *testing.T, add ...string) *eventCollector {
+	return newCollectorWith(t, nil, add...)
+}
+
+func newCollectorWith(t *testing.T, opts []addOpt, add ...string) *eventCollector {
 	return &eventCollector{
-		w:    newWatcher(t, add...),
+		w:    newWatcherWith(t, opts, add...),
 		done: make(chan struct{}),
 		e:    make(Events, 0, 8),
 	}

@@ -35,6 +35,9 @@ const (
 	Remove
 	Rename
 	Chmod
+
+	// All supported events.
+	All = Create | Write | Remove | Rename | Chmod
 )
 
 // Common errors that can be reported by a watcher
@@ -82,19 +85,32 @@ type (
 	addOpt   func(opt *withOpts)
 	withOpts struct {
 		bufsize int
+		events  Op
 	}
 )
 
 var defaultOpts = withOpts{
 	bufsize: 65536, // 64K
+	events:  Create | Write | Remove | Rename | Chmod,
 }
 
-func getOptions(opts ...addOpt) withOpts {
+func getOptions(opts ...addOpt) (withOpts, error) {
 	with := defaultOpts
 	for _, o := range opts {
 		o(&with)
 	}
-	return with
+
+	if with.bufsize < 4096 {
+		return with, fmt.Errorf("fsnotify.WithBufferSize: buffer size cannot be smaller than 4096 bytes")
+	}
+	if with.events == 0 {
+		return with, fmt.Errorf("fsnotify.WithEvents: events is 0")
+	}
+	if m := with.events & All; m == 0 {
+		return with, fmt.Errorf("fsnotify.WithEvents: events contains unknown values: %x", m)
+	}
+
+	return with, nil
 }
 
 // WithBufferSize sets the buffer size for the Windows backend. This is a no-op
@@ -105,4 +121,11 @@ func getOptions(opts ...addOpt) withOpts {
 // overflow" errors ([ErrEventOverflow]).
 func WithBufferSize(bytes int) addOpt {
 	return func(opt *withOpts) { opt.bufsize = bytes }
+}
+
+// WithEvents controls which events to monitor.
+//
+// The default is Create | Write | Remove | Rename | Chmod.
+func WithEvents(op Op) addOpt {
+	return func(opt *withOpts) { opt.events = op }
 }

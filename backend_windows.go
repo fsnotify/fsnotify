@@ -246,15 +246,29 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 		return ErrClosed
 	}
 
-	with := getOptions(opts...)
-	if with.bufsize < 4096 {
-		return fmt.Errorf("fsnotify.WithBufferSize: buffer size cannot be smaller than 4096 bytes")
+	with, err := getOptions(opts...)
+	if err != nil {
+		return err
+	}
+
+	var flags int
+	if with.events.Has(Create) {
+		flags |= sysFSCREATE
+	}
+	if with.events.Has(Write) {
+		flags |= sysFSMODIFY
+	}
+	if with.events.Has(Remove) {
+		flags |= sysFSDELETE | sysFSDELETESELF
+	}
+	if with.events.Has(Rename) {
+		flags |= sysFSMOVE | sysFSMOVEDFROM | sysFSMOVEDTO | sysFSMOVESELF
 	}
 
 	in := &input{
 		op:      opAddWatch,
 		path:    filepath.Clean(name),
-		flags:   sysFSALLEVENTS,
+		flags:   flags,
 		reply:   make(chan error),
 		bufsize: with.bufsize,
 	}
@@ -320,10 +334,10 @@ const (
 	sysFSCREATE     = 0x100
 	sysFSDELETE     = 0x200
 	sysFSDELETESELF = 0x400
-	sysFSMODIFY     = 0x2
-	sysFSMOVE       = 0xc0
-	sysFSMOVEDFROM  = 0x40
-	sysFSMOVEDTO    = 0x80
+	sysFSMODIFY     = 0x002
+	sysFSMOVE       = 0x0c0
+	sysFSMOVEDFROM  = 0x040
+	sysFSMOVEDTO    = 0x080
 	sysFSMOVESELF   = 0x800
 	sysFSIGNORED    = 0x8000
 )

@@ -287,12 +287,15 @@ func (w *Watcher) Add(name string) error { return w.AddWith(name) }
 //   - [WithBufferSize] sets the buffer size for the Windows backend; no-op on
 //     other platforms. The default is 64K (65536 bytes).
 func (w *Watcher) AddWith(name string, opts ...addOpt) error {
-	_ = getOptions(opts...)
+	with, err := getOptions(opts...)
+	if err != nil {
+		return err
+	}
 
 	w.mu.Lock()
 	w.userWatches[name] = struct{}{}
 	w.mu.Unlock()
-	_, err := w.addWatch(name, noteAllEvents)
+	_, err := w.addWatch(name, eventFlags(with.events))
 	return err
 }
 
@@ -379,8 +382,30 @@ func (w *Watcher) WatchList() []string {
 	return entries
 }
 
-// Watch all events (except NOTE_EXTEND, NOTE_LINK, NOTE_REVOKE)
-const noteAllEvents = unix.NOTE_DELETE | unix.NOTE_WRITE | unix.NOTE_ATTRIB | unix.NOTE_RENAME
+func eventFlags(event Op) int {
+	var flags int
+	if with.events.Has(Create) {
+		// No NOTE_ for this; we diff the directory contents on directory
+		// NOTE_WRITE.
+		//
+		// TODO: This also means that these flags are probably wrong: want to
+		//       add NOTE_WRITE on directories and then filter that out later if
+		//       Write isn't in the event list.
+	}
+	if with.events.Has(Write) {
+		flags |= unix.NOTE_WRITE
+	}
+	if with.events.Has(Remove) {
+		flags |= unix.NOTE_DELETE
+	}
+	if with.events.Has(Rename) {
+		flags |= unox.NOTE_RENAME
+	}
+	if with.events.Has(Chmod) {
+		flags |= unox.NOTE_ATTRIB
+	}
+	return flags
+}
 
 // addWatch adds name to the watched file set.
 // The flags are interpreted as described in kevent(2).
@@ -675,6 +700,7 @@ func (w *Watcher) sendFileCreatedEventIfNew(filePath string, fileInfo os.FileInf
 	_, doesExist := w.fileExists[filePath]
 	w.mu.Unlock()
 	if !doesExist {
+		// TODO: don't do if WithEvents() doesn't include Create
 		if !w.sendEvent(Event{Name: filePath, Op: Create}) {
 			return
 		}
@@ -705,8 +731,9 @@ func (w *Watcher) internalWatch(name string, fileInfo os.FileInfo) (string, erro
 		return w.addWatch(name, flags)
 	}
 
-	// watch file to mimic Linux inotify
-	return w.addWatch(name, noteAllEvents)
+	// Watch file
+	// TODO: pass events correctly here
+	return w.addWatch(name, eventFlags(All))
 }
 
 // Register events with the queue.

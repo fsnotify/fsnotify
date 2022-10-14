@@ -260,11 +260,30 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 	}
 
 	name = filepath.Clean(name)
-	_ = getOptions(opts...)
+	with, err := getOptions(opts...)
+	if err != nil {
+		return err
+	}
 
-	var flags uint32 = unix.IN_MOVED_TO | unix.IN_MOVED_FROM |
-		unix.IN_CREATE | unix.IN_ATTRIB | unix.IN_MODIFY |
-		unix.IN_MOVE_SELF | unix.IN_DELETE | unix.IN_DELETE_SELF
+	var flags uint32
+	if with.events.Has(Create) {
+		flags |= unix.IN_CREATE
+	}
+	if with.events.Has(Write) {
+		flags |= unix.IN_MODIFY
+	}
+	if with.events.Has(Remove) {
+		flags |= unix.IN_DELETE | unix.IN_DELETE_SELF
+	}
+	if with.events.Has(Rename) {
+		flags |= unix.IN_MOVED_FROM | unix.IN_MOVE_SELF
+	}
+	if with.events.Has(Rename) && with.events.Has(Create) {
+		flags |= unix.IN_MOVED_TO
+	}
+	if with.events.Has(Chmod) {
+		flags |= unix.IN_ATTRIB
+	}
 
 	w.mu.Lock()
 	defer w.mu.Unlock()

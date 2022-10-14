@@ -66,7 +66,6 @@ func TestWindowsNoAttributeChanges(t *testing.T) {
 	}
 }
 
-// TODO: write test which makes sure the buffer size is set correctly.
 func TestWindowsWithBufferSize(t *testing.T) {
 	getWatch := func(opts ...addOpt) (*watch, error) {
 		w, err := NewWatcher()
