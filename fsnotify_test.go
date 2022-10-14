@@ -252,20 +252,12 @@ func TestWatchCreate(t *testing.T) {
 			symlink(t, filepath.Join(tmp, "file"), tmp, "link")
 		}, `
 			create  /link
-
-			windows:
-				create   /link
-				write    /link
 		`},
 		{"create new symlink to directory", func(t *testing.T, w *Watcher, tmp string) {
 			addWatch(t, w, tmp)
 			symlink(t, tmp, tmp, "link")
 		}, `
 			create  /link
-
-			windows:
-				create  /link
-				write  /link
 		`},
 
 		// FIFO
@@ -518,10 +510,6 @@ func TestWatchSymlink(t *testing.T) {
 			symlink(t, filepath.Join(tmp, "target"), tmp, "link")
 		}, `
 			create /link
-
-			windows:
-				create    /link
-				write     /link
 
 			# No events at all on Dragonfly
 			# TODO: should fix this.
