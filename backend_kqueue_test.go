@@ -5,7 +5,6 @@ package fsnotify
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -13,8 +12,8 @@ import (
 func TestRemoveState(t *testing.T) {
 	var (
 		tmp  = t.TempDir()
-		dir  = filepath.Join(tmp, "dir")
-		file = filepath.Join(dir, "file")
+		dir  = join(tmp, "dir")
+		file = join(dir, "file")
 	)
 	mkdir(t, dir)
 	touch(t, file)

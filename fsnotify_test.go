@@ -28,7 +28,7 @@ func init() {
 func TestWatch(t *testing.T) {
 	tests := []testCase{
 		{"multiple creates", func(t *testing.T, w *Watcher, tmp string) {
-			file := filepath.Join(tmp, "file")
+			file := join(tmp, "file")
 			addWatch(t, w, tmp)
 
 			cat(t, "data", file)
@@ -47,8 +47,8 @@ func TestWatch(t *testing.T) {
 		`},
 
 		{"dir only", func(t *testing.T, w *Watcher, tmp string) {
-			beforeWatch := filepath.Join(tmp, "beforewatch")
-			file := filepath.Join(tmp, "file")
+			beforeWatch := join(tmp, "beforewatch")
+			file := join(tmp, "file")
 
 			touch(t, beforeWatch)
 			addWatch(t, w, tmp)
@@ -66,9 +66,9 @@ func TestWatch(t *testing.T) {
 		{"subdir", func(t *testing.T, w *Watcher, tmp string) {
 			addWatch(t, w, tmp)
 
-			file := filepath.Join(tmp, "file")
-			dir := filepath.Join(tmp, "sub")
-			dirfile := filepath.Join(tmp, "sub/file2")
+			file := join(tmp, "file")
+			dir := join(tmp, "sub")
+			dirfile := join(tmp, "sub/file2")
 
 			mkdir(t, dir)     // Create sub-directory
 			touch(t, file)    // Create a file
@@ -147,7 +147,7 @@ func TestWatch(t *testing.T) {
 		`},
 
 		{"watch same file twice", func(t *testing.T, w *Watcher, tmp string) {
-			file := filepath.Join(tmp, "file")
+			file := join(tmp, "file")
 			touch(t, file)
 
 			addWatch(t, w, file)
@@ -167,8 +167,8 @@ func TestWatch(t *testing.T) {
 				t.Skip("broken on macOS")
 			}
 
-			file := filepath.Join(tmp, "file")
-			link := filepath.Join(tmp, "link")
+			file := join(tmp, "file")
+			link := join(tmp, "link")
 			touch(t, file)
 			symlink(t, file, link)
 			addWatch(t, w, link)
@@ -196,8 +196,8 @@ func TestWatch(t *testing.T) {
 				t.Skip("broken on macOS")
 			}
 
-			dir := filepath.Join(tmp, "dir")
-			link := filepath.Join(tmp, "link")
+			dir := join(tmp, "dir")
+			link := join(tmp, "link")
 			mkdir(t, dir)
 			symlink(t, dir, link)
 			addWatch(t, w, link)
@@ -248,7 +248,7 @@ func TestWatchCreate(t *testing.T) {
 		{"create new symlink to file", func(t *testing.T, w *Watcher, tmp string) {
 			touch(t, tmp, "file")
 			addWatch(t, w, tmp)
-			symlink(t, filepath.Join(tmp, "file"), tmp, "link")
+			symlink(t, join(tmp, "file"), tmp, "link")
 		}, `
 			create  /link
 		`},
@@ -302,7 +302,7 @@ func TestWatchWrite(t *testing.T) {
 	tests := []testCase{
 		// Files
 		{"truncate file", func(t *testing.T, w *Watcher, tmp string) {
-			file := filepath.Join(tmp, "file")
+			file := join(tmp, "file")
 			cat(t, "data", file)
 			addWatch(t, w, tmp)
 
@@ -333,7 +333,7 @@ func TestWatchWrite(t *testing.T) {
 		`},
 
 		{"multiple writes to a file", func(t *testing.T, w *Watcher, tmp string) {
-			file := filepath.Join(tmp, "file")
+			file := join(tmp, "file")
 			cat(t, "data", file)
 			addWatch(t, w, tmp)
 
@@ -368,7 +368,7 @@ func TestWatchWrite(t *testing.T) {
 func TestWatchRename(t *testing.T) {
 	tests := []testCase{
 		{"rename file in watched dir", func(t *testing.T, w *Watcher, tmp string) {
-			file := filepath.Join(tmp, "file")
+			file := join(tmp, "file")
 			cat(t, "asd", file)
 
 			addWatch(t, w, tmp)
@@ -383,7 +383,7 @@ func TestWatchRename(t *testing.T) {
 
 			addWatch(t, w, tmp)
 			touch(t, unwatched, "file")
-			mv(t, filepath.Join(unwatched, "file"), tmp, "file")
+			mv(t, join(unwatched, "file"), tmp, "file")
 		}, `
 			create /file
 		`},
@@ -394,8 +394,8 @@ func TestWatchRename(t *testing.T) {
 			}
 
 			unwatched := t.TempDir()
-			file := filepath.Join(tmp, "file")
-			renamed := filepath.Join(unwatched, "renamed")
+			file := join(tmp, "file")
+			renamed := join(unwatched, "renamed")
 
 			addWatch(t, w, tmp)
 
@@ -419,7 +419,7 @@ func TestWatchRename(t *testing.T) {
 
 		{"rename overwriting existing file", func(t *testing.T, w *Watcher, tmp string) {
 			unwatched := t.TempDir()
-			file := filepath.Join(unwatched, "file")
+			file := join(unwatched, "file")
 
 			touch(t, tmp, "renamed")
 			touch(t, file)
@@ -441,7 +441,7 @@ func TestWatchRename(t *testing.T) {
 		`},
 
 		{"rename watched directory", func(t *testing.T, w *Watcher, tmp string) {
-			dir := filepath.Join(tmp, "dir")
+			dir := join(tmp, "dir")
 			mkdir(t, dir)
 			addWatch(t, w, dir)
 
@@ -459,8 +459,8 @@ func TestWatchRename(t *testing.T) {
 		`},
 
 		{"rename watched file", func(t *testing.T, w *Watcher, tmp string) {
-			file := filepath.Join(tmp, "file")
-			rename := filepath.Join(tmp, "rename-one")
+			file := join(tmp, "file")
+			rename := join(tmp, "rename-one")
 			touch(t, file)
 
 			addWatch(t, w, file)
@@ -477,8 +477,8 @@ func TestWatchRename(t *testing.T) {
 		`},
 
 		{"re-add renamed file", func(t *testing.T, w *Watcher, tmp string) {
-			file := filepath.Join(tmp, "file")
-			rename := filepath.Join(tmp, "rename")
+			file := join(tmp, "file")
+			rename := join(tmp, "rename")
 			touch(t, file)
 
 			addWatch(t, w, file)
@@ -512,7 +512,7 @@ func TestWatchSymlink(t *testing.T) {
 		{"create unresolvable symlink", func(t *testing.T, w *Watcher, tmp string) {
 			addWatch(t, w, tmp)
 
-			symlink(t, filepath.Join(tmp, "target"), tmp, "link")
+			symlink(t, join(tmp, "target"), tmp, "link")
 		}, `
 			create /link
 
@@ -564,14 +564,14 @@ func TestWatchSymlink(t *testing.T) {
 
 			touch(t, tmp, "file1")
 			touch(t, tmp, "file2")
-			symlink(t, filepath.Join(tmp, "file1"), tmp, "link1")
-			symlink(t, filepath.Join(tmp, "file2"), tmp, "link2")
+			symlink(t, join(tmp, "file1"), tmp, "link1")
+			symlink(t, join(tmp, "file2"), tmp, "link2")
 
 			addWatch(t, w, tmp)
 			touch(t, tmp, "foo")
 			rm(t, tmp, "foo")
 			mkdir(t, tmp, "apple")
-			mv(t, filepath.Join(tmp, "apple"), tmp, "pear")
+			mv(t, join(tmp, "apple"), tmp, "pear")
 			rmAll(t, tmp, "pear")
 		}, `
 			create   /foo     # touch foo
@@ -592,7 +592,7 @@ func TestWatchSymlink(t *testing.T) {
 func TestWatchAttrib(t *testing.T) {
 	tests := []testCase{
 		{"chmod", func(t *testing.T, w *Watcher, tmp string) {
-			file := filepath.Join(tmp, "file")
+			file := join(tmp, "file")
 
 			cat(t, "data", file)
 			addWatch(t, w, file)
@@ -605,7 +605,7 @@ func TestWatchAttrib(t *testing.T) {
 		`},
 
 		{"write does not trigger CHMOD", func(t *testing.T, w *Watcher, tmp string) {
-			file := filepath.Join(tmp, "file")
+			file := join(tmp, "file")
 
 			cat(t, "data", file)
 			addWatch(t, w, file)
@@ -620,7 +620,7 @@ func TestWatchAttrib(t *testing.T) {
 		`},
 
 		{"chmod after write", func(t *testing.T, w *Watcher, tmp string) {
-			file := filepath.Join(tmp, "file")
+			file := join(tmp, "file")
 
 			cat(t, "data", file)
 			addWatch(t, w, file)
@@ -646,7 +646,7 @@ func TestWatchAttrib(t *testing.T) {
 func TestWatchRm(t *testing.T) {
 	tests := []testCase{
 		{"remove watched file", func(t *testing.T, w *Watcher, tmp string) {
-			file := filepath.Join(tmp, "file")
+			file := join(tmp, "file")
 			touch(t, file)
 
 			addWatch(t, w, file)
@@ -665,7 +665,7 @@ func TestWatchRm(t *testing.T) {
 				t.Skip("Windows hard-locks open files so this will never work")
 			}
 
-			file := filepath.Join(tmp, "file")
+			file := join(tmp, "file")
 			touch(t, file)
 
 			// Intentionally don't close the descriptor here so it stays around.
@@ -691,7 +691,7 @@ func TestWatchRm(t *testing.T) {
 				t.Skip("behaviour is inconsistent on OpenBSD and NetBSD, and this test is flaky")
 			}
 
-			file := filepath.Join(tmp, "file")
+			file := join(tmp, "file")
 
 			touch(t, file)
 			addWatch(t, w, tmp)
@@ -809,7 +809,7 @@ func TestClose(t *testing.T) {
 
 		files := make([]string, 0, 200)
 		for i := 0; i < 200; i++ {
-			f := filepath.Join(tmp, fmt.Sprintf("file-%03d", i))
+			f := join(tmp, fmt.Sprintf("file-%03d", i))
 			touch(t, f, noWait)
 			files = append(files, f)
 		}
@@ -899,7 +899,7 @@ func TestClose(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		file := filepath.Join(tmp, "file")
+		file := join(tmp, "file")
 		touch(t, file)
 		if err := w.Add(file); !errors.Is(err, ErrClosed) {
 			t.Fatalf("wrong error for Add: %#v", err)
@@ -922,7 +922,7 @@ func TestAdd(t *testing.T) {
 		t.Parallel()
 
 		tmp := t.TempDir()
-		dir := filepath.Join(tmp, "dir-unreadable")
+		dir := join(tmp, "dir-unreadable")
 		mkdir(t, dir)
 		touch(t, dir, "/file")
 		chmod(t, 0, dir)
@@ -1215,8 +1215,8 @@ func TestWatchList(t *testing.T) {
 	t.Parallel()
 
 	tmp := t.TempDir()
-	file := filepath.Join(tmp, "file")
-	other := filepath.Join(tmp, "other")
+	file := join(tmp, "file")
+	other := join(tmp, "other")
 
 	touch(t, file)
 	touch(t, other)

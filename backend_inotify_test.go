@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -86,7 +85,7 @@ func TestInotifyOverflow(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 
-			dir := filepath.Join(tmp, strconv.Itoa(i))
+			dir := join(tmp, strconv.Itoa(i))
 			mkdir(t, dir, noWait)
 			addWatch(t, w, dir)
 
@@ -133,7 +132,7 @@ func TestInotifyDeleteOpenFile(t *testing.T) {
 	t.Parallel()
 
 	tmp := t.TempDir()
-	file := filepath.Join(tmp, "file")
+	file := join(tmp, "file")
 
 	touch(t, file)
 	fp, err := os.Open(file)
@@ -157,8 +156,8 @@ func TestInotifyDeleteOpenFile(t *testing.T) {
 func TestRemoveState(t *testing.T) {
 	var (
 		tmp  = t.TempDir()
-		dir  = filepath.Join(tmp, "dir")
-		file = filepath.Join(dir, "file")
+		dir  = join(tmp, "dir")
+		file = join(dir, "file")
 	)
 	mkdir(t, dir)
 	touch(t, file)
