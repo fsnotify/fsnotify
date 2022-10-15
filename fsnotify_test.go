@@ -437,7 +437,7 @@ func TestWatchRename(t *testing.T) {
 
 			# TODO: this is broken.
 			dragonfly:
-				REMOVE|WRITE         "/"
+				REMOVE               "/"
 		`},
 
 		{"rename watched directory", func(t *testing.T, w *Watcher, tmp string) {
@@ -449,9 +449,6 @@ func TestWatchRename(t *testing.T) {
 			touch(t, tmp, "dir-renamed/file")
 		}, `
 			rename   /dir
-
-			kqueue:
-				remove|rename /dir
 
 			# TODO(v2): Windows should behave the same by default. See #518
 			windows:
@@ -687,37 +684,64 @@ func TestWatchRm(t *testing.T) {
 		`},
 
 		{"remove watched directory", func(t *testing.T, w *Watcher, tmp string) {
-			if runtime.GOOS == "openbsd" || runtime.GOOS == "netbsd" {
-				t.Skip("behaviour is inconsistent on OpenBSD and NetBSD, and this test is flaky")
-			}
+			touch(t, tmp, "a")
+			touch(t, tmp, "b")
+			touch(t, tmp, "c")
+			touch(t, tmp, "d")
+			touch(t, tmp, "e")
+			touch(t, tmp, "f")
+			touch(t, tmp, "g")
 
-			file := join(tmp, "file")
-
-			touch(t, file)
+			mkdir(t, tmp, "h")
+			mkdir(t, tmp, "h", "a")
+			mkdir(t, tmp, "i")
+			mkdir(t, tmp, "i", "a")
+			mkdir(t, tmp, "j")
+			mkdir(t, tmp, "j", "a")
 			addWatch(t, w, tmp)
 			rmAll(t, tmp)
 		}, `
-			# OpenBSD, NetBSD
-			remove             /file
-			remove|write       /
+			remove    /
+			remove    /a
+			remove    /b
+			remove    /c
+			remove    /d
+			remove    /e
+			remove    /f
+			remove    /g
+			remove    /h
+			remove    /i
+			remove    /j
 
-			freebsd:
-				remove|write   "/"
-				remove         ""
-				create         "."
-
-			darwin:
-				remove         /file
-				remove|write   /
-			linux:
-				remove         /file
-				remove         /
-			fen:
-				remove         /
-				remove         /file
+			# TODO: this is broken; I've also seen (/i and /j missing):
+			#    REMOVE               "/"
+			#    REMOVE               "/a"
+			#    REMOVE               "/b"
+			#    REMOVE               "/c"
+			#    REMOVE               "/d"
+			#    REMOVE               "/e"
+			#    REMOVE               "/f"
+			#    REMOVE               "/g"
+			#    WRITE                "/h"
+			#    WRITE                "/h"
 			windows:
-				remove         /file
-				remove         /
+				REMOVE               "/"
+				REMOVE               "/a"
+				REMOVE               "/b"
+				REMOVE               "/c"
+				REMOVE               "/d"
+				REMOVE               "/e"
+				REMOVE               "/f"
+				REMOVE               "/g"
+				REMOVE               "/h"
+				REMOVE               "/i"
+				REMOVE               "/j"
+				WRITE                "/h"
+				WRITE                "/h"
+				WRITE                "/i"
+				WRITE                "/i"
+				WRITE                "/j"
+				WRITE                "/j"
 		`},
 	}
 
@@ -727,6 +751,8 @@ func TestWatchRm(t *testing.T) {
 	}
 }
 
+// TODO: this fails reguarly in the CI; not sure if it's a bug with the test or
+//       code; need to look in to it.
 func TestClose(t *testing.T) {
 	chanClosed := func(t *testing.T, w *Watcher) {
 		t.Helper()
