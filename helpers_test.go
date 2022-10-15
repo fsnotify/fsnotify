@@ -382,6 +382,8 @@ func (w *eventCollector) collect(t *testing.T) {
 					return
 				}
 				t.Error(e)
+				w.done <- struct{}{}
+				return
 			case e, ok := <-w.w.Events:
 				if !ok {
 					w.done <- struct{}{}
