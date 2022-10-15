@@ -29,6 +29,19 @@ jobs:
         run: |
           go test -race ./...
 
+  # Test gccgo
+  testgcc:
+    runs-on: ubuntu-22.04
+    name: test (ubuntu-22.04, gccgo 12.1)
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+
+      - name: test
+        run: |
+          sudo apt-get -y install gccgo-12
+          go-12 test ./...
+
   # Test only the latest Go version on macOS; we use the macOS builders for BSD
   # and illumos, and GitHub doesn't allow many of them to run concurrently. If
   # it works on Windows and Linux with Go 1.16, then it probably does on macOS
