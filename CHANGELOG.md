@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   up as a fsnotify.Write event. This is never useful, and could result in many
   spurious Write events.
 
+- windows: return ErrEventOverflow if the buffer is full ([#525])
+
+  Before it would merely return "short read", making it hard to detect this
+  error.
+
 - all: return ErrClosed on Add() when the watcher is closed ([#516])
 
 
@@ -35,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#516]: https://github.com/fsnotify/fsnotify/pull/516
 [#518]: https://github.com/fsnotify/fsnotify/pull/518
 [#520]: https://github.com/fsnotify/fsnotify/pull/520
+[#525]: https://github.com/fsnotify/fsnotify/pull/525
 
 ## [1.6.0] - 2022-10-13
 
