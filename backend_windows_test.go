@@ -5,7 +5,6 @@ package fsnotify
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -53,9 +52,8 @@ func TestRemoveState(t *testing.T) {
 
 func TestWindowsRemWatch(t *testing.T) {
 	tmp := t.TempDir()
-	file := filepath.Join(tmp, "file")
 
-	touch(t, file)
+	touch(t, tmp, "file")
 
 	w := newWatcher(t)
 	defer w.Close()

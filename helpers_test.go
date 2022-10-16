@@ -76,9 +76,9 @@ func rmWatch(t *testing.T, watcher *Watcher, path ...string) {
 	if len(path) < 1 {
 		t.Fatalf("rmWatch: path must have at least one element: %s", path)
 	}
-	err := watcher.Remove(filepath.Join(path...))
+	err := watcher.Remove(join(path...))
 	if err != nil {
-		t.Fatalf("rmWatch(%q): %s", filepath.Join(path...), err)
+		t.Fatalf("rmWatch(%q): %s", join(path...), err)
 	}
 }
 
