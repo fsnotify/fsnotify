@@ -38,7 +38,7 @@ Unreleased
 
 - all: return `ErrClosed` on `Add()` when the watcher is closed ([#516])
 
-- kqueue: deal with `rm -rf watched-dir` better ([#526])
+- kqueue: deal with `rm -rf watched-dir` better ([#526], [#537])
 
 - Add `Watcher.Errors` and `Watcher.Events` to the no-op `Watcher` in
   `backend_other.go`, making it easier to use on unsupported platforms such as
@@ -53,6 +53,7 @@ Unreleased
 [#525]: https://github.com/fsnotify/fsnotify/pull/525
 [#526]: https://github.com/fsnotify/fsnotify/pull/526
 [#528]: https://github.com/fsnotify/fsnotify/pull/528
+[#537]: https://github.com/fsnotify/fsnotify/pull/537
 
 1.6.0 - 2022-10-13
 -------------------

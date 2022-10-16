@@ -194,8 +194,8 @@ func (w *Watcher) sendEvent(e Event) bool {
 	case w.Events <- e:
 		return true
 	case <-w.done:
+		return false
 	}
-	return false
 }
 
 // Returns true if the error was sent, or false if watcher is closed.
@@ -204,8 +204,8 @@ func (w *Watcher) sendError(err error) bool {
 	case w.Errors <- err:
 		return true
 	case <-w.done:
+		return false
 	}
-	return false
 }
 
 // Close removes all watches and closes the events channel.
@@ -544,7 +544,7 @@ func (w *Watcher) readEvents() {
 			}
 
 			if path.isDir && event.Has(Write) && !event.Has(Remove) {
-				w.sendDirectoryChangeEvents(event.Name, false)
+				w.sendDirectoryChangeEvents(event.Name)
 			} else {
 				if !w.sendEvent(event) {
 					closed = true
@@ -553,20 +553,30 @@ func (w *Watcher) readEvents() {
 			}
 
 			if event.Has(Remove) {
-				// Look for a file that may have overwritten this.
-				// For example, mv f1 f2 will delete f2, then create f2.
+				// Look for a file that may have overwritten this; for example,
+				// mv f1 f2 will delete f2, then create f2.
 				if path.isDir {
 					fileDir := filepath.Clean(event.Name)
 					w.mu.Lock()
 					_, found := w.watches[fileDir]
 					w.mu.Unlock()
 					if found {
-						w.sendDirectoryChangeEvents(fileDir, true)
+						err := w.sendDirectoryChangeEvents(fileDir)
+						if err != nil {
+							if !w.sendError(err) {
+								closed = true
+							}
+						}
 					}
 				} else {
 					filePath := filepath.Clean(event.Name)
 					if fileInfo, err := os.Lstat(filePath); err == nil {
-						w.sendFileCreatedEventIfNew(filePath, fileInfo)
+						err := w.sendFileCreatedEventIfNew(filePath, fileInfo)
+						if err != nil {
+							if !w.sendError(err) {
+								closed = true
+							}
+						}
 					}
 				}
 			}
@@ -634,24 +644,28 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 //
 // This functionality is to have the BSD watcher match the inotify, which sends
 // a create event for files created in a watched directory.
-func (w *Watcher) sendDirectoryChangeEvents(dir string, ignoreNotExists bool) {
+func (w *Watcher) sendDirectoryChangeEvents(dir string) error {
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
-		// Directory could have been deleted already; just ignore that.
-		if ignoreNotExists && errors.Is(err, os.ErrNotExist) {
-			return
+		// Directory no longer exists: we can ignore this safely. kqueue will
+		// still give us the correct events.
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
 		}
-		if !w.sendError(fmt.Errorf("fsnotify.sendDirectoryChangeEvents: %w", err)) {
-			return
-		}
+		return fmt.Errorf("fsnotify.sendDirectoryChangeEvents: %w", err)
 	}
 
 	for _, fi := range files {
 		err := w.sendFileCreatedEventIfNew(filepath.Join(dir, fi.Name()), fi)
 		if err != nil {
-			return
+			// Don't need to send an error if this file isn't readable.
+			if errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM) {
+				return nil
+			}
+			return fmt.Errorf("fsnotify.sendDirectoryChangeEvents: %w", err)
 		}
 	}
+	return nil
 }
 
 // sendFileCreatedEvent sends a create event if the file isn't already being tracked.
