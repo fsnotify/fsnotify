@@ -1,24 +1,26 @@
 fsnotify is a Go library to provide cross-platform filesystem notifications on
-Windows, Linux, macOS, and BSD systems.
+Windows, Linux, macOS, BSD, and illumos.
 
-fsnotify requires Go 1.16 or newer.
+Go 1.16 or newer is required; the full documentation is at
+https://pkg.go.dev/github.com/fsnotify/fsnotify
 
-API docs: https://pkg.go.dev/github.com/fsnotify/fsnotify
+---
 
 Platform support:
 
-| Adapter               | OS             | Status                                                       |
-| --------------------- | ---------------| -------------------------------------------------------------|
+| Backend               | OS             | Status                                                       |
+| :-------------------- | :------------- | :----------------------------------------------------------- |
 | inotify               | Linux 2.6.32+  | Supported                                                    |
 | kqueue                | BSD, macOS     | Supported                                                    |
 | ReadDirectoryChangesW | Windows        | Supported                                                    |
-| FSEvents              | macOS          | [Planned](https://github.com/fsnotify/fsnotify/issues/11)    |
-| FEN                   | Solaris 11     | [In Progress](https://github.com/fsnotify/fsnotify/pull/371) |
-| fanotify              | Linux 5.9+     | [Maybe](https://github.com/fsnotify/fsnotify/issues/114)     |
+| FEN                   | illumos        | Supported in main branch                                     |
+| FSEvents              | macOS          | [Not yet](https://github.com/fsnotify/fsnotify/issues/11)    |
+| fanotify              | Linux 5.9+     | [Not yet](https://github.com/fsnotify/fsnotify/issues/114)   |
 | USN Journals          | Windows        | [Maybe](https://github.com/fsnotify/fsnotify/issues/53)      |
-| Polling               | *All*          | [Maybe](https://github.com/fsnotify/fsnotify/issues/9)       |
+| Polling               | *All*          | [Not yet](https://github.com/fsnotify/fsnotify/issues/9)     |
 
-Linux and macOS should include Android and iOS, but these are currently untested.
+Linux, macOS, and illumos should include Android, iOS, and Solaris, but these
+are currently untested.
 
 Usage
 -----
@@ -28,67 +30,70 @@ A basic example:
 package main
 
 import (
-	"log"
+    "log"
 
-	"github.com/fsnotify/fsnotify"
+    "github.com/fsnotify/fsnotify"
 )
 
 func main() {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer watcher.Close()
+    // Create new watcher.
+    watcher, err := fsnotify.NewWatcher()
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer watcher.Close()
 
-	done := make(chan bool)
-	go func() {
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				log.Println("event:", event)
-				if event.Has(fsnotify.Write) {
-					log.Println("modified file:", event.Name)
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				log.Println("error:", err)
-			}
-		}
-	}()
+    // Start listening for events.
+    go func() {
+        for {
+            select {
+            case event, ok := <-watcher.Events:
+                if !ok {
+                    return
+                }
+                log.Println("event:", event)
+                if event.Has(fsnotify.Write) {
+                    log.Println("modified file:", event.Name)
+                }
+            case err, ok := <-watcher.Errors:
+                if !ok {
+                    return
+                }
+                log.Println("error:", err)
+            }
+        }
+    }()
 
-	err = watcher.Add("/tmp")
-	if err != nil {
-		log.Fatal(err)
-	}
-	<-done
+    // Add a path.
+    err = watcher.Add("/tmp")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Block main goroutine forever.
+    <-make(chan struct{})
 }
 ```
 
-A slightly more expansive example can be found in [cmd/fsnotify](cmd/fsnotify),
-which can be run with:
+Some more examples can be found in [cmd/fsnotify](cmd/fsnotify), which can be
+run with:
 
-    # Watch the current directory (not recursive).
-    $ go run ./cmd/fsnotify .
+    % go run ./cmd/fsnotify
 
 FAQ
 ---
 ### Will a file still be watched when it's moved to another directory?
 No, not unless you are watching the location it was moved to.
 
-### Are all subdirectories watched too?
+### Are subdirectories watched too?
 No, you must add watches for any directory you want to watch (a recursive
 watcher is on the roadmap: [#18]).
 
 [#18]: https://github.com/fsnotify/fsnotify/issues/18
 
-### Do I have to watch the Error and Event channels in a separate goroutine?
-As of now, yes (you can read both channels in the same goroutine, you don't need
-a separate goroutine for both channels; see the example).
+### Do I have to watch the Error and Event channels in a goroutine?
+As of now, yes (you can read both channels in the same goroutine using `select`,
+you don't need a separate goroutine for both channels; see the example).
 
 ### Why don't notifications work with NFS, SMB, FUSE, /proc, or /sys?
 fsnotify requires support from underlying OS to work. The current NFS and SMB
@@ -103,18 +108,20 @@ Platform-specific notes
 -----------------------
 ### Linux
 When a file is removed a REMOVE event won't be emitted until all file
-descriptors are closed. It will emit a CHMOD though:
+descriptors are closed; it will emit a CHMOD instead:
 
     fp := os.Open("file")
     os.Remove("file")        // CHMOD
     fp.Close()               // REMOVE
 
-Linux: the `fs.inotify.max_user_watches` sysctl variable specifies the upper
-limit for the number of watches per user, and `fs.inotify.max_user_instances`
-specifies the maximum number of inotify instances per user. Every Watcher you
-create is an "instance", and every path you add is a "watch".
+This is the event that inotify sends, so not much can be changed about this.
 
-These are also exposed in /proc as `/proc/sys/fs/inotify/max_user_watches` and
+The `fs.inotify.max_user_watches` sysctl variable specifies the upper limit for
+the number of watches per user, and `fs.inotify.max_user_instances` specifies
+the maximum number of inotify instances per user. Every Watcher you create is an
+"instance", and every path you add is a "watch".
+
+These are also exposed in `/proc` as `/proc/sys/fs/inotify/max_user_watches` and
 `/proc/sys/fs/inotify/max_user_instances`
 
 To increase them you can use `sysctl` or write the value to proc file:
@@ -124,7 +131,8 @@ To increase them you can use `sysctl` or write the value to proc file:
     sysctl fs.inotify.max_user_instances=128
 
 To make the changes persist on reboot edit `/etc/sysctl.conf` or
-`/usr/lib/sysctl.d/50-default.conf` (some systemd systems):
+`/usr/lib/sysctl.d/50-default.conf` (details differ per Linux distro; check your
+distro's documentation):
 
     fs.inotify.max_user_watches=124983
     fs.inotify.max_user_instances=128
@@ -148,8 +156,3 @@ have a native FSEvents implementation (see [#11]).
 
 [#11]: https://github.com/fsnotify/fsnotify/issues/11
 [#15]: https://github.com/fsnotify/fsnotify/issues/15
-
-Related Projects
-----------------
-- [notify](https://github.com/rjeczalik/notify)
-- [fsevents](https://github.com/fsnotify/fsevents)

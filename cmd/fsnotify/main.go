@@ -1,67 +1,65 @@
+// Command fsnotify provides example usage of the fsnotify library.
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
-
-	"github.com/fsnotify/fsnotify"
 )
 
-func fatal(err error) {
-	if err == nil {
-		return
-	}
-	fmt.Fprintf(os.Stderr, "%s: %s\n", filepath.Base(os.Args[0]), err)
+var usage = `
+fsnotify is a Go library to provide cross-platform file system notifications.
+This command serves as an example and debugging tool.
+
+https://github.com/fsnotify/fsnotify
+
+Commands:
+
+    watch [paths]  Watch the paths for changes and print the events.
+    file  [file]   Watch a single file for changes.
+    dedup [paths]  Watch the paths for changes, suppressing duplicate events.
+`[1:]
+
+func exit(format string, a ...interface{}) {
+	fmt.Fprintf(os.Stderr, filepath.Base(os.Args[0])+": "+format+"\n", a...)
+	fmt.Print("\n" + usage)
 	os.Exit(1)
 }
 
-func line(s string, args ...interface{}) {
-	fmt.Printf(time.Now().Format("15:16:05.0000")+" "+s+"\n", args...)
+func help() {
+	fmt.Printf("%s [command] [arguments]\n\n", filepath.Base(os.Args[0]))
+	fmt.Print(usage)
+	os.Exit(0)
+}
+
+// Print line prefixed with the time (a bit shorter than log.Print; we don't
+// really need the date and ms is useful here).
+func printTime(s string, args ...interface{}) {
+	fmt.Printf(time.Now().Format("15:04:05.0000")+" "+s+"\n", args...)
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		fatal(errors.New("must specify at least one path to watch"))
+	if len(os.Args) == 1 {
+		help()
 	}
-
-	w, err := fsnotify.NewWatcher()
-	fatal(err)
-	defer w.Close()
-
-	go func() {
-		i := 0
-		for {
-			select {
-			case e, ok := <-w.Events:
-				if !ok {
-					return
-				}
-
-				i++
-				m := ""
-				if e.Has(fsnotify.Write) {
-					m = "(modified)"
-				}
-				line("%3d %-10s %-10s %q", i, e.Op, m, e.Name)
-			case err, ok := <-w.Errors:
-				if !ok {
-					return
-				}
-				line("ERROR: %s", err)
-			}
-		}
-	}()
-
-	for _, p := range os.Args[1:] {
-		err = w.Add(p)
-		if err != nil {
-			fatal(fmt.Errorf("%q: %w", p, err))
+	// Always show help if -h[elp] appears anywhere before we do anything else.
+	for _, f := range os.Args[1:] {
+		switch f {
+		case "help", "-h", "-help", "--help":
+			help()
 		}
 	}
 
-	line("watching; press ^C to exit")
-	<-make(chan struct{})
+	cmd, args := os.Args[1], os.Args[2:]
+	switch cmd {
+	default:
+		exit("unknown command: %q", cmd)
+	case "watch":
+		watch(args...)
+	case "file":
+		file(args...)
+	case "dedup":
+		dedup(args...)
+	}
 }

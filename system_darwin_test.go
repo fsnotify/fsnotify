@@ -1,12 +1,10 @@
-// Copyright 2016 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+//go:build darwin
+// +build darwin
 
 package fsnotify
 
 import (
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -50,8 +48,8 @@ func testExchangedataForWatcher(t *testing.T, watchDir bool) {
 	// 2. unlink intermediate
 	//
 	// Let's try to simulate that:
-	resolved := filepath.Join(testDir1, resolvedFilename)
-	intermediate := filepath.Join(testDir2, resolvedFilename+"~")
+	resolved := join(testDir1, resolvedFilename)
+	intermediate := join(testDir2, resolvedFilename+"~")
 
 	// Make sure we create the file before we start watching
 	createAndSyncFile(t, resolved)

@@ -1,7 +1,3 @@
-// Copyright 2011 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 //go:build windows
 // +build windows
 
@@ -21,21 +17,121 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// Watcher watches a set of files, delivering events to a channel.
+// Watcher watches a set of paths, delivering events on a channel.
+//
+// A watcher should not be copied (e.g. pass it by pointer, rather than by
+// value).
+//
+// # Linux notes
+//
+// When a file is removed a Remove event won't be emitted until all file
+// descriptors are closed, and deletes will always emit a Chmod. For example:
+//
+//     fp := os.Open("file")
+//     os.Remove("file")        // Triggers Chmod
+//     fp.Close()               // Triggers Remove
+//
+// This is the event that inotify sends, so not much can be changed about this.
+//
+// The fs.inotify.max_user_watches sysctl variable specifies the upper limit
+// for the number of watches per user, and fs.inotify.max_user_instances
+// specifies the maximum number of inotify instances per user. Every Watcher you
+// create is an "instance", and every path you add is a "watch".
+//
+// These are also exposed in /proc as /proc/sys/fs/inotify/max_user_watches and
+// /proc/sys/fs/inotify/max_user_instances
+//
+// To increase them you can use sysctl or write the value to the /proc file:
+//
+//     # Default values on Linux 5.18
+//     sysctl fs.inotify.max_user_watches=124983
+//     sysctl fs.inotify.max_user_instances=128
+//
+// To make the changes persist on reboot edit /etc/sysctl.conf or
+// /usr/lib/sysctl.d/50-default.conf (details differ per Linux distro; check
+// your distro's documentation):
+//
+//     fs.inotify.max_user_watches=124983
+//     fs.inotify.max_user_instances=128
+//
+// Reaching the limit will result in a "no space left on device" or "too many open
+// files" error.
+//
+// # kqueue notes (macOS, BSD)
+//
+// kqueue requires opening a file descriptor for every file that's being watched;
+// so if you're watching a directory with five files then that's six file
+// descriptors. You will run in to your system's "max open files" limit faster on
+// these platforms.
+//
+// The sysctl variables kern.maxfiles and kern.maxfilesperproc can be used to
+// control the maximum number of open files, as well as /etc/login.conf on BSD
+// systems.
+//
+// # macOS notes
+//
+// Spotlight indexing on macOS can result in multiple events (see [#15]). A
+// temporary workaround is to add your folder(s) to the "Spotlight Privacy
+// Settings" until we have a native FSEvents implementation (see [#11]).
+//
+// [#11]: https://github.com/fsnotify/fsnotify/issues/11
+// [#15]: https://github.com/fsnotify/fsnotify/issues/15
 type Watcher struct {
+	// Events sends the filesystem change events.
+	//
+	// fsnotify can send the following events; a "path" here can refer to a
+	// file, directory, symbolic link, or special file like a FIFO.
+	//
+	//   fsnotify.Create    A new path was created; this may be followed by one
+	//                      or more Write events if data also gets written to a
+	//                      file.
+	//
+	//   fsnotify.Remove    A path was removed.
+	//
+	//   fsnotify.Rename    A path was renamed. A rename is always sent with the
+	//                      old path as Event.Name, and a Create event will be
+	//                      sent with the new name. Renames are only sent for
+	//                      paths that are currently watched; e.g. moving an
+	//                      unmonitored file into a monitored directory will
+	//                      show up as just a Create. Similarly, renaming a file
+	//                      to outside a monitored directory will show up as
+	//                      only a Rename.
+	//
+	//   fsnotify.Write     A file or named pipe was written to. A Truncate will
+	//                      also trigger a Write. A single "write action"
+	//                      initiated by the user may show up as one or multiple
+	//                      writes, depending on when the system syncs things to
+	//                      disk. For example when compiling a large Go program
+	//                      you may get hundreds of Write events, so you
+	//                      probably want to wait until you've stopped receiving
+	//                      them (see the dedup example in cmd/fsnotify).
+	//
+	//   fsnotify.Chmod     Attributes were changed. On Linux this is also sent
+	//                      when a file is removed (or more accurately, when a
+	//                      link to an inode is removed). On kqueue it's sent
+	//                      and on kqueue when a file is truncated. On Windows
+	//                      it's never sent.
 	Events chan Event
+
+	// Errors sends any errors.
+	//
+	// [ErrEventOverflow] is used to indicate ther are too many events:
+	//
+	//  - inotify: there are too many queued events (fs.inotify.max_queued_events sysctl)
+	//  - windows: The buffer size is too small.
+	//  - kqueue, fen: not used.
 	Errors chan error
 
 	port  windows.Handle // Handle to completion port
 	input chan *input    // Inputs to the reader are sent on this channel
 	quit  chan chan<- error
 
-	mu       sync.Mutex // Protects access to watches, isClosed
-	watches  watchMap   // Map of watches (key: i-number)
-	isClosed bool       // Set to true when Close() is first called
+	mu      sync.Mutex // Protects access to watches, closed
+	watches watchMap   // Map of watches (key: i-number)
+	closed  bool       // Set to true when Close() is first called
 }
 
-// NewWatcher establishes a new watcher with the underlying OS and begins waiting for events.
+// NewWatcher creates a new Watcher.
 func NewWatcher() (*Watcher, error) {
 	port, err := windows.CreateIoCompletionPort(windows.InvalidHandle, 0, 0, 0)
 	if err != nil {
@@ -53,14 +149,44 @@ func NewWatcher() (*Watcher, error) {
 	return w, nil
 }
 
+func (w *Watcher) isClosed() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.closed
+}
+
+func (w *Watcher) sendEvent(name string, mask uint64) bool {
+	if mask == 0 {
+		return false
+	}
+
+	event := w.newEvent(name, uint32(mask))
+	select {
+	case ch := <-w.quit:
+		w.quit <- ch
+	case w.Events <- event:
+	}
+	return true
+}
+
+// Returns true if the error was sent, or false if watcher is closed.
+func (w *Watcher) sendError(err error) bool {
+	select {
+	case w.Errors <- err:
+		return true
+	case <-w.quit:
+	}
+	return false
+}
+
 // Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error {
-	w.mu.Lock()
-	if w.isClosed {
-		w.mu.Unlock()
+	if w.isClosed() {
 		return nil
 	}
-	w.isClosed = true
+
+	w.mu.Lock()
+	w.closed = true
 	w.mu.Unlock()
 
 	// Send "quit" message to the reader goroutine
@@ -72,14 +198,42 @@ func (w *Watcher) Close() error {
 	return <-ch
 }
 
-// Add starts watching the named file or directory (non-recursively).
+// Add starts monitoring the path for changes.
+//
+// A path can only be watched once; attempting to watch it more than once will
+// return an error. Paths that do not yet exist on the filesystem cannot be
+// added.
+//
+// A watch will be automatically removed if the watched path is deleted or
+// renamed. The exception is the Windows backend, which doesn't remove the
+// watcher on renames.
+//
+// Notifications on network filesystems (NFS, SMB, FUSE, etc.) or special
+// filesystems (/proc, /sys, etc.) generally don't work.
+//
+// Returns [ErrClosed] if [Watcher.Close] was called.
+//
+// # Watching directories
+//
+// All files in a directory are monitored, including new files that are created
+// after the watcher is started. Subdirectories are not watched (i.e. it's
+// non-recursive).
+//
+// # Watching files
+//
+// Watching individual files (rather than directories) is generally not
+// recommended as many tools update files atomically. Instead of "just" writing
+// to the file a temporary file will be written to first, and if successful the
+// temporary file is moved to to destination removing the original, or some
+// variant thereof. The watcher on the original file is now lost, as it no
+// longer exists.
+//
+// Instead, watch the parent directory and use Event.Name to filter out files
+// you're not interested in. There is an example of this in [cmd/fsnotify/file.go].
 func (w *Watcher) Add(name string) error {
-	w.mu.Lock()
-	if w.isClosed {
-		w.mu.Unlock()
-		return errors.New("watcher already closed")
+	if w.isClosed() {
+		return ErrClosed
 	}
-	w.mu.Unlock()
 
 	in := &input{
 		op:    opAddWatch,
@@ -94,8 +248,17 @@ func (w *Watcher) Add(name string) error {
 	return <-in.reply
 }
 
-// Remove stops watching the the named file or directory (non-recursively).
+// Remove stops monitoring the path for changes.
+//
+// Directories are always removed non-recursively. For example, if you added
+// /tmp/dir and /tmp/dir/subdir then you will need to remove both.
+//
+// Removing a path that has not yet been added returns [ErrNonExistentWatch].
 func (w *Watcher) Remove(name string) error {
+	if w.isClosed() {
+		return nil
+	}
+
 	in := &input{
 		op:    opRemoveWatch,
 		path:  filepath.Clean(name),
@@ -108,8 +271,14 @@ func (w *Watcher) Remove(name string) error {
 	return <-in.reply
 }
 
-// WatchList returns the directories and files that are being monitered.
+// WatchList returns all paths added with [Add] (and are not yet removed).
+//
+// Returns nil if [Watcher.Close] was called.
 func (w *Watcher) WatchList() []string {
+	if w.isClosed() {
+		return nil
+	}
+
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -123,16 +292,14 @@ func (w *Watcher) WatchList() []string {
 	return entries
 }
 
+// These options are from the old golang.org/x/exp/winfsnotify, where you could
+// add various options to the watch. This has long since been removed.
+//
+// The "sys" in the name is misleading as they're not part of any "system".
+//
+// This should all be removed at some point, and just use windows.FILE_NOTIFY_*
 const (
-	// Options for AddWatch
-	sysFSONESHOT = 0x80000000
-	sysFSONLYDIR = 0x1000000
-
-	// Events
-	sysFSACCESS     = 0x1
 	sysFSALLEVENTS  = 0xfff
-	sysFSATTRIB     = 0x4
-	sysFSCLOSE      = 0x18
 	sysFSCREATE     = 0x100
 	sysFSDELETE     = 0x200
 	sysFSDELETESELF = 0x400
@@ -141,13 +308,10 @@ const (
 	sysFSMOVEDFROM  = 0x40
 	sysFSMOVEDTO    = 0x80
 	sysFSMOVESELF   = 0x800
-
-	// Special events
-	sysFSIGNORED   = 0x8000
-	sysFSQOVERFLOW = 0x4000
+	sysFSIGNORED    = 0x8000
 )
 
-func newEvent(name string, mask uint32) Event {
+func (w *Watcher) newEvent(name string, mask uint32) Event {
 	e := Event{Name: name}
 	if mask&sysFSCREATE == sysFSCREATE || mask&sysFSMOVEDTO == sysFSMOVEDTO {
 		e.Op |= Create
@@ -160,9 +324,6 @@ func newEvent(name string, mask uint32) Event {
 	}
 	if mask&sysFSMOVE == sysFSMOVE || mask&sysFSMOVESELF == sysFSMOVESELF || mask&sysFSMOVEDFROM == sysFSMOVEDFROM {
 		e.Op |= Rename
-	}
-	if mask&sysFSATTRIB == sysFSATTRIB {
-		e.Op |= Chmod
 	}
 	return e
 }
@@ -212,7 +373,7 @@ func (w *Watcher) wakeupReader() error {
 	return nil
 }
 
-func getDir(pathname string) (dir string, err error) {
+func (w *Watcher) getDir(pathname string) (dir string, err error) {
 	attr, err := windows.GetFileAttributes(windows.StringToUTF16Ptr(pathname))
 	if err != nil {
 		return "", os.NewSyscallError("GetFileAttributes", err)
@@ -226,7 +387,7 @@ func getDir(pathname string) (dir string, err error) {
 	return
 }
 
-func getIno(path string) (ino *inode, err error) {
+func (w *Watcher) getIno(path string) (ino *inode, err error) {
 	h, err := windows.CreateFile(windows.StringToUTF16Ptr(path),
 		windows.FILE_LIST_DIRECTORY,
 		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
@@ -270,15 +431,12 @@ func (m watchMap) set(ino *inode, watch *watch) {
 
 // Must run within the I/O thread.
 func (w *Watcher) addWatch(pathname string, flags uint64) error {
-	dir, err := getDir(pathname)
+	dir, err := w.getDir(pathname)
 	if err != nil {
 		return err
 	}
-	if flags&sysFSONLYDIR != 0 && pathname != dir {
-		return nil
-	}
 
-	ino, err := getIno(dir)
+	ino, err := w.getIno(dir)
 	if err != nil {
 		return err
 	}
@@ -324,11 +482,11 @@ func (w *Watcher) addWatch(pathname string, flags uint64) error {
 
 // Must run within the I/O thread.
 func (w *Watcher) remWatch(pathname string) error {
-	dir, err := getDir(pathname)
+	dir, err := w.getDir(pathname)
 	if err != nil {
 		return err
 	}
-	ino, err := getIno(dir)
+	ino, err := w.getIno(dir)
 	if err != nil {
 		return err
 	}
@@ -339,7 +497,7 @@ func (w *Watcher) remWatch(pathname string) error {
 
 	err = windows.CloseHandle(ino.handle)
 	if err != nil {
-		w.Errors <- os.NewSyscallError("CloseHandle", err)
+		w.sendError(os.NewSyscallError("CloseHandle", err))
 	}
 	if watch == nil {
 		return fmt.Errorf("%w: %s", ErrNonExistentWatch, pathname)
@@ -352,6 +510,7 @@ func (w *Watcher) remWatch(pathname string) error {
 		w.sendEvent(filepath.Join(watch.path, name), watch.names[name]&sysFSIGNORED)
 		delete(watch.names, name)
 	}
+
 	return w.startRead(watch)
 }
 
@@ -375,17 +534,17 @@ func (w *Watcher) deleteWatch(watch *watch) {
 func (w *Watcher) startRead(watch *watch) error {
 	err := windows.CancelIo(watch.ino.handle)
 	if err != nil {
-		w.Errors <- os.NewSyscallError("CancelIo", err)
+		w.sendError(os.NewSyscallError("CancelIo", err))
 		w.deleteWatch(watch)
 	}
-	mask := toWindowsFlags(watch.mask)
+	mask := w.toWindowsFlags(watch.mask)
 	for _, m := range watch.names {
-		mask |= toWindowsFlags(m)
+		mask |= w.toWindowsFlags(m)
 	}
 	if mask == 0 {
 		err := windows.CloseHandle(watch.ino.handle)
 		if err != nil {
-			w.Errors <- os.NewSyscallError("CloseHandle", err)
+			w.sendError(os.NewSyscallError("CloseHandle", err))
 		}
 		w.mu.Lock()
 		delete(w.watches[watch.ino.volume], watch.ino.index)
@@ -399,11 +558,7 @@ func (w *Watcher) startRead(watch *watch) error {
 		err := os.NewSyscallError("ReadDirectoryChanges", rdErr)
 		if rdErr == windows.ERROR_ACCESS_DENIED && watch.mask&provisional == 0 {
 			// Watched directory was probably removed
-			if w.sendEvent(watch.path, watch.mask&sysFSDELETESELF) {
-				if watch.mask&sysFSONESHOT != 0 {
-					watch.mask = 0
-				}
-			}
+			w.sendEvent(watch.path, watch.mask&sysFSDELETESELF)
 			err = nil
 		}
 		w.deleteWatch(watch)
@@ -469,7 +624,7 @@ func (w *Watcher) readEvents() {
 		switch qErr {
 		case windows.ERROR_MORE_DATA:
 			if watch == nil {
-				w.Errors <- errors.New("ERROR_MORE_DATA has unexpectedly null lpOverlapped buffer")
+				w.sendError(errors.New("ERROR_MORE_DATA has unexpectedly null lpOverlapped buffer"))
 			} else {
 				// The i/o succeeded but the buffer is full.
 				// In theory we should be building up a full packet.
@@ -486,7 +641,7 @@ func (w *Watcher) readEvents() {
 			// CancelIo was called on this handle
 			continue
 		default:
-			w.Errors <- os.NewSyscallError("GetQueuedCompletionPort", qErr)
+			w.sendError(os.NewSyscallError("GetQueuedCompletionPort", qErr))
 			continue
 		case nil:
 		}
@@ -494,18 +649,17 @@ func (w *Watcher) readEvents() {
 		var offset uint32
 		for {
 			if n == 0 {
-				w.Events <- newEvent("", sysFSQOVERFLOW)
-				w.Errors <- errors.New("short read in readEvents()")
+				w.sendError(ErrEventOverflow)
 				break
 			}
 
 			// Point "raw" to the event in the buffer
 			raw := (*windows.FileNotifyInformation)(unsafe.Pointer(&watch.buf[offset]))
-			// TODO: Consider using unsafe.Slice that is available from go1.17
-			// https://stackoverflow.com/questions/51187973/how-to-create-an-array-or-a-slice-from-an-array-unsafe-pointer-in-golang
-			// instead of using a fixed windows.MAX_PATH buf, we create a buf that is the size of the path name
+
+			// Create a buf that is the size of the path name
 			size := int(raw.FileNameLength / 2)
 			var buf []uint16
+			// TODO: Use unsafe.Slice in Go 1.17; https://stackoverflow.com/questions/51187973
 			sh := (*reflect.SliceHeader)(unsafe.Pointer(&buf))
 			sh.Data = uintptr(unsafe.Pointer(&raw.FileName))
 			sh.Len = size
@@ -542,11 +696,7 @@ func (w *Watcher) readEvents() {
 			}
 
 			sendNameEvent := func() {
-				if w.sendEvent(fullname, watch.names[name]&mask) {
-					if watch.names[name]&sysFSONESHOT != 0 {
-						delete(watch.names, name)
-					}
-				}
+				w.sendEvent(fullname, watch.names[name]&mask)
 			}
 			if raw.Action != windows.FILE_ACTION_RENAMED_NEW_NAME {
 				sendNameEvent()
@@ -555,11 +705,8 @@ func (w *Watcher) readEvents() {
 				w.sendEvent(fullname, watch.names[name]&sysFSIGNORED)
 				delete(watch.names, name)
 			}
-			if w.sendEvent(fullname, watch.mask&toFSnotifyFlags(raw.Action)) {
-				if watch.mask&sysFSONESHOT != 0 {
-					watch.mask = 0
-				}
-			}
+
+			w.sendEvent(fullname, watch.mask&w.toFSnotifyFlags(raw.Action))
 			if raw.Action == windows.FILE_ACTION_RENAMED_NEW_NAME {
 				fullname = filepath.Join(watch.path, watch.rename)
 				sendNameEvent()
@@ -573,40 +720,22 @@ func (w *Watcher) readEvents() {
 
 			// Error!
 			if offset >= n {
-				w.Errors <- errors.New("Windows system assumed buffer larger than it is, events have likely been missed.")
+				w.sendError(errors.New(
+					"Windows system assumed buffer larger than it is, events have likely been missed."))
 				break
 			}
 		}
 
 		if err := w.startRead(watch); err != nil {
-			w.Errors <- err
+			w.sendError(err)
 		}
 	}
 }
 
-func (w *Watcher) sendEvent(name string, mask uint64) bool {
-	if mask == 0 {
-		return false
-	}
-	event := newEvent(name, uint32(mask))
-	select {
-	case ch := <-w.quit:
-		w.quit <- ch
-	case w.Events <- event:
-	}
-	return true
-}
-
-func toWindowsFlags(mask uint64) uint32 {
+func (w *Watcher) toWindowsFlags(mask uint64) uint32 {
 	var m uint32
-	if mask&sysFSACCESS != 0 {
-		m |= windows.FILE_NOTIFY_CHANGE_LAST_ACCESS
-	}
 	if mask&sysFSMODIFY != 0 {
 		m |= windows.FILE_NOTIFY_CHANGE_LAST_WRITE
-	}
-	if mask&sysFSATTRIB != 0 {
-		m |= windows.FILE_NOTIFY_CHANGE_ATTRIBUTES
 	}
 	if mask&(sysFSMOVE|sysFSCREATE|sysFSDELETE) != 0 {
 		m |= windows.FILE_NOTIFY_CHANGE_FILE_NAME | windows.FILE_NOTIFY_CHANGE_DIR_NAME
@@ -614,7 +743,7 @@ func toWindowsFlags(mask uint64) uint32 {
 	return m
 }
 
-func toFSnotifyFlags(action uint32) uint64 {
+func (w *Watcher) toFSnotifyFlags(action uint32) uint64 {
 	switch action {
 	case windows.FILE_ACTION_ADDED:
 		return sysFSCREATE
