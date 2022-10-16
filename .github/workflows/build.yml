@@ -23,5 +23,12 @@ jobs:
         run: |
           set -x
           for a in $(go tool dist list); do
-            GOOS=${a%%/*} GOARCH=${a#*/} go build
+            export GOOS=${a%%/*}
+            export GOARCH=${a#*/}
+
+            go test -c
+            # Building for Android or iOS requires cgo
+            if [ "$GOOS" != 'android' ] && [ "$GOOS" != 'ios' ]; then
+              go build ./cmd/fsnotify
+            fi
           done
