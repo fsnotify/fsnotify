@@ -37,10 +37,27 @@ type Op uint32
 // The operations fsnotify can trigger; see the documentation on [Watcher] for a
 // full description, and check them with [Event.Has].
 const (
+	// A new pathname was created.
 	Create Op = 1 << iota
+
+	// The pathname was written to; this does *not* mean the write has finished,
+	// and a write can be followed by more writes.
 	Write
+
+	// The path was removed; any watches on it will be removed. Some "remove"
+	// operations may trigger a Rename if the file is actually moved (for
+	// example "remove to trash" is often a rename).
 	Remove
+
+	// The path was renamed to something else; any watched on it will be
+	// removed.
 	Rename
+
+	// File attributes were changed.
+	//
+	// It's generally not recommended to take action on this event, as it may
+	// get triggered very frequently by some software. For example, Spotlight
+	// indexing on macOS, anti-virus software, backup software, etc.
 	Chmod
 )
 

@@ -64,15 +64,6 @@ import (
 // The sysctl variables kern.maxfiles and kern.maxfilesperproc can be used to
 // control the maximum number of open files, as well as /etc/login.conf on BSD
 // systems.
-//
-// # macOS notes
-//
-// Spotlight indexing on macOS can result in multiple events (see [#15]). A
-// temporary workaround is to add your folder(s) to the "Spotlight Privacy
-// Settings" until we have a native FSEvents implementation (see [#11]).
-//
-// [#11]: https://github.com/fsnotify/fsnotify/issues/11
-// [#15]: https://github.com/fsnotify/fsnotify/issues/15
 type Watcher struct {
 	// Events sends the filesystem change events.
 	//
@@ -112,7 +103,7 @@ type Watcher struct {
 
 	// Errors sends any errors.
 	//
-	// [ErrEventOverflow] is used to indicate ther are too many events:
+	// [ErrEventOverflow] is used to indicate there are too many events:
 	//
 	//  - inotify: there are too many queued events (fs.inotify.max_queued_events sysctl)
 	//  - windows: The buffer size is too small.
