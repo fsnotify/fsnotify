@@ -1,7 +1,9 @@
 name: 'test'
 on:
-  push:
+  pull_request:
     paths: ['**.go', 'go.mod', '.github/workflows/*']
+  push:
+    branches: ['main', 'aix']
 
 jobs:
   # Test Windows and Linux with the latest Go version and the oldest we support.
