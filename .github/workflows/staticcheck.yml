@@ -1,7 +1,9 @@
 name: 'staticcheck'
 on:
-  push:
+  pull_request:
     paths: ['**.go', 'go.mod', '.github/workflows/*']
+  push:
+    branches: ['main', 'aix']
 
 jobs:
   staticcheck:
