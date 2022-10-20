@@ -166,6 +166,9 @@ func TestWatch(t *testing.T) {
 				// behaviour too.
 				t.Skip("broken on macOS")
 			}
+			if !hasPrivilegesForSymlink() {
+				t.Skip("does not have privileges for symlink on this OS")
+			}
 
 			file := join(tmp, "file")
 			link := join(tmp, "link")
@@ -194,6 +197,9 @@ func TestWatch(t *testing.T) {
 				// Pretty sure this is caused by the broken symlink-follow
 				// behaviour too.
 				t.Skip("broken on macOS")
+			}
+			if !hasPrivilegesForSymlink() {
+				t.Skip("does not have privileges for symlink on this OS")
 			}
 
 			dir := join(tmp, "dir")
@@ -246,6 +252,9 @@ func TestWatchCreate(t *testing.T) {
 
 		// Links
 		{"create new symlink to file", func(t *testing.T, w *Watcher, tmp string) {
+			if !hasPrivilegesForSymlink() {
+				t.Skip("does not have privileges for symlink on this OS")
+			}
 			touch(t, tmp, "file")
 			addWatch(t, w, tmp)
 			symlink(t, join(tmp, "file"), tmp, "link")
@@ -253,6 +262,9 @@ func TestWatchCreate(t *testing.T) {
 			create  /link
 		`},
 		{"create new symlink to directory", func(t *testing.T, w *Watcher, tmp string) {
+			if !hasPrivilegesForSymlink() {
+				t.Skip("does not have privileges for symlink on this OS")
+			}
 			addWatch(t, w, tmp)
 			symlink(t, tmp, tmp, "link")
 		}, `
@@ -505,6 +517,10 @@ func TestWatchRename(t *testing.T) {
 }
 
 func TestWatchSymlink(t *testing.T) {
+	if !hasPrivilegesForSymlink() {
+		t.Skip("does not have privileges for symlink on this OS")
+	}
+
 	tests := []testCase{
 		{"create unresolvable symlink", func(t *testing.T, w *Watcher, tmp string) {
 			addWatch(t, w, tmp)
