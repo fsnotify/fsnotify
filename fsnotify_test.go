@@ -166,7 +166,7 @@ func TestWatch(t *testing.T) {
 				// behaviour too.
 				t.Skip("broken on macOS")
 			}
-			if !hasPrivilegesForSymlink() {
+			if !internal.HasPrivilegesForSymlink() {
 				t.Skip("does not have privileges for symlink on this OS")
 			}
 
@@ -198,7 +198,7 @@ func TestWatch(t *testing.T) {
 				// behaviour too.
 				t.Skip("broken on macOS")
 			}
-			if !hasPrivilegesForSymlink() {
+			if !internal.HasPrivilegesForSymlink() {
 				t.Skip("does not have privileges for symlink on this OS")
 			}
 
@@ -252,7 +252,7 @@ func TestWatchCreate(t *testing.T) {
 
 		// Links
 		{"create new symlink to file", func(t *testing.T, w *Watcher, tmp string) {
-			if !hasPrivilegesForSymlink() {
+			if !internal.HasPrivilegesForSymlink() {
 				t.Skip("does not have privileges for symlink on this OS")
 			}
 			touch(t, tmp, "file")
@@ -262,7 +262,7 @@ func TestWatchCreate(t *testing.T) {
 			create  /link
 		`},
 		{"create new symlink to directory", func(t *testing.T, w *Watcher, tmp string) {
-			if !hasPrivilegesForSymlink() {
+			if !internal.HasPrivilegesForSymlink() {
 				t.Skip("does not have privileges for symlink on this OS")
 			}
 			addWatch(t, w, tmp)
@@ -517,7 +517,7 @@ func TestWatchRename(t *testing.T) {
 }
 
 func TestWatchSymlink(t *testing.T) {
-	if !hasPrivilegesForSymlink() {
+	if !internal.HasPrivilegesForSymlink() {
 		t.Skip("does not have privileges for symlink on this OS")
 	}
 
@@ -768,7 +768,8 @@ func TestWatchRm(t *testing.T) {
 }
 
 // TODO: this fails reguarly in the CI; not sure if it's a bug with the test or
-//       code; need to look in to it.
+//
+//	code; need to look in to it.
 func TestClose(t *testing.T) {
 	chanClosed := func(t *testing.T, w *Watcher) {
 		t.Helper()
@@ -988,7 +989,8 @@ func TestAdd(t *testing.T) {
 }
 
 // TODO: should also check internal state is correct/cleaned up; e.g. no
-//       left-over file descriptors or whatnot.
+//
+//	left-over file descriptors or whatnot.
 func TestRemove(t *testing.T) {
 	t.Run("works", func(t *testing.T) {
 		t.Parallel()
