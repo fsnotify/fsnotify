@@ -3,10 +3,10 @@
 //
 // Currently supported systems:
 //
-//    Linux 2.6.32+    via inotify
-//    BSD, macOS       via kqueue
-//    Windows          via ReadDirectoryChangesW
-//    illumos          via FEN
+//	Linux 2.6.32+    via inotify
+//	BSD, macOS       via kqueue
+//	Windows          via ReadDirectoryChangesW
+//	illumos          via FEN
 package fsnotify
 
 import (
