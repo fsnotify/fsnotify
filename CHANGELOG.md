@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - illumos: add FEN backend to support illumos and Solaris. ([#371])
 
+- all: add `AddWith()`, which is identical to `Add()` but allows passing
+  options. ([#521])
+
+- windows: allow setting the buffer size with `fsnotify.WithBufferSize()`; the
+  default of 64K is the highest value that works on all platforms and is enough
+  for most purposes, but in some cases a highest buffer is needed. ([#521])
+
 ### Changes and fixes
 
 - inotify: remove watcher if a watched path is renamed ([#518])
@@ -23,24 +30,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - windows: don't listen for file attribute changes ([#520])
 
-  File attribute changes are sent as FILE_ACTION_MODIFIED by the Windows API,
+  File attribute changes are sent as `FILE_ACTION_MODIFIED` by the Windows API,
   with no way to see if they're a file write or attribute change, so would show
   up as a fsnotify.Write event. This is never useful, and could result in many
   spurious Write events.
 
-- windows: return ErrEventOverflow if the buffer is full ([#525])
+- windows: return `ErrEventOverflow` if the buffer is full ([#525])
 
   Before it would merely return "short read", making it hard to detect this
   error.
 
-- all: return ErrClosed on Add() when the watcher is closed ([#516])
+- all: return `ErrClosed` on `Add()` when the watcher is closed ([#516])
+
+- kqueue: ideal with `rm -rf watched-dir` better ([#526])
 
 
 [#371]: https://github.com/fsnotify/fsnotify/pull/371
 [#516]: https://github.com/fsnotify/fsnotify/pull/516
 [#518]: https://github.com/fsnotify/fsnotify/pull/518
 [#520]: https://github.com/fsnotify/fsnotify/pull/520
+[#521]: https://github.com/fsnotify/fsnotify/pull/521
 [#525]: https://github.com/fsnotify/fsnotify/pull/525
+[#526]: https://github.com/fsnotify/fsnotify/pull/526
 
 ## [1.6.0] - 2022-10-13
 
