@@ -1,11 +1,7 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
+Unreleased
+----------
 
 ### Additions
 
@@ -42,7 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - all: return `ErrClosed` on `Add()` when the watcher is closed ([#516])
 
-- kqueue: ideal with `rm -rf watched-dir` better ([#526])
+- kqueue: deal with `rm -rf watched-dir` better ([#526])
+
+- Add `Watcher.Errors` and `Watcher.Events` to the no-op `Watcher` in
+  `backend_other.go`, making it easier to use on unsupported platforms such as
+  WASM, AIX, etc. ([#528])
 
 
 [#371]: https://github.com/fsnotify/fsnotify/pull/371
@@ -52,9 +52,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#521]: https://github.com/fsnotify/fsnotify/pull/521
 [#525]: https://github.com/fsnotify/fsnotify/pull/525
 [#526]: https://github.com/fsnotify/fsnotify/pull/526
+[#528]: https://github.com/fsnotify/fsnotify/pull/528
 
-## [1.6.0] - 2022-10-13
-
+1.6.0 - 2022-10-13
+-------------------
 This version of fsnotify needs Go 1.16 (this was already the case since 1.5.1,
 but not documented). It also increases the minimum Linux version to 2.6.32.
 
