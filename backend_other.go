@@ -1,12 +1,9 @@
-//go:build !darwin && !dragonfly && !freebsd && !openbsd && !linux && !netbsd && !solaris && !windows
-// +build !darwin,!dragonfly,!freebsd,!openbsd,!linux,!netbsd,!solaris,!windows
+//go:build appengine || (!darwin && !dragonfly && !freebsd && !openbsd && !linux && !netbsd && !solaris && !windows)
+// +build appengine !darwin,!dragonfly,!freebsd,!openbsd,!linux,!netbsd,!solaris,!windows
 
 package fsnotify
 
-import (
-	"fmt"
-	"runtime"
-)
+import "errors"
 
 // Watcher watches a set of paths, delivering events on a channel.
 //
@@ -107,7 +104,7 @@ type Watcher struct {
 
 // NewWatcher creates a new Watcher.
 func NewWatcher() (*Watcher, error) {
-	return nil, fmt.Errorf("fsnotify not supported on %s", runtime.GOOS)
+	return nil, errors.New("fsnotify not supported on the current platform")
 }
 
 // Close removes all watches and closes the events channel.
@@ -161,9 +158,7 @@ func (w *Watcher) Add(name string) error { return nil }
 //
 //   - [WithBufferSize] sets the buffer size for the Windows backend; no-op on
 //     other platforms. The default is 64K (65536 bytes).
-func (w *Watcher) AddWith(name string, opts ...addOpt) error {
-	return nil
-}
+func (w *Watcher) AddWith(name string, opts ...addOpt) error { return nil }
 
 // Remove stops monitoring the path for changes.
 //

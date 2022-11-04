@@ -1,5 +1,5 @@
-//go:build linux
-// +build linux
+//go:build linux && !appengine
+// +build linux,!appengine
 
 package fsnotify
 
