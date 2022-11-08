@@ -5,7 +5,6 @@ package fsnotify
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -13,57 +12,6 @@ import (
 	"testing"
 	"time"
 )
-
-// Make sure there are no additional threads being created.
-//
-// TODO: should generalize this and run for all backends.
-func TestInotifyNoBlockingSyscalls(t *testing.T) {
-	test := func() error {
-		getThreads := func() (int, error) {
-			// return pprof.Lookup("threadcreate").Count()
-			d := fmt.Sprintf("/proc/%d/task", os.Getpid())
-			ls, err := os.ReadDir(d)
-			if err != nil {
-				return 0, fmt.Errorf("reading %q: %s", d, err)
-			}
-			return len(ls), nil
-		}
-
-		w := newWatcher(t)
-		start, err := getThreads()
-		if err != nil {
-			return err
-		}
-
-		// Call readEvents a bunch of times; if this function has a blocking raw
-		// syscall, it'll create many new kthreads
-		for i := 0; i <= 60; i++ {
-			go w.readEvents()
-		}
-
-		time.Sleep(2 * time.Second)
-
-		end, err := getThreads()
-		if err != nil {
-			return err
-		}
-		if diff := end - start; diff > 0 {
-			return fmt.Errorf("Got a nonzero diff %v. starting: %v. ending: %v", diff, start, end)
-		}
-		return nil
-	}
-
-	// This test can be a bit flaky, so run it twice and consider it "failed"
-	// only if both fail.
-	err := test()
-	if err != nil {
-		time.Sleep(2 * time.Second)
-		err := test()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-}
 
 // Ensure that the correct error is returned on overflows.
 func TestInotifyOverflow(t *testing.T) {
