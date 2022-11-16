@@ -120,6 +120,8 @@ remove=$(<<EOF
 // /tmp/dir and /tmp/dir/subdir then you will need to remove both.
 //
 // Removing a path that has not yet been added returns [ErrNonExistentWatch].
+//
+// Returns nil if [Watcher.Close] was called.
 EOF
 )
 
