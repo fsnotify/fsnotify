@@ -40,9 +40,13 @@ Unreleased
 
 - kqueue: deal with `rm -rf watched-dir` better ([#526], [#537])
 
-- Add `Watcher.Errors` and `Watcher.Events` to the no-op `Watcher` in
+- other: add `Watcher.Errors` and `Watcher.Events` to the no-op `Watcher` in
   `backend_other.go`, making it easier to use on unsupported platforms such as
   WASM, AIX, etc. ([#528])
+
+- other: use the backend_other.go no-op if the `appengine` build tag is set;
+  Google AppEngine forbids usage of the unsafe package so the inotify backend
+  won't work there.
 
 
 [#371]: https://github.com/fsnotify/fsnotify/pull/371
