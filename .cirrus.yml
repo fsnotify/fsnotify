@@ -1,0 +1,12 @@
+freebsd_task:
+  name: 'FreeBSD'
+  freebsd_instance:
+    image_family: freebsd-13-1
+  install_script:
+    - pkg update -f
+    - pkg install -y go
+  test_script:
+      # run tests as user "cirrus" instead of root
+    - pw useradd cirrus -m
+    - chown -R cirrus:cirrus .
+    - sudo -u cirrus go test -race ./...
