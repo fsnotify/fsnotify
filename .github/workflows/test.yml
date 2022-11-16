@@ -72,22 +72,6 @@ jobs:
         run: |
           go test -race ./...
 
-  # FreeBSD
-  testFreeBSD:
-    runs-on: macos-12
-    name: test (freebsd, 1.18)
-    steps:
-      - uses: actions/checkout@v3
-      - name: test (freebsd, 1.18)
-        id: test
-        uses: vmactions/freebsd-vm@v0
-        with:
-          usesh: true
-          prepare: pkg install -y go
-          run: |
-            pw user add -n action -m
-            su action -c 'go test -race ./...'
-
   # OpenBSD; no -race as the VM doesn't include the comp set.
   #
   # TODO: should probably add this, but on my local machine the tests time out
