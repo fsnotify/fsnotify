@@ -6,7 +6,6 @@ package fsnotify
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -570,8 +569,8 @@ func (w *Watcher) readEvents() {
 					}
 				} else {
 					filePath := filepath.Clean(event.Name)
-					if fileInfo, err := os.Lstat(filePath); err == nil {
-						err := w.sendFileCreatedEventIfNew(filePath, fileInfo)
+					if fi, err := os.Lstat(filePath); err == nil {
+						err := w.sendFileCreatedEventIfNew(filePath, fi)
 						if err != nil {
 							if !w.sendError(err) {
 								closed = true
@@ -610,15 +609,20 @@ func (w *Watcher) newEvent(name string, mask uint32) Event {
 // watchDirectoryFiles to mimic inotify when adding a watch on a directory
 func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 	// Get all files
-	files, err := ioutil.ReadDir(dirPath)
+	files, err := os.ReadDir(dirPath)
 	if err != nil {
 		return err
 	}
 
-	for _, fileInfo := range files {
-		path := filepath.Join(dirPath, fileInfo.Name())
+	for _, f := range files {
+		path := filepath.Join(dirPath, f.Name())
 
-		cleanPath, err := w.internalWatch(path, fileInfo)
+		fi, err := f.Info()
+		if err != nil {
+			return fmt.Errorf("%q: %w", filepath.Join(dirPath, fi.Name()), err)
+		}
+
+		cleanPath, err := w.internalWatch(path, fi)
 		if err != nil {
 			// No permission to read the file; that's not a problem: just skip.
 			// But do add it to w.fileExists to prevent it from being picked up
@@ -628,7 +632,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 			case errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM):
 				cleanPath = filepath.Clean(path)
 			default:
-				return fmt.Errorf("%q: %w", filepath.Join(dirPath, fileInfo.Name()), err)
+				return fmt.Errorf("%q: %w", filepath.Join(dirPath, fi.Name()), err)
 			}
 		}
 
@@ -645,7 +649,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 // This functionality is to have the BSD watcher match the inotify, which sends
 // a create event for files created in a watched directory.
 func (w *Watcher) sendDirectoryChangeEvents(dir string) error {
-	files, err := ioutil.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		// Directory no longer exists: we can ignore this safely. kqueue will
 		// still give us the correct events.
@@ -655,8 +659,13 @@ func (w *Watcher) sendDirectoryChangeEvents(dir string) error {
 		return fmt.Errorf("fsnotify.sendDirectoryChangeEvents: %w", err)
 	}
 
-	for _, fi := range files {
-		err := w.sendFileCreatedEventIfNew(filepath.Join(dir, fi.Name()), fi)
+	for _, f := range files {
+		fi, err := f.Info()
+		if err != nil {
+			return fmt.Errorf("fsnotify.sendDirectoryChangeEvents: %w", err)
+		}
+
+		err = w.sendFileCreatedEventIfNew(filepath.Join(dir, fi.Name()), fi)
 		if err != nil {
 			// Don't need to send an error if this file isn't readable.
 			if errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM) {
@@ -669,7 +678,7 @@ func (w *Watcher) sendDirectoryChangeEvents(dir string) error {
 }
 
 // sendFileCreatedEvent sends a create event if the file isn't already being tracked.
-func (w *Watcher) sendFileCreatedEventIfNew(filePath string, fileInfo os.FileInfo) (err error) {
+func (w *Watcher) sendFileCreatedEventIfNew(filePath string, fi os.FileInfo) (err error) {
 	w.mu.Lock()
 	_, doesExist := w.fileExists[filePath]
 	w.mu.Unlock()
@@ -680,7 +689,7 @@ func (w *Watcher) sendFileCreatedEventIfNew(filePath string, fileInfo os.FileInf
 	}
 
 	// like watchDirectoryFiles (but without doing another ReadDir)
-	filePath, err = w.internalWatch(filePath, fileInfo)
+	filePath, err = w.internalWatch(filePath, fi)
 	if err != nil {
 		return err
 	}
@@ -692,8 +701,8 @@ func (w *Watcher) sendFileCreatedEventIfNew(filePath string, fileInfo os.FileInf
 	return nil
 }
 
-func (w *Watcher) internalWatch(name string, fileInfo os.FileInfo) (string, error) {
-	if fileInfo.IsDir() {
+func (w *Watcher) internalWatch(name string, fi os.FileInfo) (string, error) {
+	if fi.IsDir() {
 		// mimic Linux providing delete events for subdirectories, but preserve
 		// the flags used if currently watching subdirectory
 		w.mu.Lock()

@@ -635,6 +635,8 @@ func (w *Watcher) readEvents() {
 		}
 
 		switch qErr {
+		case nil:
+			// No error
 		case windows.ERROR_MORE_DATA:
 			if watch == nil {
 				w.sendError(errors.New("ERROR_MORE_DATA has unexpectedly null lpOverlapped buffer"))
@@ -656,7 +658,6 @@ func (w *Watcher) readEvents() {
 		default:
 			w.sendError(os.NewSyscallError("GetQueuedCompletionPort", qErr))
 			continue
-		case nil:
 		}
 
 		var offset uint32
@@ -733,8 +734,9 @@ func (w *Watcher) readEvents() {
 
 			// Error!
 			if offset >= n {
+				//lint:ignore ST1005 Windows should be capitalized
 				w.sendError(errors.New(
-					"Windows system assumed buffer larger than it is, events have likely been missed."))
+					"Windows system assumed buffer larger than it is, events have likely been missed"))
 				break
 			}
 		}
