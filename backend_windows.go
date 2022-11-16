@@ -1,6 +1,10 @@
 //go:build windows
 // +build windows
 
+// Windows backend based on ReadDirectoryChangesW()
+//
+// https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-readdirectorychangesw
+
 package fsnotify
 
 import (
@@ -96,6 +100,8 @@ type Watcher struct {
 	//                      you may get hundreds of Write events, so you
 	//                      probably want to wait until you've stopped receiving
 	//                      them (see the dedup example in cmd/fsnotify).
+	//                      Some systems may send Write event for directories
+	//                      when the directory content changes.
 	//
 	//   fsnotify.Chmod     Attributes were changed. On Linux this is also sent
 	//                      when a file is removed (or more accurately, when a
@@ -193,7 +199,7 @@ func (w *Watcher) Close() error {
 //
 // A path can only be watched once; attempting to watch it more than once will
 // return an error. Paths that do not yet exist on the filesystem cannot be
-// added.
+// watched.
 //
 // A watch will be automatically removed if the watched path is deleted or
 // renamed. The exception is the Windows backend, which doesn't remove the
@@ -209,8 +215,9 @@ func (w *Watcher) Close() error {
 // # Watching directories
 //
 // All files in a directory are monitored, including new files that are created
-// after the watcher is started. Subdirectories are not watched (i.e. it's
-// non-recursive).
+// after the watcher is started. By default subdirectories are not watched (i.e.
+// it's non-recursive), but if the path ends with "/..." all files and
+// subdirectories are watched too.
 //
 // # Watching files
 //
@@ -258,8 +265,15 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 
 // Remove stops monitoring the path for changes.
 //
-// Directories are always removed non-recursively. For example, if you added
-// /tmp/dir and /tmp/dir/subdir then you will need to remove both.
+// If the path was added as a recursive watch (e.g. as "/tmp/dir/...") then the
+// entire recusrice watch will be removed. You can use both "/tmp/dir" and
+// "/tmp/dir/..." (they behave identical).
+//
+// You cannot remove individual files or subdirectories from recursive watches;
+// e.g. Add("/tmp/path/...") and then Remove("/tmp/path/sub") will fail.
+//
+// For other watches directories are removed non-recursively. For example, if
+// you added "/tmp/dir" and "/tmp/dir/subdir" then you will need to remove both.
 //
 // Removing a path that has not yet been added returns [ErrNonExistentWatch].
 //
@@ -362,13 +376,14 @@ type inode struct {
 }
 
 type watch struct {
-	ov     windows.Overlapped
-	ino    *inode            // i-number
-	path   string            // Directory path
-	mask   uint64            // Directory itself is being watched with these notify flags
-	names  map[string]uint64 // Map of names being watched and their notify flags
-	rename string            // Remembers the old name while renaming a file
-	buf    []byte            // buffer, allocated later
+	ov      windows.Overlapped
+	ino     *inode            // i-number
+	recurse bool              // Recursive watch?
+	path    string            // Directory path
+	mask    uint64            // Directory itself is being watched with these notify flags
+	names   map[string]uint64 // Map of names being watched and their notify flags
+	rename  string            // Remembers the old name while renaming a file
+	buf     []byte            // buffer, allocated later
 }
 
 type (
@@ -442,6 +457,7 @@ func (m watchMap) set(ino *inode, watch *watch) {
 
 // Must run within the I/O thread.
 func (w *Watcher) addWatch(pathname string, flags uint64, bufsize int) error {
+	pathname, recurse := recursivePath(pathname)
 	dir, err := w.getDir(pathname)
 	if err != nil {
 		return err
@@ -461,10 +477,11 @@ func (w *Watcher) addWatch(pathname string, flags uint64, bufsize int) error {
 			return os.NewSyscallError("CreateIoCompletionPort", err)
 		}
 		watchEntry = &watch{
-			ino:   ino,
-			path:  dir,
-			names: make(map[string]uint64),
-			buf:   make([]byte, bufsize),
+			ino:     ino,
+			path:    dir,
+			names:   make(map[string]uint64),
+			recurse: recurse,
+			buf:     make([]byte, bufsize),
 		}
 		w.mu.Lock()
 		w.watches.set(ino, watchEntry)
@@ -494,6 +511,8 @@ func (w *Watcher) addWatch(pathname string, flags uint64, bufsize int) error {
 
 // Must run within the I/O thread.
 func (w *Watcher) remWatch(pathname string) error {
+	pathname, recurse := recursivePath(pathname)
+
 	dir, err := w.getDir(pathname)
 	if err != nil {
 		return err
@@ -506,6 +525,10 @@ func (w *Watcher) remWatch(pathname string) error {
 	w.mu.Lock()
 	watch := w.watches.get(ino)
 	w.mu.Unlock()
+
+	if recurse && !watch.recurse {
+		return fmt.Errorf("can't use /... with non-recursive watch %q", pathname)
+	}
 
 	err = windows.CloseHandle(ino.handle)
 	if err != nil {
@@ -568,7 +591,7 @@ func (w *Watcher) startRead(watch *watch) error {
 	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&watch.buf))
 	rdErr := windows.ReadDirectoryChanges(watch.ino.handle,
 		(*byte)(unsafe.Pointer(hdr.Data)), uint32(hdr.Len),
-		false, mask, nil, &watch.ov, 0)
+		watch.recurse, mask, nil, &watch.ov, 0)
 	if rdErr != nil {
 		err := os.NewSyscallError("ReadDirectoryChanges", rdErr)
 		if rdErr == windows.ERROR_ACCESS_DENIED && watch.mask&provisional == 0 {
@@ -595,9 +618,8 @@ func (w *Watcher) readEvents() {
 	runtime.LockOSThread()
 
 	for {
+		// This error is handled after the watch == nil check below.
 		qErr := windows.GetQueuedCompletionStatus(w.port, &n, &key, &ov, windows.INFINITE)
-		// This error is handled after the watch == nil check below. NOTE: this
-		// seems odd, note sure if it's correct.
 
 		watch := (*watch)(unsafe.Pointer(ov))
 		if watch == nil {

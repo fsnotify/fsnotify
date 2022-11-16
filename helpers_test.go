@@ -138,19 +138,19 @@ func mkdir(t *testing.T, path ...string) {
 }
 
 // mkdir -p
-// func mkdirAll(t *testing.T, path ...string) {
-// 	t.Helper()
-// 	if len(path) < 1 {
-// 		t.Fatalf("mkdirAll: path must have at least one element: %s", path)
-// 	}
-// 	err := os.MkdirAll(join(path...), 0o0755)
-// 	if err != nil {
-// 		t.Fatalf("mkdirAll(%q): %s", join(path...), err)
-// 	}
-// 	if shouldWait(path...) {
-// 		eventSeparator()
-// 	}
-// }
+func mkdirAll(t *testing.T, path ...string) {
+	t.Helper()
+	if len(path) < 1 {
+		t.Fatalf("mkdirAll: path must have at least one element: %s", path)
+	}
+	err := os.MkdirAll(join(path...), 0o0755)
+	if err != nil {
+		t.Fatalf("mkdirAll(%q): %s", join(path...), err)
+	}
+	if shouldWait(path...) {
+		eventSeparator()
+	}
+}
 
 // ln -s
 func symlink(t *testing.T, target string, link ...string) {
@@ -575,4 +575,13 @@ func isSolaris() bool {
 		return true
 	}
 	return false
+}
+
+func recurseOnly(t *testing.T) {
+	switch runtime.GOOS {
+	case "windows":
+		// Run test.
+	default:
+		t.Skip("recursion not yet supported on " + runtime.GOOS)
+	}
 }

@@ -69,7 +69,7 @@ add=$(<<EOF
 //
 // A path can only be watched once; attempting to watch it more than once will
 // return an error. Paths that do not yet exist on the filesystem cannot be
-// added.
+// watched.
 //
 // A watch will be automatically removed if the watched path is deleted or
 // renamed. The exception is the Windows backend, which doesn't remove the
@@ -85,8 +85,9 @@ add=$(<<EOF
 // # Watching directories
 //
 // All files in a directory are monitored, including new files that are created
-// after the watcher is started. Subdirectories are not watched (i.e. it's
-// non-recursive).
+// after the watcher is started. By default subdirectories are not watched (i.e.
+// it's non-recursive), but if the path ends with "/..." all files and
+// subdirectories are watched too.
 //
 // # Watching files
 //
@@ -116,8 +117,15 @@ EOF
 remove=$(<<EOF
 // Remove stops monitoring the path for changes.
 //
-// Directories are always removed non-recursively. For example, if you added
-// /tmp/dir and /tmp/dir/subdir then you will need to remove both.
+// If the path was added as a recursive watch (e.g. as "/tmp/dir/...") then the
+// entire recusrice watch will be removed. You can use both "/tmp/dir" and
+// "/tmp/dir/..." (they behave identical).
+//
+// You cannot remove individual files or subdirectories from recursive watches;
+// e.g. Add("/tmp/path/...") and then Remove("/tmp/path/sub") will fail.
+//
+// For other watches directories are removed non-recursively. For example, if
+// you added "/tmp/dir" and "/tmp/dir/subdir" then you will need to remove both.
 //
 // Removing a path that has not yet been added returns [ErrNonExistentWatch].
 //
@@ -166,6 +174,8 @@ events=$(<<EOF
 	//                      you may get hundreds of Write events, so you
 	//                      probably want to wait until you've stopped receiving
 	//                      them (see the dedup example in cmd/fsnotify).
+	//                      Some systems may send Write event for directories
+	//                      when the directory content changes.
 	//
 	//   fsnotify.Chmod     Attributes were changed. On Linux this is also sent
 	//                      when a file is removed (or more accurately, when a
