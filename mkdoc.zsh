@@ -56,6 +56,16 @@ watcher=$(<<EOF
 // The sysctl variables kern.maxfiles and kern.maxfilesperproc can be used to
 // control the maximum number of open files, as well as /etc/login.conf on BSD
 // systems.
+//
+// # Windows notes
+//
+// Paths can be added as "C:\\path\\to\\dir", but forward slashes
+// ("C:/path/to/dir") will also work.
+//
+// The default buffer size is 64K, which is the largest value that is guaranteed
+// to work with SMB filesystems. If you have many events in quick succession
+// this may not be enough, and you will have to use [WithBufferSize] to increase
+// the value.
 EOF
 )
 

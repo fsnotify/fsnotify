@@ -133,8 +133,8 @@ func WithBufferSize(bytes int) addOpt {
 	return func(opt *withOpts) { opt.bufsize = bytes }
 }
 
-// Check if this path is recursive (ends with "/..."), and return the path with
-// the /... stripped.
+// Check if this path is recursive (ends with "/..." or "\..."), and return the
+// path with the /... stripped.
 func recursivePath(path string) (string, bool) {
 	if filepath.Base(path) == "..." {
 		return filepath.Dir(path), true

@@ -866,7 +866,7 @@ func TestWatchRecursive(t *testing.T) {
 			mkdirAll(t, tmp, "/one/two/three/four")
 			addWatch(t, w, tmp, "...")
 
-			mv(t, filepath.Join(tmp, "one"), tmp, "one-rename")
+			mv(t, join(tmp, "one"), tmp, "one-rename")
 			touch(t, tmp, "one-rename/file")
 			touch(t, tmp, "one-rename/two/three/file")
 		}, `
