@@ -266,8 +266,8 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 // Remove stops monitoring the path for changes.
 //
 // If the path was added as a recursive watch (e.g. as "/tmp/dir/...") then the
-// entire recusrice watch will be removed. You can use both "/tmp/dir" and
-// "/tmp/dir/..." (they behave identical).
+// entire recursive watch will be removed. You can use either "/tmp/dir" or
+// "/tmp/dir/..." (they behave identically).
 //
 // You cannot remove individual files or subdirectories from recursive watches;
 // e.g. Add("/tmp/path/...") and then Remove("/tmp/path/sub") will fail.
