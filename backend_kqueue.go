@@ -1,6 +1,9 @@
 //go:build freebsd || openbsd || netbsd || dragonfly || darwin
 // +build freebsd openbsd netbsd dragonfly darwin
 
+// Note: the documentation on the Watcher type and methods is generated from
+// mkdoc.zsh
+
 package fsnotify
 
 import (

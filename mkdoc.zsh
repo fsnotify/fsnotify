@@ -2,8 +2,8 @@
 [ "${ZSH_VERSION:-}" = "" ] && echo >&2 "Only works with zsh" && exit 1
 setopt err_exit no_unset pipefail extended_glob
 
-# Simple script to update the godoc comments on all watchers. Probably took me
-# more time to write this than doing it manually, but ah well 🙃
+# Simple script to update the godoc comments on all watchers so you don't need
+# to update the same comment 5 times.
 
 watcher=$(<<EOF
 // Watcher watches a set of paths, delivering events on a channel.

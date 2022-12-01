@@ -4,6 +4,9 @@
 // Windows backend based on ReadDirectoryChangesW()
 //
 // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-readdirectorychangesw
+//
+// Note: the documentation on the Watcher type and methods is generated from
+// mkdoc.zsh
 
 package fsnotify
 

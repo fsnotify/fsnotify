@@ -1,6 +1,9 @@
 //go:build appengine || (!darwin && !dragonfly && !freebsd && !openbsd && !linux && !netbsd && !solaris && !windows)
 // +build appengine !darwin,!dragonfly,!freebsd,!openbsd,!linux,!netbsd,!solaris,!windows
 
+// Note: the documentation on the Watcher type and methods is generated from
+// mkdoc.zsh
+
 package fsnotify
 
 import "errors"
