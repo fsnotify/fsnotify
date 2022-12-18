@@ -65,32 +65,7 @@ type FanotifyEvent struct {
 	Pid int
 }
 
-// Listener represents a generic notification group that holds a list of files,
-// directories or a mountpoint for which notification or permission
-// events shall be created.
-type Listener struct {
-	// fd returned by fanotify_init
-	fd int
-	// flags passed to fanotify_init
-	flags uint
-	// mount fd is the file descriptor of the mountpoint
-	mountpoint         *os.File
-	kernelMajorVersion int
-	kernelMinorVersion int
-	entireMount        bool
-	notificationOnly   bool
-	watches            map[string]bool
-	stopper            struct {
-		r *os.File
-		w *os.File
-	}
-	// Events holds either notification events for the watched file/directory.
-	Events chan FanotifyEvent
-	// PermissionEvents holds permission request events for the watched file/directory.
-	PermissionEvents chan FanotifyEvent
-}
-
-// NewListener returns a fanotify listener from which filesystem
+// NewFanotifyWatcher returns a fanotify listener from which filesystem
 // notification events can be read. Each listener
 // supports listening to events under a single mount point.
 // For cases where multiple mount points need to be monitored
@@ -127,7 +102,7 @@ type Listener struct {
 //  - For Linux kernel version 5.0 and earlier no additional information about the underlying filesystem object is available.
 //  - For Linux kernel versions 5.1 till 5.8 (inclusive) additional information about the underlying filesystem object is correlated to an event.
 //  - For Linux kernel version 5.9 or later the modified file name is made available in the event.
-func NewListener(mountPoint string, entireMount bool, permType PermissionType) (*Listener, error) {
+func NewFanotifyWatcher(mountPoint string, entireMount bool, permType PermissionType) (*Watcher, error) {
 	capSysAdmin, err := checkCapSysAdmin()
 	if err != nil {
 		return nil, err
@@ -139,60 +114,25 @@ func NewListener(mountPoint string, entireMount bool, permType PermissionType) (
 	if permType == PreContent || permType == PostContent {
 		isNotificationListener = false
 	}
-	return newListener(mountPoint, entireMount, isNotificationListener, permType)
-}
-
-// Start starts the listener and polls the fanotify event notification group for marked events.
-// The events are pushed into the Listener's Events channel.
-func (l *Listener) Start() {
-	var fds [2]unix.PollFd
-	if l == nil {
-		panic("nil listener")
+	w, err := newFanotifyWatcher(mountPoint, entireMount, isNotificationListener, permType)
+	if err != nil {
+		return nil, err
 	}
-	// Fanotify Fd
-	fds[0].Fd = int32(l.fd)
-	fds[0].Events = unix.POLLIN
-	// Stopper/Cancellation Fd
-	fds[1].Fd = int32(l.stopper.r.Fd())
-	fds[1].Events = unix.POLLIN
-	for {
-		n, err := unix.Poll(fds[:], -1)
-		if n == 0 {
-			continue
-		}
-		if err != nil {
-			if err == unix.EINTR {
-				continue
-			} else {
-				// TODO handle error
-				return
-			}
-		}
-		if fds[1].Revents != 0 {
-			if fds[1].Revents&unix.POLLIN == unix.POLLIN {
-				// found data on the stopper
-				return
-			}
-		}
-		if fds[0].Revents != 0 {
-			if fds[0].Revents&unix.POLLIN == unix.POLLIN {
-				l.readEvents() // blocks when the channel bufferred is full
-			}
-		}
-	}
+	go w.start()
+	return w, nil
 }
 
 // Stop stops the listener and closes the notification group and the events channel
-func (l *Listener) Stop() {
-	if l == nil {
+func (w *Watcher) Stop() {
+	if w == nil {
 		return
 	}
 	// stop the listener
-	unix.Write(int(l.stopper.w.Fd()), []byte("stop"))
-	l.mountpoint.Close()
-	l.stopper.r.Close()
-	l.stopper.w.Close()
-	close(l.Events)
+	unix.Write(int(w.stopper.w.Fd()), []byte("stop"))
+	w.mountpoint.Close()
+	w.stopper.r.Close()
+	w.stopper.w.Close()
+	close(w.Events)
 }
 
 // WatchMount adds or modifies the notification marks for the entire
@@ -202,15 +142,15 @@ func (l *Listener) Stop() {
 // The following event types are considered invalid and WatchMount returns [ErrInvalidFlagCombination]
 // for - [FileCreated], [FileAttribChanged], [FileMovedTo], [FileMovedFrom], [WatchedFileDeleted],
 // [WatchedFileOrDirectoryDeleted], [FileDeleted], [FileOrDirectoryDeleted]
-func (l *Listener) WatchMount(eventTypes EventType) error {
-	return l.fanotifyMark(l.mountpoint.Name(), unix.FAN_MARK_ADD|unix.FAN_MARK_MOUNT, uint64(eventTypes))
+func (w *Watcher) WatchMount(eventTypes EventType) error {
+	return w.fanotifyMark(w.mountpoint.Name(), unix.FAN_MARK_ADD|unix.FAN_MARK_MOUNT, uint64(eventTypes))
 }
 
 // UnwatchMount removes the notification marks for the entire mount point.
 // This method returns an [ErrWatchPath] if the listener was not initialized to monitor
 // the entire mount point. To unmark specific files or directories use [DeleteWatch] method.
-func (l *Listener) UnwatchMount(eventTypes EventType) error {
-	return l.fanotifyMark(l.mountpoint.Name(), unix.FAN_MARK_REMOVE|unix.FAN_MARK_MOUNT, uint64(eventTypes))
+func (w *Watcher) UnwatchMount(eventTypes EventType) error {
+	return w.fanotifyMark(w.mountpoint.Name(), unix.FAN_MARK_REMOVE|unix.FAN_MARK_MOUNT, uint64(eventTypes))
 }
 
 // AddWatch adds or modifies the fanotify mark for the specified path.
@@ -221,55 +161,54 @@ func (l *Listener) UnwatchMount(eventTypes EventType) error {
 //  - [FileCreated] cannot be or-ed / combined with [FileClosed]. The fanotify system does not generate any event for this combination.
 //  - [FileOpened] with any of the event types containing OrDirectory causes an event flood for the directory and then stopping raising any events at all.
 //  - [FileOrDirectoryOpened] with any of the other event types causes an event flood for the directory and then stopping raising any events at all.
-func (l *Listener) AddWatch(path string, eventTypes EventType) error {
-	if l == nil {
+func (w *Watcher) AddWatch(path string, eventTypes EventType) error {
+	if w == nil {
 		panic("nil listener")
 	}
-	if l.entireMount {
+	if w.entireMount {
 		return os.ErrInvalid
 	}
-	return l.fanotifyMark(path, unix.FAN_MARK_ADD, uint64(eventTypes|unix.FAN_EVENT_ON_CHILD))
+	return w.fanotifyMark(path, unix.FAN_MARK_ADD, uint64(eventTypes|unix.FAN_EVENT_ON_CHILD))
 }
 
 // Allow sends an "allowed" response to the permission request event.
-func (l *Listener) Allow(e FanotifyEvent) {
+func (w *Watcher) Allow(e FanotifyEvent) {
 	var response unix.FanotifyResponse
 	response.Fd = int32(e.Fd)
 	response.Response = unix.FAN_ALLOW
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.LittleEndian, &response)
-	unix.Write(l.fd, buf.Bytes())
+	unix.Write(w.fd, buf.Bytes())
 }
 
 // Deny sends an "denied" response to the permission request event.
-func (l *Listener) Deny(e FanotifyEvent) {
+func (w *Watcher) Deny(e FanotifyEvent) {
 	var response unix.FanotifyResponse
 	response.Fd = int32(e.Fd)
 	response.Response = unix.FAN_DENY
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.LittleEndian, &response)
-	unix.Write(l.fd, buf.Bytes())
+	unix.Write(w.fd, buf.Bytes())
 }
 
 // DeleteWatch removes/unmarks the fanotify mark for the specified path.
 // Calling DeleteWatch on the listener initialized to monitor the entire mount point
 // results in [os.ErrInvalid]. Use [UnwatchMount] for deleting marks on the mount point.
-func (l *Listener) DeleteWatch(parentDir string, eventTypes EventType) error {
-	if l.entireMount {
+func (w *Watcher) DeleteWatch(parentDir string, eventTypes EventType) error {
+	if w.entireMount {
 		return os.ErrInvalid
 	}
-	return l.fanotifyMark(parentDir, unix.FAN_MARK_REMOVE, uint64(eventTypes|unix.FAN_EVENT_ON_CHILD))
+	return w.fanotifyMark(parentDir, unix.FAN_MARK_REMOVE, uint64(eventTypes|unix.FAN_EVENT_ON_CHILD))
 }
 
 // ClearWatch stops watching for all event types
-func (l *Listener) ClearWatch() error {
-	if l == nil {
+func (w *Watcher) ClearWatch() error {
+	if w == nil {
 		panic("nil listener")
 	}
-	if err := unix.FanotifyMark(l.fd, unix.FAN_MARK_FLUSH, 0, -1, ""); err != nil {
+	if err := unix.FanotifyMark(w.fd, unix.FAN_MARK_FLUSH, 0, -1, ""); err != nil {
 		return err
 	}
-	l.watches = make(map[string]bool)
 	return nil
 }
 

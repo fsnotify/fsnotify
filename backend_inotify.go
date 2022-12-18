@@ -121,6 +121,23 @@ type Watcher struct {
 	paths       map[int]string    // Map of watched paths (watch descriptor → path)
 	done        chan struct{}     // Channel for sending a "quit message" to the reader goroutine
 	doneResp    chan struct{}     // Channel to respond to Close
+
+	// flags passed to fanotify_init
+	flags uint
+	// mount fd is the file descriptor of the mountpoint
+	mountpoint         *os.File
+	kernelMajorVersion int
+	kernelMinorVersion int
+	entireMount        bool
+	notificationOnly   bool
+	stopper            struct {
+		r *os.File
+		w *os.File
+	}
+	// FanotifyEvents holds either notification events for the watched file/directory.
+	FanotifyEvents chan FanotifyEvent
+	// PermissionEvents holds permission request events for the watched file/directory.
+	PermissionEvents chan FanotifyEvent
 }
 
 // NewWatcher creates a new Watcher.

@@ -214,7 +214,7 @@ func fanotifyEventOK(meta *unix.FanotifyEventMetadata, n int) bool {
 }
 
 // permissionType is ignored when isNotificationListener is true.
-func newListener(mountpointPath string, entireMount bool, notificationOnly bool, permissionType PermissionType) (*Listener, error) {
+func newFanotifyWatcher(mountpointPath string, entireMount bool, notificationOnly bool, permissionType PermissionType) (*Watcher, error) {
 
 	var flags, eventFlags uint
 
@@ -281,7 +281,7 @@ func newListener(mountpointPath string, entireMount bool, notificationOnly bool,
 	if err != nil {
 		return nil, fmt.Errorf("stopper error: cannot set fd to non-blocking: %v", err)
 	}
-	listener := &Listener{
+	listener := &Watcher{
 		fd:                 fd,
 		flags:              flags,
 		mountpoint:         mountpoint,
@@ -289,45 +289,68 @@ func newListener(mountpointPath string, entireMount bool, notificationOnly bool,
 		kernelMinorVersion: min,
 		entireMount:        entireMount,
 		notificationOnly:   notificationOnly,
-		watches:            make(map[string]bool),
 		stopper: struct {
 			r *os.File
 			w *os.File
 		}{r, w},
-		Events:           make(chan FanotifyEvent, 4096),
-		PermissionEvents: make(chan FanotifyEvent, 4096),
+		FanotifyEvents:   make(chan FanotifyEvent),
+		PermissionEvents: make(chan FanotifyEvent),
 	}
 	return listener, nil
 }
 
-func (l *Listener) fanotifyMark(path string, flags uint, mask uint64) error {
-	if l == nil {
+// start starts the listener and polls the fanotify event notification group for marked events.
+// The events are pushed into the Listener's Events channel.
+func (w *Watcher) start() {
+	var fds [2]unix.PollFd
+	if w == nil {
 		panic("nil listener")
 	}
-	skip := true
-	if !fanotifyMarkFlagsKernelSupport(mask, l.kernelMajorVersion, l.kernelMinorVersion) {
+	// Fanotify Fd
+	fds[0].Fd = int32(w.fd)
+	fds[0].Events = unix.POLLIN
+	// Stopper/Cancellation Fd
+	fds[1].Fd = int32(w.stopper.r.Fd())
+	fds[1].Events = unix.POLLIN
+	for {
+		n, err := unix.Poll(fds[:], -1)
+		if n == 0 {
+			continue
+		}
+		if err != nil {
+			if err == unix.EINTR {
+				continue
+			} else {
+				// TODO handle error
+				return
+			}
+		}
+		if fds[1].Revents != 0 {
+			if fds[1].Revents&unix.POLLIN == unix.POLLIN {
+				// found data on the stopper
+				return
+			}
+		}
+		if fds[0].Revents != 0 {
+			if fds[0].Revents&unix.POLLIN == unix.POLLIN {
+				w.readFanotifyEvents() // blocks when the channel bufferred is full
+			}
+		}
+	}
+}
+
+func (w *Watcher) fanotifyMark(path string, flags uint, mask uint64) error {
+	if w == nil {
+		panic("nil listener")
+	}
+	if !fanotifyMarkFlagsKernelSupport(mask, w.kernelMajorVersion, w.kernelMinorVersion) {
 		panic("some of the mark mask combinations specified are not supported on the current kernel; refer to the documentation")
 	}
 	if err := isFanotifyMarkMaskValid(flags, mask); err != nil {
 		return fmt.Errorf("%v: %w", err, ErrInvalidFlagCombination)
 	}
-	remove := flags&unix.FAN_MARK_REMOVE == unix.FAN_MARK_REMOVE
-	_, found := l.watches[path]
-	if found {
-		if remove {
-			delete(l.watches, path)
-			skip = false
-		}
-	} else {
-		if !remove {
-			l.watches[path] = true
-			skip = false
-		}
-	}
-	if !skip {
-		if err := unix.FanotifyMark(l.fd, flags, mask, -1, path); err != nil {
-			return err
-		}
+	if err := unix.FanotifyMark(w.fd, flags, mask, -1, path); err != nil {
+		return err
 	}
 	return nil
 }
@@ -377,7 +400,7 @@ func getFileHandleWithName(metadataLen uint16, buf []byte, i int) (*unix.FileHan
 	return &handle, fname
 }
 
-func (l *Listener) readEvents() error {
+func (w *Watcher) readFanotifyEvents() error {
 	var fid *fanotifyEventInfoFID
 	var metadata *unix.FanotifyEventMetadata
 	var buf [4096 * sizeOfFanotifyEventMetadata]byte
@@ -386,7 +409,7 @@ func (l *Listener) readEvents() error {
 	var fileName string
 
 	for {
-		n, err := unix.Read(l.fd, buf[:])
+		n, err := unix.Read(w.fd, buf[:])
 		if err == unix.EINTR {
 			continue
 		}
@@ -425,9 +448,9 @@ func (l *Listener) readEvents() error {
 				if mask&unix.FAN_ACCESS_PERM == unix.FAN_ACCESS_PERM ||
 					mask&unix.FAN_OPEN_PERM == unix.FAN_OPEN_PERM ||
 					mask&unix.FAN_OPEN_EXEC_PERM == unix.FAN_OPEN_EXEC_PERM {
-					l.PermissionEvents <- event
+					w.PermissionEvents <- event
 				} else {
-					l.Events <- event
+					w.FanotifyEvents <- event
 				}
 				i += int(metadata.Event_len)
 				n -= int(metadata.Event_len)
@@ -455,7 +478,7 @@ func (l *Listener) readEvents() error {
 				} else {
 					fileHandle = getFileHandle(metadata.Metadata_len, buf[:], i)
 				}
-				fd, errno := unix.OpenByHandleAt(int(l.mountpoint.Fd()), *fileHandle, unix.O_RDONLY)
+				fd, errno := unix.OpenByHandleAt(int(w.mountpoint.Fd()), *fileHandle, unix.O_RDONLY)
 				if errno != nil {
 					// log.Println("OpenByHandleAt:", errno)
 					i += int(metadata.Event_len)
@@ -479,7 +502,7 @@ func (l *Listener) readEvents() error {
 				}
 				// As of the kernel release (6.0) permission events cannot have FID flags.
 				// So the event here is always a notification event
-				l.Events <- event
+				w.FanotifyEvents <- event
 				i += int(metadata.Event_len)
 				n -= int(metadata.Event_len)
 				metadata = (*unix.FanotifyEventMetadata)(unsafe.Pointer(&buf[i]))
