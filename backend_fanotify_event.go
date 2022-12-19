@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"regexp"
 	"strconv"
 	"unsafe"
@@ -32,7 +33,7 @@ type kernelFSID struct {
 	val [2]int32
 }
 
-// FanotifyEventInfoFID represents a unique file identifier info record.
+// fanotifyEventInfoFID represents a unique file identifier info record.
 // This structure is used for records of types FAN_EVENT_INFO_TYPE_FID,
 // FAN_EVENT_INFO_TYPE_DFID and FAN_EVENT_INFO_TYPE_DFID_NAME.
 // For FAN_EVENT_INFO_TYPE_DFID_NAME there is additionally a null terminated
@@ -281,7 +282,7 @@ func newFanotifyWatcher(mountpointPath string, entireMount bool, notificationOnl
 	if err != nil {
 		return nil, fmt.Errorf("stopper error: cannot set fd to non-blocking: %v", err)
 	}
-	listener := &Watcher{
+	watcher := &Watcher{
 		fd:                 fd,
 		flags:              flags,
 		mountpoint:         mountpoint,
@@ -293,10 +294,11 @@ func newFanotifyWatcher(mountpointPath string, entireMount bool, notificationOnl
 			r *os.File
 			w *os.File
 		}{r, w},
+		fanotify:         true,
 		FanotifyEvents:   make(chan FanotifyEvent),
 		PermissionEvents: make(chan FanotifyEvent),
 	}
-	return listener, nil
+	return watcher, nil
 }
 
 // start starts the listener and polls the fanotify event notification group for marked events.
@@ -440,10 +442,12 @@ func (w *Watcher) readFanotifyEvents() error {
 					mask = mask ^ unix.FAN_ONDIR
 				}
 				event := FanotifyEvent{
-					Fd:         int(metadata.Fd),
-					Path:       string(name[:n1]),
-					EventTypes: EventType(mask),
-					Pid:        int(metadata.Pid),
+					Event: Event{
+						Name: string(name[:n1]),
+						Op:   EventType(mask).toOp(),
+					},
+					Fd:  int(metadata.Fd),
+					Pid: int(metadata.Pid),
 				}
 				if mask&unix.FAN_ACCESS_PERM == unix.FAN_ACCESS_PERM ||
 					mask&unix.FAN_OPEN_PERM == unix.FAN_OPEN_PERM ||
@@ -494,11 +498,12 @@ func (w *Watcher) readFanotifyEvents() error {
 					mask = mask ^ unix.FAN_ONDIR
 				}
 				event := FanotifyEvent{
-					Fd:         fd,
-					Path:       pathName,
-					FileName:   fileName,
-					EventTypes: EventType(mask),
-					Pid:        int(metadata.Pid),
+					Event: Event{
+						Name: path.Join(pathName, fileName),
+						Op:   EventType(mask).toOp(),
+					},
+					Fd:  fd,
+					Pid: int(metadata.Pid),
 				}
 				// As of the kernel release (6.0) permission events cannot have FID flags.
 				// So the event here is always a notification event

@@ -134,6 +134,7 @@ type Watcher struct {
 		r *os.File
 		w *os.File
 	}
+	fanotify bool
 	// FanotifyEvents holds either notification events for the watched file/directory.
 	FanotifyEvents chan FanotifyEvent
 	// PermissionEvents holds permission request events for the watched file/directory.
@@ -196,26 +197,33 @@ func (w *Watcher) isClosed() bool {
 
 // Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error {
-	w.mu.Lock()
-	if w.isClosed() {
+	if !w.fanotify {
+		w.mu.Lock()
+		if w.isClosed() {
+			w.mu.Unlock()
+			return nil
+		}
+
+		// Send 'close' signal to goroutine, and set the Watcher to closed.
+		close(w.done)
 		w.mu.Unlock()
-		return nil
+
+		// Causes any blocking reads to return with an error, provided the file
+		// still supports deadline operations.
+		err := w.inotifyFile.Close()
+		if err != nil {
+			return err
+		}
+
+		// Wait for goroutine to close
+		<-w.doneResp
+	} else {
+		unix.Write(int(w.stopper.w.Fd()), []byte("stop"))
+		w.mountpoint.Close()
+		w.stopper.r.Close()
+		w.stopper.w.Close()
+		close(w.Events)
 	}
-
-	// Send 'close' signal to goroutine, and set the Watcher to closed.
-	close(w.done)
-	w.mu.Unlock()
-
-	// Causes any blocking reads to return with an error, provided the file
-	// still supports deadline operations.
-	err := w.inotifyFile.Close()
-	if err != nil {
-		return err
-	}
-
-	// Wait for goroutine to close
-	<-w.doneResp
-
 	return nil
 }
 

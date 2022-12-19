@@ -51,16 +51,9 @@ const (
 // for a file access shall be granted. For these events, the recipient must write a
 // response which decides whether access is granted or not.
 type FanotifyEvent struct {
+	Event
 	// Fd is the open file descriptor for the file/directory being watched
 	Fd int
-	// Path holds the name of the parent directory
-	Path string
-	// FileName holds the name of the file under the watched parent. The value is only available
-	// on kernels 5.1 or greater (that support the receipt of events which contain additional information
-	// about the underlying filesystem object correlated to an event).
-	FileName string
-	// EventTypes holds bit mask representing the operations
-	EventTypes EventType
 	// Pid Process ID of the process that caused the event
 	Pid int
 }
@@ -120,19 +113,6 @@ func NewFanotifyWatcher(mountPoint string, entireMount bool, permType Permission
 	}
 	go w.start()
 	return w, nil
-}
-
-// Stop stops the listener and closes the notification group and the events channel
-func (w *Watcher) Stop() {
-	if w == nil {
-		return
-	}
-	// stop the listener
-	unix.Write(int(w.stopper.w.Fd()), []byte("stop"))
-	w.mountpoint.Close()
-	w.stopper.r.Close()
-	w.stopper.w.Close()
-	close(w.Events)
 }
 
 // WatchMount adds or modifies the notification marks for the entire
@@ -251,6 +231,47 @@ func (e EventType) String() string {
 	return strings.Join(eventTypeList, ",")
 }
 
+func (e EventType) toOp() Op {
+	var op Op
+	if e.Has(unix.FAN_CREATE) || e.Has(unix.FAN_MOVED_TO) {
+		op |= Create
+	}
+	if e.Has(unix.FAN_DELETE) || e.Has(unix.FAN_DELETE_SELF) {
+		op |= Remove
+	}
+	if e.Has(unix.FAN_MODIFY) || e.Has(unix.FAN_CLOSE_WRITE) {
+		op |= Write
+	}
+	if e.Has(unix.FAN_MOVE_SELF) || e.Has(unix.FAN_MOVED_FROM) {
+		op |= Rename
+	}
+	if e.Has(unix.FAN_ATTRIB) {
+		op |= Chmod
+	}
+	if e.Has(unix.FAN_ACCESS) {
+		op |= Read
+	}
+	if e.Has(unix.FAN_CLOSE_NOWRITE) {
+		op |= Close
+	}
+	if e.Has(unix.FAN_OPEN) {
+		op |= Open
+	}
+	if e.Has(unix.FAN_OPEN_EXEC) {
+		op |= Execute
+	}
+	if e.Has(unix.FAN_OPEN_PERM) {
+		op |= PermissionToOpen
+	}
+	if e.Has(unix.FAN_OPEN_EXEC_PERM) {
+		op |= PermissionToExecute
+	}
+	if e.Has(unix.FAN_ACCESS_PERM) {
+		op |= PermissionToRead
+	}
+	return op
+}
+
 func (e FanotifyEvent) String() string {
-	return fmt.Sprintf("Fd:(%d), Pid:(%d), EventType:(%s), Path:(%s), Filename:(%s)", e.Fd, e.Pid, e.EventTypes, e.Path, e.FileName)
+	return fmt.Sprintf("Fd:(%d), Pid:(%d), Op:(%v), Path:(%s)", e.Fd, e.Pid, e.Op, e.Name)
 }
