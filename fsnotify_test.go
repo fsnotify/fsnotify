@@ -1503,7 +1503,7 @@ func BenchmarkWatch(b *testing.B) {
 					wg.Done()
 					return
 				}
-				b.Fatal(err)
+				b.Error(err)
 			case _, ok := <-w.Events:
 				if !ok {
 					wg.Done()
