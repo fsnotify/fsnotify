@@ -10,6 +10,8 @@ Unreleased
 - all: add `AddWith()`, which is identical to `Add()` but allows passing
   options. ([#521])
 
+- all: support recursively watching paths with `Add("path/...")`. ([#540])
+
 - windows: allow setting the buffer size with `fsnotify.WithBufferSize()`; the
   default of 64K is the highest value that works on all platforms and is enough
   for most purposes, but in some cases a highest buffer is needed. ([#521])
@@ -46,7 +48,7 @@ Unreleased
 
 - other: use the backend_other.go no-op if the `appengine` build tag is set;
   Google AppEngine forbids usage of the unsafe package so the inotify backend
-  won't work there.
+  won't compile there.
 
 
 [#371]: https://github.com/fsnotify/fsnotify/pull/371
@@ -58,6 +60,7 @@ Unreleased
 [#526]: https://github.com/fsnotify/fsnotify/pull/526
 [#528]: https://github.com/fsnotify/fsnotify/pull/528
 [#537]: https://github.com/fsnotify/fsnotify/pull/537
+[#540]: https://github.com/fsnotify/fsnotify/pull/540
 
 1.6.0 - 2022-10-13
 -------------------

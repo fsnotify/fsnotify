@@ -656,7 +656,7 @@ func TestWatchAttrib(t *testing.T) {
 	}
 }
 
-func TestWatchRm(t *testing.T) {
+func TestWatchRemove(t *testing.T) {
 	tests := []testCase{
 		{"remove watched file", func(t *testing.T, w *Watcher, tmp string) {
 			file := join(tmp, "file")
@@ -758,6 +758,194 @@ func TestWatchRm(t *testing.T) {
 				WRITE                "/i"
 				WRITE                "/j"
 				WRITE                "/j"
+		`},
+
+		{"remove recursive", func(t *testing.T, w *Watcher, tmp string) {
+			recurseOnly(t)
+
+			mkdirAll(t, tmp, "dir1", "subdir")
+			mkdirAll(t, tmp, "dir2", "subdir")
+			touch(t, tmp, "dir1", "subdir", "file")
+			touch(t, tmp, "dir2", "subdir", "file")
+
+			addWatch(t, w, tmp, "dir1", "...")
+			addWatch(t, w, tmp, "dir2", "...")
+			cat(t, "asd", tmp, "dir1", "subdir", "file")
+			cat(t, "asd", tmp, "dir2", "subdir", "file")
+
+			if err := w.Remove(join(tmp, "dir1")); err != nil {
+				t.Fatal(err)
+			}
+			if err := w.Remove(join(tmp, "dir2", "...")); err != nil {
+				t.Fatal(err)
+			}
+
+			if w := w.WatchList(); len(w) != 0 {
+				t.Errorf("WatchList not empty: %s", w)
+			}
+
+			cat(t, "asd", tmp, "dir1", "subdir", "file")
+			cat(t, "asd", tmp, "dir2", "subdir", "file")
+		}, `
+			write /dir1/subdir
+			write /dir1/subdir/file
+			write /dir2/subdir
+			write /dir2/subdir/file
+		`},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		tt.run(t)
+	}
+}
+
+func TestWatchRecursive(t *testing.T) {
+	recurseOnly(t)
+
+	tests := []testCase{
+		// Make a nested directory tree, then write some files there.
+		{"basic", func(t *testing.T, w *Watcher, tmp string) {
+			mkdirAll(t, tmp, "/one/two/three/four")
+			addWatch(t, w, tmp, "/...")
+
+			cat(t, "asd", tmp, "/file.txt")
+			cat(t, "asd", tmp, "/one/two/three/file.txt")
+		}, `
+			create    /file.txt                  # cat asd >file.txt
+			write     /file.txt
+
+			write     /one/two/three             # cat asd >one/two/three/file.txt
+			create    /one/two/three/file.txt
+			write     /one/two/three/file.txt
+		`},
+
+		// Create a new directory tree and then some files under that.
+		{"add directory", func(t *testing.T, w *Watcher, tmp string) {
+			mkdirAll(t, tmp, "/one/two/three/four")
+			addWatch(t, w, tmp, "/...")
+
+			mkdirAll(t, tmp, "/one/two/new/dir")
+			touch(t, tmp, "/one/two/new/file")
+			touch(t, tmp, "/one/two/new/dir/file")
+		}, `
+			write     /one/two                # mkdir -p one/two/new/dir
+			create    /one/two/new
+			create    /one/two/new/dir
+
+			write     /one/two/new            # touch one/two/new/file
+			create    /one/two/new/file
+
+			create    /one/two/new/dir/file   # touch one/two/new/dir/file
+		`},
+
+		// Remove nested directory
+		{"remove directory", func(t *testing.T, w *Watcher, tmp string) {
+			mkdirAll(t, tmp, "one/two/three/four")
+			addWatch(t, w, tmp, "...")
+
+			cat(t, "asd", tmp, "one/two/three/file.txt")
+			rmAll(t, tmp, "one/two")
+		}, `
+			write                /one/two/three            # cat asd >one/two/three/file.txt
+			create               /one/two/three/file.txt
+			write                /one/two/three/file.txt
+
+			write                /one/two                  # rm -r one/two
+			write                /one/two/three
+			remove               /one/two/three/file.txt
+			remove               /one/two/three/four
+			write                /one/two/three
+			remove               /one/two/three
+			write                /one/two
+			remove               /one/two
+		`},
+
+		// Rename nested directory
+		{"rename directory", func(t *testing.T, w *Watcher, tmp string) {
+			mkdirAll(t, tmp, "/one/two/three/four")
+			addWatch(t, w, tmp, "...")
+
+			mv(t, join(tmp, "one"), tmp, "one-rename")
+			touch(t, tmp, "one-rename/file")
+			touch(t, tmp, "one-rename/two/three/file")
+		}, `
+			rename               "/one"                        # mv one one-rename
+			create               "/one-rename"
+
+			write                "/one-rename"                 # touch one-rename/file
+			create               "/one-rename/file"
+
+			write                "/one-rename/two/three"       # touch one-rename/two/three/file
+			create               "/one-rename/two/three/file"
+		`},
+
+		{"remove watched directory", func(t *testing.T, w *Watcher, tmp string) {
+			mk := func(r string) {
+				touch(t, r, "a")
+				touch(t, r, "b")
+				touch(t, r, "c")
+				touch(t, r, "d")
+				touch(t, r, "e")
+				touch(t, r, "f")
+				touch(t, r, "g")
+
+				mkdir(t, r, "h")
+				mkdir(t, r, "h", "a")
+				mkdir(t, r, "i")
+				mkdir(t, r, "i", "a")
+				mkdir(t, r, "j")
+				mkdir(t, r, "j", "a")
+			}
+			mk(tmp)
+			mkdir(t, tmp, "sub")
+			mk(join(tmp, "sub"))
+
+			addWatch(t, w, tmp, "...")
+			rmAll(t, tmp)
+		}, `
+			remove               "/a"
+			remove               "/b"
+			remove               "/c"
+			remove               "/d"
+			remove               "/e"
+			remove               "/f"
+			remove               "/g"
+			write                "/h"
+			remove               "/h/a"
+			write                "/h"
+			remove               "/h"
+			write                "/i"
+			remove               "/i/a"
+			write                "/i"
+			remove               "/i"
+			write                "/j"
+			remove               "/j/a"
+			write                "/j"
+			remove               "/j"
+			write                "/sub"
+			remove               "/sub/a"
+			remove               "/sub/b"
+			remove               "/sub/c"
+			remove               "/sub/d"
+			remove               "/sub/e"
+			remove               "/sub/f"
+			remove               "/sub/g"
+			write                "/sub/h"
+			remove               "/sub/h/a"
+			write                "/sub/h"
+			remove               "/sub/h"
+			write                "/sub/i"
+			remove               "/sub/i/a"
+			write                "/sub/i"
+			remove               "/sub/i"
+			write                "/sub/j"
+			remove               "/sub/j/a"
+			write                "/sub/j"
+			remove               "/sub/j"
+			write                "/sub"
+			remove               "/sub"
+			remove               "/"
 		`},
 	}
 
@@ -1063,6 +1251,23 @@ func TestRemove(t *testing.T) {
 			w.Close()
 		}
 	})
+
+	t.Run("remove with ... when non-recursive", func(t *testing.T) {
+		recurseOnly(t)
+		t.Parallel()
+
+		tmp := t.TempDir()
+		w := newWatcher(t)
+		addWatch(t, w, tmp)
+
+		if err := w.Remove(join(tmp, "...")); err == nil {
+			t.Fatal("err was nil")
+		}
+		if err := w.Remove(tmp); err != nil {
+			t.Fatal(err)
+		}
+	})
+
 }
 
 func TestEventString(t *testing.T) {
