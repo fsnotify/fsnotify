@@ -22,6 +22,14 @@ const (
 	sizeOfFanotifyEventMetadata = uint32(unsafe.Sizeof(unix.FanotifyEventMetadata{}))
 )
 
+var (
+	// errInvalidFlagCombination indicates the bit/combination of flags are invalid
+	errInvalidFlagCombination = errors.New("invalid flag bitmask")
+)
+
+// fanotifyEventType represents an event / operation on a particular file/directory
+type fanotifyEventType uint64
+
 // These fanotify structs are not defined in golang.org/x/sys/unix
 type fanotifyEventInfoHeader struct {
 	InfoType uint8
@@ -113,7 +121,7 @@ func isFanotifyMarkMaskValid(flags uint, mask uint64) error {
 	return nil
 }
 
-func checkMask(mask uint64, validEventTypes []EventType) error {
+func checkMask(mask uint64, validEventTypes []fanotifyEventType) error {
 	flags := mask
 	for _, v := range validEventTypes {
 		if flags&uint64(v) == uint64(v) {
@@ -121,7 +129,7 @@ func checkMask(mask uint64, validEventTypes []EventType) error {
 		}
 	}
 	if flags != 0 {
-		return ErrInvalidFlagCombination
+		return errInvalidFlagCombination
 	}
 	return nil
 }
@@ -215,7 +223,7 @@ func fanotifyEventOK(meta *unix.FanotifyEventMetadata, n int) bool {
 }
 
 // permissionType is ignored when isNotificationListener is true.
-func newFanotifyWatcher(mountpointPath string, entireMount bool, notificationOnly bool, permissionType PermissionType) (*Watcher, error) {
+func newFanotifyWatcher(mountpointPath string, entireMount bool, notificationOnly bool, permissionType NotificationClass) (*Watcher, error) {
 
 	var flags, eventFlags uint
 
@@ -257,7 +265,7 @@ func newFanotifyWatcher(mountpointPath string, entireMount bool, notificationOnl
 	}
 	eventFlags = unix.O_RDONLY | unix.O_LARGEFILE | unix.O_CLOEXEC
 	if err := flagsValid(flags); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidFlagCombination, err)
+		return nil, fmt.Errorf("%w: %v", errInvalidFlagCombination, err)
 	}
 	if !fanotifyInitFlagsKernelSupport(flags, maj, min) {
 		panic("some of the flags specified are not supported on the current kernel; refer to the documentation")
@@ -299,62 +307,6 @@ func newFanotifyWatcher(mountpointPath string, entireMount bool, notificationOnl
 		PermissionEvents: make(chan FanotifyEvent),
 	}
 	return watcher, nil
-}
-
-// start starts the listener and polls the fanotify event notification group for marked events.
-// The events are pushed into the Listener's Events channel.
-func (w *Watcher) start() {
-	var fds [2]unix.PollFd
-	if w == nil {
-		panic("nil listener")
-	}
-	// Fanotify Fd
-	fds[0].Fd = int32(w.fd)
-	fds[0].Events = unix.POLLIN
-	// Stopper/Cancellation Fd
-	fds[1].Fd = int32(w.stopper.r.Fd())
-	fds[1].Events = unix.POLLIN
-	for {
-		n, err := unix.Poll(fds[:], -1)
-		if n == 0 {
-			continue
-		}
-		if err != nil {
-			if err == unix.EINTR {
-				continue
-			} else {
-				// TODO handle error
-				return
-			}
-		}
-		if fds[1].Revents != 0 {
-			if fds[1].Revents&unix.POLLIN == unix.POLLIN {
-				// found data on the stopper
-				return
-			}
-		}
-		if fds[0].Revents != 0 {
-			if fds[0].Revents&unix.POLLIN == unix.POLLIN {
-				w.readFanotifyEvents() // blocks when the channel bufferred is full
-			}
-		}
-	}
-}
-
-func (w *Watcher) fanotifyMark(path string, flags uint, mask uint64) error {
-	if w == nil {
-		panic("nil listener")
-	}
-	if !fanotifyMarkFlagsKernelSupport(mask, w.kernelMajorVersion, w.kernelMinorVersion) {
-		panic("some of the mark mask combinations specified are not supported on the current kernel; refer to the documentation")
-	}
-	if err := isFanotifyMarkMaskValid(flags, mask); err != nil {
-		return fmt.Errorf("%v: %w", err, ErrInvalidFlagCombination)
-	}
-	if err := unix.FanotifyMark(w.fd, flags, mask, -1, path); err != nil {
-		return err
-	}
-	return nil
 }
 
 func getFileHandle(metadataLen uint16, buf []byte, i int) *unix.FileHandle {
@@ -402,6 +354,124 @@ func getFileHandleWithName(metadataLen uint16, buf []byte, i int) (*unix.FileHan
 	return &handle, fname
 }
 
+// start starts the listener and polls the fanotify event notification group for marked events.
+// The events are pushed into the Listener's Events channel.
+func (w *Watcher) start() {
+	var fds [2]unix.PollFd
+	if w == nil {
+		panic("nil listener")
+	}
+	// Fanotify Fd
+	fds[0].Fd = int32(w.fd)
+	fds[0].Events = unix.POLLIN
+	// Stopper/Cancellation Fd
+	fds[1].Fd = int32(w.stopper.r.Fd())
+	fds[1].Events = unix.POLLIN
+	for {
+		n, err := unix.Poll(fds[:], -1)
+		if n == 0 {
+			continue
+		}
+		if err != nil {
+			if err == unix.EINTR {
+				continue
+			} else {
+				// TODO handle error
+				return
+			}
+		}
+		if fds[1].Revents != 0 {
+			if fds[1].Revents&unix.POLLIN == unix.POLLIN {
+				// found data on the stopper
+				return
+			}
+		}
+		if fds[0].Revents != 0 {
+			if fds[0].Revents&unix.POLLIN == unix.POLLIN {
+				w.readFanotifyEvents() // blocks when the channel bufferred is full
+			}
+		}
+	}
+}
+
+// fanotifyAddWith adds or modifies the fanotify mark for the specified path.
+// The events are only raised for the specified directory and does raise events
+// for subdirectories. Calling AddWatch to mark the entire mountpoint results in
+// [os.ErrInvalid]. To watch the entire mount point use [WatchMount] method.
+// Certain flag combinations are known to cause issues.
+//  - [FileCreated] cannot be or-ed / combined with [FileClosed]. The fanotify system does not generate any event for this combination.
+//  - [FileOpened] with any of the event types containing OrDirectory causes an event flood for the directory and then stopping raising any events at all.
+//  - [FileOrDirectoryOpened] with any of the other event types causes an event flood for the directory and then stopping raising any events at all.
+func (w *Watcher) fanotifyAddWith(path string, opts ...addOpt) error {
+	if w == nil {
+		panic("nil listener")
+	}
+	// TODO allow entire mount via same API but with option;
+	// remove WatchMount and UnwatchMount
+	if w.entireMount {
+		return os.ErrInvalid
+	}
+	var eventTypes fanotifyEventType
+	eventTypes = fileAccessed |
+		fileOrDirectoryAccessed |
+		fileModified |
+		fileOpenedForExec |
+		fileAttribChanged |
+		fileOrDirectoryAttribChanged |
+		fileCreated |
+		fileOrDirectoryCreated |
+		fileDeleted |
+		fileOrDirectoryDeleted |
+		watchedFileDeleted |
+		watchedFileOrDirectoryDeleted |
+		fileMovedFrom |
+		fileOrDirectoryMovedFrom |
+		fileMovedTo |
+		fileOrDirectoryMovedTo |
+		watchedFileMoved |
+		watchedFileOrDirectoryMoved
+	return w.fanotifyMark(path, unix.FAN_MARK_ADD, uint64(eventTypes|unix.FAN_EVENT_ON_CHILD))
+}
+
+func (w *Watcher) fanotifyRemove(path string) error {
+	var eventTypes fanotifyEventType
+	eventTypes = fileAccessed |
+		fileOrDirectoryAccessed |
+		fileModified |
+		fileOpenedForExec |
+		fileAttribChanged |
+		fileOrDirectoryAttribChanged |
+		fileCreated |
+		fileOrDirectoryCreated |
+		fileDeleted |
+		fileOrDirectoryDeleted |
+		watchedFileDeleted |
+		watchedFileOrDirectoryDeleted |
+		fileMovedFrom |
+		fileOrDirectoryMovedFrom |
+		fileMovedTo |
+		fileOrDirectoryMovedTo |
+		watchedFileMoved |
+		watchedFileOrDirectoryMoved
+	return w.fanotifyMark(path, unix.FAN_MARK_REMOVE, uint64(eventTypes|unix.FAN_EVENT_ON_CHILD))
+}
+
+func (w *Watcher) fanotifyMark(path string, flags uint, mask uint64) error {
+	if w == nil {
+		panic("nil listener")
+	}
+	if !fanotifyMarkFlagsKernelSupport(mask, w.kernelMajorVersion, w.kernelMinorVersion) {
+		panic("some of the mark mask combinations specified are not supported on the current kernel; refer to the documentation")
+	}
+	if err := isFanotifyMarkMaskValid(flags, mask); err != nil {
+		return fmt.Errorf("%v: %w", err, errInvalidFlagCombination)
+	}
+	if err := unix.FanotifyMark(w.fd, flags, mask, -1, path); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (w *Watcher) readFanotifyEvents() error {
 	var fid *fanotifyEventInfoFID
 	var metadata *unix.FanotifyEventMetadata
@@ -425,6 +495,7 @@ func (w *Watcher) readFanotifyEvents() error {
 		metadata = (*unix.FanotifyEventMetadata)(unsafe.Pointer(&buf[i]))
 		for fanotifyEventOK(metadata, n) {
 			if metadata.Vers != unix.FANOTIFY_METADATA_VERSION {
+				// fmt.Println("metadata.Vers", metadata.Vers, "FANOTIFY_METADATA_VERSION", unix.FANOTIFY_METADATA_VERSION, "metadata:", metadata)
 				panic("metadata structure from the kernel does not match the structure definition at compile time")
 			}
 			if metadata.Fd != unix.FAN_NOFD {
@@ -444,7 +515,7 @@ func (w *Watcher) readFanotifyEvents() error {
 				event := FanotifyEvent{
 					Event: Event{
 						Name: string(name[:n1]),
-						Op:   EventType(mask).toOp(),
+						Op:   fanotifyEventType(mask).toOp(),
 					},
 					Fd:  int(metadata.Fd),
 					Pid: int(metadata.Pid),
@@ -500,7 +571,7 @@ func (w *Watcher) readFanotifyEvents() error {
 				event := FanotifyEvent{
 					Event: Event{
 						Name: path.Join(pathName, fileName),
-						Op:   EventType(mask).toOp(),
+						Op:   fanotifyEventType(mask).toOp(),
 					},
 					Fd:  fd,
 					Pid: int(metadata.Pid),
@@ -515,4 +586,59 @@ func (w *Watcher) readFanotifyEvents() error {
 		}
 	}
 	return nil
+}
+
+// Has returns true if event types (e) contains the passed in event type (et).
+func (e fanotifyEventType) Has(et fanotifyEventType) bool {
+	return e&et == et
+}
+
+// Or appends the specified event types to the set of event types to watch for
+func (e fanotifyEventType) Or(et fanotifyEventType) fanotifyEventType {
+	return e | et
+}
+
+func (e fanotifyEventType) toOp() Op {
+	var op Op
+	if e.Has(unix.FAN_CREATE) || e.Has(unix.FAN_MOVED_TO) {
+		op |= Create
+	}
+	if e.Has(unix.FAN_DELETE) || e.Has(unix.FAN_DELETE_SELF) {
+		op |= Remove
+	}
+	if e.Has(unix.FAN_MODIFY) || e.Has(unix.FAN_CLOSE_WRITE) {
+		op |= Write
+	}
+	if e.Has(unix.FAN_MOVE_SELF) || e.Has(unix.FAN_MOVED_FROM) {
+		op |= Rename
+	}
+	if e.Has(unix.FAN_ATTRIB) {
+		op |= Chmod
+	}
+	if e.Has(unix.FAN_ACCESS) {
+		op |= Read
+	}
+	if e.Has(unix.FAN_CLOSE_NOWRITE) {
+		op |= Close
+	}
+	if e.Has(unix.FAN_OPEN) {
+		op |= Open
+	}
+	if e.Has(unix.FAN_OPEN_EXEC) {
+		op |= Execute
+	}
+	if e.Has(unix.FAN_OPEN_PERM) {
+		op |= PermissionToOpen
+	}
+	if e.Has(unix.FAN_OPEN_EXEC_PERM) {
+		op |= PermissionToExecute
+	}
+	if e.Has(unix.FAN_ACCESS_PERM) {
+		op |= PermissionToRead
+	}
+	return op
+}
+
+func (e FanotifyEvent) String() string {
+	return fmt.Sprintf("Fd:(%d), Pid:(%d), Op:(%v), Path:(%s)", e.Fd, e.Pid, e.Op, e.Name)
 }

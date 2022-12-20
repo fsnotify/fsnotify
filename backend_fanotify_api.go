@@ -7,9 +7,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
-	"os"
-	"strings"
 
 	"golang.org/x/sys/unix"
 )
@@ -17,29 +14,35 @@ import (
 var (
 	// ErrCapSysAdmin indicates caller is missing CAP_SYS_ADMIN permissions
 	ErrCapSysAdmin = errors.New("require CAP_SYS_ADMIN capability")
-	// ErrInvalidFlagCombination indicates the bit/combination of flags are invalid
-	ErrInvalidFlagCombination = errors.New("invalid flag bitmask")
-	// ErrUnsupportedOnKernelVersion indicates the feature/flag is unavailable for the current kernel version
-	ErrUnsupportedOnKernelVersion = errors.New("feature unsupported on current kernel version")
-	// ErrWatchPath indicates path needs to be specified for watching
-	ErrWatchPath = errors.New("missing watch path")
+	// ErrInvalidFlagValue indicates flag value is invalid
+	ErrInvalidFlagValue = errors.New("invalid flag value")
 )
 
-// EventType represents an event / operation on a particular file/directory
-type EventType uint64
+// NotificationClass represents value indicating when the permission event must be requested.
+type NotificationClass int
 
-// PermissionType represents value indicating when the permission event must be requested.
-type PermissionType int
+// PermissionRequest represents the request for which the permission event is created.
+type PermissionRequest uint64
 
 const (
 	// PermissionNone is used to indicate the listener is for notification events only.
-	PermissionNone PermissionType = 0
+	PermissionNone NotificationClass = 0
 	// PreContent is intended for event listeners that
 	// need to access files before they contain their final data.
-	PreContent PermissionType = 1
+	PreContent NotificationClass = 1
 	// PostContent is intended for event listeners that
 	// need to access files when they already contain their final content.
-	PostContent PermissionType = 2
+	PostContent NotificationClass = 2
+
+	// PermissionRequestToOpen create's an event when a permission to open a file or
+	// directory is requested.
+	PermissionRequestToOpen PermissionRequest = PermissionRequest(fileOpenPermission)
+	// PermissionRequestToAccess create's an event when a permission to read a file or
+	// directory is requested.
+	PermissionRequestToAccess PermissionRequest = PermissionRequest(fileAccessPermission)
+	// PermissionRequestToExecute create an event when a permission to open a file for
+	// execution is requested.
+	PermissionRequestToExecute PermissionRequest = PermissionRequest(fileOpenToExecutePermission)
 )
 
 // FanotifyEvent represents a notification or a permission event from the kernel for the file,
@@ -92,10 +95,13 @@ type FanotifyEvent struct {
 // are set based on the running kernel version. [ErrCapSysAdmin] is returned
 // if the process does not have CAP_SYS_ADM capability.
 //
-//  - For Linux kernel version 5.0 and earlier no additional information about the underlying filesystem object is available.
-//  - For Linux kernel versions 5.1 till 5.8 (inclusive) additional information about the underlying filesystem object is correlated to an event.
-//  - For Linux kernel version 5.9 or later the modified file name is made available in the event.
-func NewFanotifyWatcher(mountPoint string, entireMount bool, permType PermissionType) (*Watcher, error) {
+//  - For Linux kernel version 5.0 and earlier no additional information about
+//    the underlying filesystem object is available.
+//  - For Linux kernel versions 5.1 till 5.8 (inclusive) additional information
+//    about the underlying filesystem object is correlated to an event.
+//  - For Linux kernel version 5.9 or later the modified file name is made available
+//    in the event.
+func NewFanotifyWatcher(mountPoint string, entireMount bool, permType NotificationClass) (*Watcher, error) {
 	capSysAdmin, err := checkCapSysAdmin()
 	if err != nil {
 		return nil, err
@@ -115,44 +121,89 @@ func NewFanotifyWatcher(mountPoint string, entireMount bool, permType Permission
 	return w, nil
 }
 
-// WatchMount adds or modifies the notification marks for the entire
-// mount point.
-// This method returns an [ErrWatchPath] if the listener was not initialized to monitor
-// the entire mount point. To mark specific files or directories use [AddWatch] method.
-// The following event types are considered invalid and WatchMount returns [ErrInvalidFlagCombination]
-// for - [FileCreated], [FileAttribChanged], [FileMovedTo], [FileMovedFrom], [WatchedFileDeleted],
-// [WatchedFileOrDirectoryDeleted], [FileDeleted], [FileOrDirectoryDeleted]
-func (w *Watcher) WatchMount(eventTypes EventType) error {
+// AddMount adds watch to monitor the entire mountpoint for
+// file or directory accessed, file opened, file modified,
+// file closed with no write, file closed with write,
+// file opened for execution events. The method returns
+// [ErrInvalidFlagValue] if the watcher was not initialized
+// with [NewFanotifyWatcher] entireMount boolean flag set to
+// true.
+//
+// This operation is only available for Fanotify watcher type i.e.
+// ([NewFanotifyWatcher]). The method panics if the watcher is an
+// instance from [NewWatcher].
+func (w *Watcher) AddMount() error {
+	if !w.fanotify {
+		panic("expected fanotify watcher")
+	}
+	if !w.entireMount {
+		return ErrInvalidFlagValue
+	}
+	var eventTypes fanotifyEventType
+	eventTypes = fileAccessed |
+		fileOrDirectoryAccessed |
+		fileModified |
+		fileClosedAfterWrite |
+		fileClosedWithNoWrite |
+		fileOpened |
+		fileOrDirectoryOpened |
+		fileOpenedForExec
+
 	return w.fanotifyMark(w.mountpoint.Name(), unix.FAN_MARK_ADD|unix.FAN_MARK_MOUNT, uint64(eventTypes))
 }
 
-// UnwatchMount removes the notification marks for the entire mount point.
-// This method returns an [ErrWatchPath] if the listener was not initialized to monitor
-// the entire mount point. To unmark specific files or directories use [DeleteWatch] method.
-func (w *Watcher) UnwatchMount(eventTypes EventType) error {
+// RemoveMount removes watch from the mount point.
+//
+// This operation is only available for Fanotify watcher type i.e.
+// ([NewFanotifyWatcher]). The method panics if the watcher is an
+// instance from [NewWatcher].
+func (w *Watcher) RemoveMount() error {
+	if !w.fanotify {
+		panic("expected fanotify watcher")
+	}
+	var eventTypes fanotifyEventType
+	eventTypes = fileAccessed |
+		fileOrDirectoryAccessed |
+		fileModified |
+		fileClosedAfterWrite |
+		fileClosedWithNoWrite |
+		fileOpened |
+		fileOrDirectoryOpened |
+		fileOpenedForExec
+
 	return w.fanotifyMark(w.mountpoint.Name(), unix.FAN_MARK_REMOVE|unix.FAN_MARK_MOUNT, uint64(eventTypes))
 }
 
-// AddWatch adds or modifies the fanotify mark for the specified path.
-// The events are only raised for the specified directory and does raise events
-// for subdirectories. Calling AddWatch to mark the entire mountpoint results in
-// [os.ErrInvalid]. To watch the entire mount point use [WatchMount] method.
-// Certain flag combinations are known to cause issues.
-//  - [FileCreated] cannot be or-ed / combined with [FileClosed]. The fanotify system does not generate any event for this combination.
-//  - [FileOpened] with any of the event types containing OrDirectory causes an event flood for the directory and then stopping raising any events at all.
-//  - [FileOrDirectoryOpened] with any of the other event types causes an event flood for the directory and then stopping raising any events at all.
-func (w *Watcher) AddWatch(path string, eventTypes EventType) error {
-	if w == nil {
-		panic("nil listener")
+// AddPermissions adds the ability to make access permission decisions
+// for file or directory. The function returns an error [ErrInvalidFlagValue]
+// if there are no requests sent.
+//
+// This operation is only available for Fanotify watcher type i.e.
+// ([NewFanotifyWatcher]). The method panics if the watcher is an
+// instance from [NewWatcher].
+func (w *Watcher) AddPermissions(name string, requests ...PermissionRequest) error {
+	if !w.fanotify {
+		panic("expected fanotify watcher")
 	}
-	if w.entireMount {
-		return os.ErrInvalid
+	if len(requests) == 0 {
+		return ErrInvalidFlagValue
 	}
-	return w.fanotifyMark(path, unix.FAN_MARK_ADD, uint64(eventTypes|unix.FAN_EVENT_ON_CHILD))
+	var eventTypes fanotifyEventType
+	for _, r := range requests {
+		eventTypes |= fanotifyEventType(r)
+	}
+	return w.fanotifyMark(name, unix.FAN_MARK_ADD, uint64(eventTypes|unix.FAN_EVENT_ON_CHILD))
 }
 
 // Allow sends an "allowed" response to the permission request event.
+//
+// This operation is only available for Fanotify watcher type i.e.
+// ([NewFanotifyWatcher]). The method panics if the watcher is an
+// instance from [NewWatcher].
 func (w *Watcher) Allow(e FanotifyEvent) {
+	if !w.fanotify {
+		panic("expected fanotify watcher")
+	}
 	var response unix.FanotifyResponse
 	response.Fd = int32(e.Fd)
 	response.Response = unix.FAN_ALLOW
@@ -162,116 +213,18 @@ func (w *Watcher) Allow(e FanotifyEvent) {
 }
 
 // Deny sends an "denied" response to the permission request event.
+//
+// This operation is only available for Fanotify watcher type i.e.
+// ([NewFanotifyWatcher]). The method panics if the watcher is an
+// instance from [NewWatcher].
 func (w *Watcher) Deny(e FanotifyEvent) {
+	if !w.fanotify {
+		panic("expected fanotify watcher")
+	}
 	var response unix.FanotifyResponse
 	response.Fd = int32(e.Fd)
 	response.Response = unix.FAN_DENY
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.LittleEndian, &response)
 	unix.Write(w.fd, buf.Bytes())
-}
-
-// DeleteWatch removes/unmarks the fanotify mark for the specified path.
-// Calling DeleteWatch on the listener initialized to monitor the entire mount point
-// results in [os.ErrInvalid]. Use [UnwatchMount] for deleting marks on the mount point.
-func (w *Watcher) DeleteWatch(parentDir string, eventTypes EventType) error {
-	if w.entireMount {
-		return os.ErrInvalid
-	}
-	return w.fanotifyMark(parentDir, unix.FAN_MARK_REMOVE, uint64(eventTypes|unix.FAN_EVENT_ON_CHILD))
-}
-
-// ClearWatch stops watching for all event types
-func (w *Watcher) ClearWatch() error {
-	if w == nil {
-		panic("nil listener")
-	}
-	if err := unix.FanotifyMark(w.fd, unix.FAN_MARK_FLUSH, 0, -1, ""); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Has returns true if event types (e) contains the passed in event type (et).
-func (e EventType) Has(et EventType) bool {
-	return e&et == et
-}
-
-// Or appends the specified event types to the set of event types to watch for
-func (e EventType) Or(et EventType) EventType {
-	return e | et
-}
-
-// String prints event types
-func (e EventType) String() string {
-	var eventTypes = map[EventType]string{
-		unix.FAN_ACCESS:         "Access",
-		unix.FAN_MODIFY:         "Modify",
-		unix.FAN_CLOSE_WRITE:    "CloseWrite",
-		unix.FAN_CLOSE_NOWRITE:  "CloseNoWrite",
-		unix.FAN_OPEN:           "Open",
-		unix.FAN_OPEN_EXEC:      "OpenExec",
-		unix.FAN_ATTRIB:         "AttribChange",
-		unix.FAN_CREATE:         "Create",
-		unix.FAN_DELETE:         "Delete",
-		unix.FAN_DELETE_SELF:    "SelfDelete",
-		unix.FAN_MOVED_FROM:     "MovedFrom",
-		unix.FAN_MOVED_TO:       "MovedTo",
-		unix.FAN_MOVE_SELF:      "SelfMove",
-		unix.FAN_OPEN_PERM:      "PermissionToOpen",
-		unix.FAN_OPEN_EXEC_PERM: "PermissionToExecute",
-		unix.FAN_ACCESS_PERM:    "PermissionToAccess",
-	}
-	var eventTypeList []string
-	for k, v := range eventTypes {
-		if e.Has(k) {
-			eventTypeList = append(eventTypeList, v)
-		}
-	}
-	return strings.Join(eventTypeList, ",")
-}
-
-func (e EventType) toOp() Op {
-	var op Op
-	if e.Has(unix.FAN_CREATE) || e.Has(unix.FAN_MOVED_TO) {
-		op |= Create
-	}
-	if e.Has(unix.FAN_DELETE) || e.Has(unix.FAN_DELETE_SELF) {
-		op |= Remove
-	}
-	if e.Has(unix.FAN_MODIFY) || e.Has(unix.FAN_CLOSE_WRITE) {
-		op |= Write
-	}
-	if e.Has(unix.FAN_MOVE_SELF) || e.Has(unix.FAN_MOVED_FROM) {
-		op |= Rename
-	}
-	if e.Has(unix.FAN_ATTRIB) {
-		op |= Chmod
-	}
-	if e.Has(unix.FAN_ACCESS) {
-		op |= Read
-	}
-	if e.Has(unix.FAN_CLOSE_NOWRITE) {
-		op |= Close
-	}
-	if e.Has(unix.FAN_OPEN) {
-		op |= Open
-	}
-	if e.Has(unix.FAN_OPEN_EXEC) {
-		op |= Execute
-	}
-	if e.Has(unix.FAN_OPEN_PERM) {
-		op |= PermissionToOpen
-	}
-	if e.Has(unix.FAN_OPEN_EXEC_PERM) {
-		op |= PermissionToExecute
-	}
-	if e.Has(unix.FAN_ACCESS_PERM) {
-		op |= PermissionToRead
-	}
-	return op
-}
-
-func (e FanotifyEvent) String() string {
-	return fmt.Sprintf("Fd:(%d), Pid:(%d), Op:(%v), Path:(%s)", e.Fd, e.Pid, e.Op, e.Name)
 }

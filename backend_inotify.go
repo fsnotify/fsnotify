@@ -72,35 +72,43 @@ type Watcher struct {
 	// fsnotify can send the following events; a "path" here can refer to a
 	// file, directory, symbolic link, or special file like a FIFO.
 	//
-	//   fsnotify.Create    A new path was created; this may be followed by one
-	//                      or more Write events if data also gets written to a
-	//                      file.
+	//   fsnotify.Create              A new path was created; this may be followed by one
+	//                                or more Write events if data also gets written to a
+	//                                file.
 	//
-	//   fsnotify.Remove    A path was removed.
+	//   fsnotify.Remove              A path was removed.
 	//
-	//   fsnotify.Rename    A path was renamed. A rename is always sent with the
-	//                      old path as Event.Name, and a Create event will be
-	//                      sent with the new name. Renames are only sent for
-	//                      paths that are currently watched; e.g. moving an
-	//                      unmonitored file into a monitored directory will
-	//                      show up as just a Create. Similarly, renaming a file
-	//                      to outside a monitored directory will show up as
-	//                      only a Rename.
+	//   fsnotify.Rename              A path was renamed. A rename is always sent with the
+	//                                old path as Event.Name, and a Create event will be
+	//                                sent with the new name. Renames are only sent for
+	//                                paths that are currently watched; e.g. moving an
+	//                                unmonitored file into a monitored directory will
+	//                                show up as just a Create. Similarly, renaming a file
+	//                                to outside a monitored directory will show up as
+	//                                only a Rename.
 	//
-	//   fsnotify.Write     A file or named pipe was written to. A Truncate will
-	//                      also trigger a Write. A single "write action"
-	//                      initiated by the user may show up as one or multiple
-	//                      writes, depending on when the system syncs things to
-	//                      disk. For example when compiling a large Go program
-	//                      you may get hundreds of Write events, so you
-	//                      probably want to wait until you've stopped receiving
-	//                      them (see the dedup example in cmd/fsnotify).
+	//   fsnotify.Write               A file or named pipe was written to. A Truncate will
+	//                                also trigger a Write. A single "write action"
+	//                                initiated by the user may show up as one or multiple
+	//                                writes, depending on when the system syncs things to
+	//                                disk. For example when compiling a large Go program
+	//                                you may get hundreds of Write events, so you
+	//                                probably want to wait until you've stopped receiving
+	//                                them (see the dedup example in cmd/fsnotify).
 	//
-	//   fsnotify.Chmod     Attributes were changed. On Linux this is also sent
-	//                      when a file is removed (or more accurately, when a
-	//                      link to an inode is removed). On kqueue it's sent
-	//                      and on kqueue when a file is truncated. On Windows
-	//                      it's never sent.
+	//   fsnotify.Chmod               Attributes were changed. On Linux this is also sent
+	//                                when a file is removed (or more accurately, when a
+	//                                link to an inode is removed). On kqueue it's sent
+	//                                and on kqueue when a file is truncated. On Windows
+	//                                it's never sent.
+	//
+	//   fsnotify.Read                File or directory was read. (Applicable only to fanotify watcher.)
+	//
+	//   fsnotify.Close               File was closed without a write. (Applicable only to fanotify watcher.)
+	//
+	//   fsnotify.Open                File or directory was opened. (Applicable only to fanotify watcher.)
+	//
+	//   fsnotify.Execute             File was opened for execution. (Applicable only to fanotify watcher.)
 	Events chan Event
 
 	// Errors sends any errors.
@@ -122,6 +130,7 @@ type Watcher struct {
 	done        chan struct{}     // Channel for sending a "quit message" to the reader goroutine
 	doneResp    chan struct{}     // Channel to respond to Close
 
+	// Fanotify fields
 	// flags passed to fanotify_init
 	flags uint
 	// mount fd is the file descriptor of the mountpoint
@@ -138,6 +147,11 @@ type Watcher struct {
 	// FanotifyEvents holds either notification events for the watched file/directory.
 	FanotifyEvents chan FanotifyEvent
 	// PermissionEvents holds permission request events for the watched file/directory.
+	//   fsnotify.PermissionToOpen    Permission request to open a file or directory. (Applicable only to fanotify watcher.)
+	//
+	//   fsnotify.PermissionToExecute Permission to open file for execution. (Applicable only to fanotify watcher.)
+	//
+	//   fsnotify.PermissionToRead    Permission to read a file or directory. (Applicable only to fanotify watcher.)
 	PermissionEvents chan FanotifyEvent
 }
 
@@ -271,6 +285,13 @@ func (w *Watcher) Add(name string) error { return w.AddWith(name) }
 //   - [WithBufferSize] sets the buffer size for the Windows backend; no-op on
 //     other platforms. The default is 64K (65536 bytes).
 func (w *Watcher) AddWith(name string, opts ...addOpt) error {
+	if !w.fanotify {
+		return w.inotifyAddWith(name, opts...)
+	}
+	return w.fanotifyAddWith(name, opts...)
+}
+
+func (w *Watcher) inotifyAddWith(name string, opts ...addOpt) error {
 	if w.isClosed() {
 		return ErrClosed
 	}
@@ -313,6 +334,13 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 //
 // Returns nil if [Watcher.Close] was called.
 func (w *Watcher) Remove(name string) error {
+	if !w.fanotify {
+		return w.inotifyRemove(name)
+	}
+	return w.fanotifyRemove(name)
+}
+
+func (w *Watcher) inotifyRemove(name string) error {
 	if w.isClosed() {
 		return nil
 	}
@@ -329,6 +357,7 @@ func (w *Watcher) Remove(name string) error {
 	}
 
 	return w.remove(name, watch)
+
 }
 
 // Unlocked!

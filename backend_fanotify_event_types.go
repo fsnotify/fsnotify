@@ -6,98 +6,98 @@ package fsnotify
 import "golang.org/x/sys/unix"
 
 const (
-	// FileAccessed event when a file is accessed
-	FileAccessed EventType = unix.FAN_ACCESS
+	// fileAccessed event when a file is accessed
+	fileAccessed fanotifyEventType = unix.FAN_ACCESS
 
-	// FileOrDirectoryAccessed event when a file or directory is accessed
-	FileOrDirectoryAccessed EventType = unix.FAN_ACCESS | unix.FAN_ONDIR
+	// fileOrDirectoryAccessed event when a file or directory is accessed
+	fileOrDirectoryAccessed fanotifyEventType = unix.FAN_ACCESS | unix.FAN_ONDIR
 
-	// FileModified event when a file is modified
-	FileModified EventType = unix.FAN_MODIFY
+	// fileModified event when a file is modified
+	fileModified fanotifyEventType = unix.FAN_MODIFY
 
-	// FileClosedAfterWrite event when a file is closed
-	FileClosedAfterWrite EventType = unix.FAN_CLOSE_WRITE
+	// fileClosedAfterWrite event when a file is closed
+	fileClosedAfterWrite fanotifyEventType = unix.FAN_CLOSE_WRITE
 
-	// FileClosedWithNoWrite event when a file is closed without writing
-	FileClosedWithNoWrite EventType = unix.FAN_CLOSE_NOWRITE
+	// fileClosedWithNoWrite event when a file is closed without writing
+	fileClosedWithNoWrite fanotifyEventType = unix.FAN_CLOSE_NOWRITE
 
-	// FileClosed event when a file is closed after write or no write
-	FileClosed EventType = unix.FAN_CLOSE_WRITE | unix.FAN_CLOSE_NOWRITE
+	// fileClosed event when a file is closed after write or no write
+	fileClosed fanotifyEventType = unix.FAN_CLOSE_WRITE | unix.FAN_CLOSE_NOWRITE
 
-	// FileOpened event when a file is opened
-	FileOpened EventType = unix.FAN_OPEN
+	// fileOpened event when a file is opened
+	fileOpened fanotifyEventType = unix.FAN_OPEN
 
-	// FileOrDirectoryOpened event when a file or directory is opened
-	FileOrDirectoryOpened EventType = unix.FAN_OPEN | unix.FAN_ONDIR
+	// fileOrDirectoryOpened event when a file or directory is opened
+	fileOrDirectoryOpened fanotifyEventType = unix.FAN_OPEN | unix.FAN_ONDIR
 
-	// FileOpenedForExec event when a file is opened with the intent to be executed.
+	// fileOpenedForExec event when a file is opened with the intent to be executed.
 	// Requires Linux kernel 5.0 or later
-	FileOpenedForExec EventType = unix.FAN_OPEN_EXEC
+	fileOpenedForExec fanotifyEventType = unix.FAN_OPEN_EXEC
 
-	// FileAttribChanged event when a file attribute has changed
+	// fileAttribChanged event when a file attribute has changed
 	// Requires Linux kernel 5.1 or later (requires FID)
-	FileAttribChanged EventType = unix.FAN_ATTRIB
+	fileAttribChanged fanotifyEventType = unix.FAN_ATTRIB
 
-	// FileOrDirectoryAttribChanged event when a file or directory attribute has changed
+	// fileOrDirectoryAttribChanged event when a file or directory attribute has changed
 	// Requires Linux kernel 5.1 or later (requires FID)
-	FileOrDirectoryAttribChanged EventType = unix.FAN_ATTRIB | unix.FAN_ONDIR
+	fileOrDirectoryAttribChanged fanotifyEventType = unix.FAN_ATTRIB | unix.FAN_ONDIR
 
-	// FileCreated event when file a has been created
+	// fileCreated event when file a has been created
 	// Requires Linux kernel 5.1 or later (requires FID)
 	// BUG FileCreated does not work with FileClosed, FileClosedAfterWrite or FileClosedWithNoWrite
-	FileCreated EventType = unix.FAN_CREATE
+	fileCreated fanotifyEventType = unix.FAN_CREATE
 
-	// FileOrDirectoryCreated event when a file or directory has been created
+	// fileOrDirectoryCreated event when a file or directory has been created
 	// Requires Linux kernel 5.1 or later (requires FID)
-	FileOrDirectoryCreated EventType = unix.FAN_CREATE | unix.FAN_ONDIR
+	fileOrDirectoryCreated fanotifyEventType = unix.FAN_CREATE | unix.FAN_ONDIR
 
-	// FileDeleted event when file a has been deleted
+	// fileDeleted event when file a has been deleted
 	// Requires Linux kernel 5.1 or later (requires FID)
-	FileDeleted EventType = unix.FAN_DELETE
+	fileDeleted fanotifyEventType = unix.FAN_DELETE
 
-	// FileOrDirectoryDeleted event when a file or directory has been deleted
+	// fileOrDirectoryDeleted event when a file or directory has been deleted
 	// Requires Linux kernel 5.1 or later (requires FID)
-	FileOrDirectoryDeleted EventType = unix.FAN_DELETE | unix.FAN_ONDIR
+	fileOrDirectoryDeleted fanotifyEventType = unix.FAN_DELETE | unix.FAN_ONDIR
 
-	// WatchedFileDeleted event when a watched file has been deleted
+	// watchedFileDeleted event when a watched file has been deleted
 	// Requires Linux kernel 5.1 or later (requires FID)
-	WatchedFileDeleted EventType = unix.FAN_DELETE_SELF
+	watchedFileDeleted fanotifyEventType = unix.FAN_DELETE_SELF
 
-	// WatchedFileOrDirectoryDeleted event when a watched file or directory has been deleted
+	// watchedFileOrDirectoryDeleted event when a watched file or directory has been deleted
 	// Requires Linux kernel 5.1 or later (requires FID)
-	WatchedFileOrDirectoryDeleted EventType = unix.FAN_DELETE_SELF | unix.FAN_ONDIR
+	watchedFileOrDirectoryDeleted fanotifyEventType = unix.FAN_DELETE_SELF | unix.FAN_ONDIR
 
-	// FileMovedFrom event when a file has been moved from the watched directory
+	// fileMovedFrom event when a file has been moved from the watched directory
 	// Requires Linux kernel 5.1 or later (requires FID)
-	FileMovedFrom EventType = unix.FAN_MOVED_FROM
+	fileMovedFrom fanotifyEventType = unix.FAN_MOVED_FROM
 
-	// FileOrDirectoryMovedFrom event when a file or directory has been moved from the watched directory
+	// fileOrDirectoryMovedFrom event when a file or directory has been moved from the watched directory
 	// Requires Linux kernel 5.1 or later (requires FID)
-	FileOrDirectoryMovedFrom EventType = unix.FAN_MOVED_FROM | unix.FAN_ONDIR
+	fileOrDirectoryMovedFrom fanotifyEventType = unix.FAN_MOVED_FROM | unix.FAN_ONDIR
 
-	// FileMovedTo event when a file has been moved to the watched directory
+	// fileMovedTo event when a file has been moved to the watched directory
 	// Requires Linux kernel 5.1 or later (requires FID)
-	FileMovedTo EventType = unix.FAN_MOVED_TO
+	fileMovedTo fanotifyEventType = unix.FAN_MOVED_TO
 
-	// FileOrDirectoryMovedTo event when a file or directory has been moved to the watched directory
+	// fileOrDirectoryMovedTo event when a file or directory has been moved to the watched directory
 	// Requires Linux kernel 5.1 or later (requires FID)
-	FileOrDirectoryMovedTo EventType = unix.FAN_MOVED_TO | unix.FAN_ONDIR
+	fileOrDirectoryMovedTo fanotifyEventType = unix.FAN_MOVED_TO | unix.FAN_ONDIR
 
-	// WatchedFileMoved event when a watched file has moved
+	// watchedFileMoved event when a watched file has moved
 	// Requires Linux kernel 5.1 or later (requires FID)
-	WatchedFileMoved EventType = unix.FAN_MOVE_SELF
+	watchedFileMoved fanotifyEventType = unix.FAN_MOVE_SELF
 
-	// WatchedFileOrDirectoryMoved event when a watched file or directory has moved
+	// watchedFileOrDirectoryMoved event when a watched file or directory has moved
 	// Requires Linux kernel 5.1 or later (requires FID)
-	WatchedFileOrDirectoryMoved EventType = unix.FAN_MOVE_SELF | unix.FAN_ONDIR
+	watchedFileOrDirectoryMoved fanotifyEventType = unix.FAN_MOVE_SELF | unix.FAN_ONDIR
 
-	// FileOpenPermission event when a permission to open a file or directory is requested
-	FileOpenPermission EventType = unix.FAN_OPEN_PERM
+	// fileOpenPermission event when a permission to open a file or directory is requested
+	fileOpenPermission fanotifyEventType = unix.FAN_OPEN_PERM
 
-	// FileOpenToExecutePermission event when a permission to open a file for
+	// fileOpenToExecutePermission event when a permission to open a file for
 	// execution is requested
-	FileOpenToExecutePermission EventType = unix.FAN_OPEN_EXEC_PERM
+	fileOpenToExecutePermission fanotifyEventType = unix.FAN_OPEN_EXEC_PERM
 
-	// FileAccessPermission event when a permission to read a file or directory is requested
-	FileAccessPermission EventType = unix.FAN_ACCESS_PERM
+	// fileAccessPermission event when a permission to read a file or directory is requested
+	fileAccessPermission fanotifyEventType = unix.FAN_ACCESS_PERM
 )
