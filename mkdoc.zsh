@@ -2,8 +2,8 @@
 [ "${ZSH_VERSION:-}" = "" ] && echo >&2 "Only works with zsh" && exit 1
 setopt err_exit no_unset pipefail extended_glob
 
-# Simple script to update the godoc comments on all watchers. Probably took me
-# more time to write this than doing it manually, but ah well 🙃
+# Simple script to update the godoc comments on all watchers so you don't need
+# to update the same comment 5 times.
 
 watcher=$(<<EOF
 // Watcher watches a set of paths, delivering events on a channel.
@@ -56,6 +56,16 @@ watcher=$(<<EOF
 // The sysctl variables kern.maxfiles and kern.maxfilesperproc can be used to
 // control the maximum number of open files, as well as /etc/login.conf on BSD
 // systems.
+//
+// # Windows notes
+//
+// Paths can be added as "C:\\path\\to\\dir", but forward slashes
+// ("C:/path/to/dir") will also work.
+//
+// The default buffer size is 64K, which is the largest value that is guaranteed
+// to work with SMB filesystems. If you have many events in quick succession
+// this may not be enough, and you will have to use [WithBufferSize] to increase
+// the value.
 EOF
 )
 
@@ -69,7 +79,7 @@ add=$(<<EOF
 //
 // A path can only be watched once; attempting to watch it more than once will
 // return an error. Paths that do not yet exist on the filesystem cannot be
-// added.
+// watched.
 //
 // A watch will be automatically removed if the watched path is deleted or
 // renamed. The exception is the Windows backend, which doesn't remove the
@@ -85,8 +95,9 @@ add=$(<<EOF
 // # Watching directories
 //
 // All files in a directory are monitored, including new files that are created
-// after the watcher is started. Subdirectories are not watched (i.e. it's
-// non-recursive).
+// after the watcher is started. By default subdirectories are not watched (i.e.
+// it's non-recursive), but if the path ends with "/..." all files and
+// subdirectories are watched too.
 //
 // # Watching files
 //
@@ -116,8 +127,15 @@ EOF
 remove=$(<<EOF
 // Remove stops monitoring the path for changes.
 //
-// Directories are always removed non-recursively. For example, if you added
-// /tmp/dir and /tmp/dir/subdir then you will need to remove both.
+// If the path was added as a recursive watch (e.g. as "/tmp/dir/...") then the
+// entire recursive watch will be removed. You can use either "/tmp/dir" or
+// "/tmp/dir/..." (they behave identically).
+//
+// You cannot remove individual files or subdirectories from recursive watches;
+// e.g. Add("/tmp/path/...") and then Remove("/tmp/path/sub") will fail.
+//
+// For other watches directories are removed non-recursively. For example, if
+// you added "/tmp/dir" and "/tmp/dir/subdir" then you will need to remove both.
 //
 // Removing a path that has not yet been added returns [ErrNonExistentWatch].
 //
@@ -166,6 +184,8 @@ events=$(<<EOF
 	//                      you may get hundreds of Write events, so you
 	//                      probably want to wait until you've stopped receiving
 	//                      them (see the dedup example in cmd/fsnotify).
+	//                      Some systems may send Write event for directories
+	//                      when the directory content changes.
 	//
 	//   fsnotify.Chmod     Attributes were changed. On Linux this is also sent
 	//                      when a file is removed (or more accurately, when a

@@ -93,6 +93,7 @@ func TestInotifyDeleteOpenFile(t *testing.T) {
 	w.collect(t)
 
 	rm(t, file)
+	eventSeparator()
 	e := w.events(t)
 	cmpEvents(t, tmp, e, newEvents(t, `chmod /file`))
 

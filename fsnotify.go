@@ -12,6 +12,7 @@ package fsnotify
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -172,4 +173,13 @@ func getOptions(opts ...addOpt) withOpts {
 // you're hitting "queue or buffer overflow" errors ([ErrEventOverflow]).
 func WithBufferSize(bytes int) addOpt {
 	return func(opt *withOpts) { opt.bufsize = bytes }
+}
+
+// Check if this path is recursive (ends with "/..." or "\..."), and return the
+// path with the /... stripped.
+func recursivePath(path string) (string, bool) {
+	if filepath.Base(path) == "..." {
+		return filepath.Dir(path), true
+	}
+	return path, false
 }
