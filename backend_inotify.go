@@ -408,14 +408,11 @@ func (w *Watcher) readEvents() {
 		if n < unix.SizeofInotifyEvent {
 			var err error
 			if n == 0 {
-				// If EOF is received. This should really never happen.
-				err = io.EOF
+				err = io.EOF // If EOF is received. This should really never happen.
 			} else if n < 0 {
-				// If an error occurred while reading.
-				err = errno
+				err = errno // If an error occurred while reading.
 			} else {
-				// Read was too short.
-				err = errors.New("notify: short read in readEvents()")
+				err = errors.New("notify: short read in readEvents()") // Read was too short.
 			}
 			if !w.sendError(err) {
 				return
