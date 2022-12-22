@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"unsafe"
 
-	"github.com/syndtr/gocapability/capability"
+	"github.com/fsnotify/fsnotify/internal"
 	"golang.org/x/sys/unix"
 )
 
@@ -78,13 +78,11 @@ func kernelVersion() (maj, min, patch int, err error) {
 // return true if process has CAP_SYS_ADMIN privilege
 // else return false
 func checkCapSysAdmin() (bool, error) {
-	capabilities, err := capability.NewPid2(os.Getpid())
+	c, err := internal.CapInit()
 	if err != nil {
 		return false, err
 	}
-	capabilities.Load()
-	capSysAdmin := capabilities.Get(capability.EFFECTIVE, capability.CAP_SYS_ADMIN)
-	return capSysAdmin, nil
+	return c.IsSet(unix.CAP_SYS_ADMIN, internal.CapEffective)
 }
 
 func flagsValid(flags uint) error {
