@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"os"
 
 	"golang.org/x/sys/unix"
 )
@@ -44,6 +45,77 @@ const (
 	// execution is requested.
 	PermissionRequestToExecute PermissionRequest = PermissionRequest(fileOpenToExecutePermission)
 )
+
+// Watcher watches a set of paths, delivering events on a channel.
+//
+// A watcher should not be copied (e.g. pass it by pointer, rather than by
+// value).
+type Watcher struct {
+	// Events sends the filesystem change events.
+	//
+	// fsnotify can send the following events; a "path" here can refer to a
+	// file, directory, symbolic link, or special file like a FIFO.
+	//
+	//   fsnotify.Create              A new path was created; this may be followed by one
+	//                                or more Write events if data also gets written to a
+	//                                file.
+	//
+	//   fsnotify.Remove              A path was removed.
+	//
+	//   fsnotify.Rename              A path was renamed. A rename is always sent with the
+	//                                old path as Event.Name, and a Create event will be
+	//                                sent with the new name. Renames are only sent for
+	//                                paths that are currently watched; e.g. moving an
+	//                                unmonitored file into a monitored directory will
+	//                                show up as just a Create. Similarly, renaming a file
+	//                                to outside a monitored directory will show up as
+	//                                only a Rename.
+	//
+	//   fsnotify.Write               A file or named pipe was written to. A Truncate will
+	//                                also trigger a Write. A single "write action"
+	//                                initiated by the user may show up as one or multiple
+	//                                writes, depending on when the system syncs things to
+	//                                disk. For example when compiling a large Go program
+	//                                you may get hundreds of Write events, so you
+	//                                probably want to wait until you've stopped receiving
+	//                                them (see the dedup example in cmd/fsnotify).
+	//                                Some systems may send Write event for directories
+	//                                when the directory content changes.
+	//
+	//   fsnotify.Chmod               Attributes were changed. On Linux this is also sent
+	//                                when a file is removed (or more accurately, when a
+	//                                link to an inode is removed). On kqueue it's sent
+	//                                and on kqueue when a file is truncated. On Windows
+	//                                it's never sent.
+	//
+	//   fsnotify.Read                File or directory was read. (Applicable only to fanotify watcher.)
+	//
+	//   fsnotify.Close               File was closed without a write. (Applicable only to fanotify watcher.)
+	//
+	//   fsnotify.Open                File or directory was opened. (Applicable only to fanotify watcher.)
+	//
+	//   fsnotify.Execute             File was opened for execution. (Applicable only to fanotify watcher.)
+	Events chan Event
+
+	fd                 int
+	flags              uint     // flags passed to fanotify_init
+	mountpoint         *os.File // mount fd is the file descriptor of the mountpoint
+	kernelMajorVersion int
+	kernelMinorVersion int
+	entireMount        bool
+	notificationOnly   bool
+	stopper            struct {
+		r *os.File
+		w *os.File
+	}
+	// FanotifyEvents holds either notification events for the watched file/directory.
+	FanotifyEvents chan FanotifyEvent
+	// PermissionEvents holds permission request events for the watched file/directory.
+	//   fsnotify.PermissionToOpen    Permission request to open a file or directory. (Applicable only to fanotify watcher.)
+	//   fsnotify.PermissionToExecute Permission to open file for execution. (Applicable only to fanotify watcher.)
+	//   fsnotify.PermissionToRead    Permission to read a file or directory. (Applicable only to fanotify watcher.)
+	PermissionEvents chan FanotifyEvent
+}
 
 // FanotifyEvent represents a notification or a permission event from the kernel for the file,
 // directory marked for watching.
@@ -133,9 +205,6 @@ func NewFanotifyWatcher(mountPoint string, entireMount bool, permType Notificati
 // ([NewFanotifyWatcher]). The method panics if the watcher is an
 // instance from [NewWatcher].
 func (w *Watcher) AddMount() error {
-	if !w.fanotify {
-		panic("expected fanotify watcher")
-	}
 	if !w.entireMount {
 		return ErrInvalidFlagValue
 	}
@@ -158,9 +227,6 @@ func (w *Watcher) AddMount() error {
 // ([NewFanotifyWatcher]). The method panics if the watcher is an
 // instance from [NewWatcher].
 func (w *Watcher) RemoveMount() error {
-	if !w.fanotify {
-		panic("expected fanotify watcher")
-	}
 	var eventTypes fanotifyEventType
 	eventTypes = fileAccessed |
 		fileOrDirectoryAccessed |
@@ -174,6 +240,15 @@ func (w *Watcher) RemoveMount() error {
 	return w.fanotifyMark(w.mountpoint.Name(), unix.FAN_MARK_REMOVE|unix.FAN_MARK_MOUNT, uint64(eventTypes))
 }
 
+// Close stops the watcher and closes the event channels
+func (w *Watcher) Close() {
+	unix.Write(int(w.stopper.w.Fd()), []byte("stop"))
+	w.mountpoint.Close()
+	w.stopper.r.Close()
+	w.stopper.w.Close()
+	close(w.Events)
+}
+
 // AddPermissions adds the ability to make access permission decisions
 // for file or directory. The function returns an error [ErrInvalidFlagValue]
 // if there are no requests sent.
@@ -182,9 +257,6 @@ func (w *Watcher) RemoveMount() error {
 // ([NewFanotifyWatcher]). The method panics if the watcher is an
 // instance from [NewWatcher].
 func (w *Watcher) AddPermissions(name string, requests ...PermissionRequest) error {
-	if !w.fanotify {
-		panic("expected fanotify watcher")
-	}
 	if len(requests) == 0 {
 		return ErrInvalidFlagValue
 	}
@@ -201,9 +273,6 @@ func (w *Watcher) AddPermissions(name string, requests ...PermissionRequest) err
 // ([NewFanotifyWatcher]). The method panics if the watcher is an
 // instance from [NewWatcher].
 func (w *Watcher) Allow(e FanotifyEvent) {
-	if !w.fanotify {
-		panic("expected fanotify watcher")
-	}
 	var response unix.FanotifyResponse
 	response.Fd = int32(e.Fd)
 	response.Response = unix.FAN_ALLOW
@@ -218,9 +287,6 @@ func (w *Watcher) Allow(e FanotifyEvent) {
 // ([NewFanotifyWatcher]). The method panics if the watcher is an
 // instance from [NewWatcher].
 func (w *Watcher) Deny(e FanotifyEvent) {
-	if !w.fanotify {
-		panic("expected fanotify watcher")
-	}
 	var response unix.FanotifyResponse
 	response.Fd = int32(e.Fd)
 	response.Response = unix.FAN_DENY

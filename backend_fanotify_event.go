@@ -300,7 +300,6 @@ func newFanotifyWatcher(mountpointPath string, entireMount bool, notificationOnl
 			r *os.File
 			w *os.File
 		}{r, w},
-		fanotify:         true,
 		FanotifyEvents:   make(chan FanotifyEvent),
 		PermissionEvents: make(chan FanotifyEvent),
 	}
