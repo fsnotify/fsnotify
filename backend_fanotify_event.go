@@ -4,6 +4,7 @@
 package fsnotify
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"path"
 	"regexp"
 	"strconv"
+	"strings"
 	"unsafe"
 
 	"github.com/fsnotify/fsnotify/internal"
@@ -132,6 +134,57 @@ func checkMask(mask uint64, validEventTypes []fanotifyEventType) error {
 	return nil
 }
 
+// Returns the entry from /etc/fstab and Device ID of the file
+// where the unix.Stat(path).Dev matches unix.Stat(fields[1]).Dev;
+// Returns error if there are permission or other errors
+func getMountPointForPath(path string) (string, uint64, error) {
+	var pathStat unix.Stat_t
+	var fsFileStat unix.Stat_t
+	var fsErr error
+
+	fstab := "/etc/fstab"
+	f, err := os.Open(fstab)
+	if err != nil {
+		return "", 0, err
+	}
+	defer f.Close()
+	if err := unix.Stat(path, &pathStat); err != nil {
+		return "", 0, fmt.Errorf("cannot stat %s: %w", path, err)
+	}
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimLeft(scanner.Text(), " \t")
+		if strings.HasPrefix(line, "#") {
+			continue // skip comment lines
+		}
+		if line == "" {
+			continue // skip empty lines
+		}
+		fields := strings.Fields(line)
+		if fields[2] == "swap" {
+			continue // skip swap partition
+		}
+		// TODO fields[1] can contain spaces; deal with \011 or \040
+		// characters in fields[1] (man 5 fstab)
+		if err := unix.Stat(fields[1], &fsFileStat); err != nil {
+			// continue on other entries return an error at the ends
+			// if none was found
+			fsErr = err
+			continue
+		}
+		if pathStat.Dev == fsFileStat.Dev {
+			return fields[1], pathStat.Dev, nil
+		}
+	}
+	if scanner.Err() != nil {
+		return "", 0, fmt.Errorf("error reading fstab: %w", err)
+	}
+	if fsErr != nil {
+		return "", 0, fmt.Errorf("cannot stat paths in fstab: %w", fsErr)
+	}
+	return "", 0, fmt.Errorf("cannot stat paths in fstab")
+}
+
 // Check if specified fanotify_init flags are supported for the given
 // kernel version. If none of the defined flags are specified
 // then the basic option works on any kernel version.
@@ -220,8 +273,7 @@ func fanotifyEventOK(meta *unix.FanotifyEventMetadata, n int) bool {
 		int(meta.Event_len) <= n)
 }
 
-// permissionType is ignored when isNotificationListener is true.
-func newFanotifyWatcher(mountpointPath string, entireMount bool, notificationOnly bool, permissionType NotificationClass) (*Watcher, error) {
+func newFanotifyWatcher() (*Watcher, error) {
 
 	var flags, eventFlags uint
 
@@ -229,37 +281,21 @@ func newFanotifyWatcher(mountpointPath string, entireMount bool, notificationOnl
 	if err != nil {
 		return nil, err
 	}
-	if !notificationOnly {
-		// permission + notification events; cannot have FID with this.
-		switch permissionType {
-		case PreContent:
-			flags = unix.FAN_CLASS_PRE_CONTENT | unix.FAN_CLOEXEC
-		case PostContent:
-			flags = unix.FAN_CLASS_CONTENT | unix.FAN_CLOEXEC
-		default:
-			return nil, os.ErrInvalid
-		}
-	} else {
-		switch {
-		case maj < 5:
+	switch {
+	case maj < 5:
+		flags = unix.FAN_CLASS_NOTIF | unix.FAN_CLOEXEC
+	case maj == 5:
+		if min < 1 {
 			flags = unix.FAN_CLASS_NOTIF | unix.FAN_CLOEXEC
-		case maj == 5:
-			if min < 1 {
-				flags = unix.FAN_CLASS_NOTIF | unix.FAN_CLOEXEC
-			}
-			if min >= 1 && min < 9 {
-				flags = unix.FAN_CLASS_NOTIF | unix.FAN_CLOEXEC | unix.FAN_REPORT_FID
-			}
-			if min >= 9 {
-				flags = unix.FAN_CLASS_NOTIF | unix.FAN_CLOEXEC | unix.FAN_REPORT_DIR_FID | unix.FAN_REPORT_NAME
-			}
-		case maj > 5:
+		}
+		if min >= 1 && min < 9 {
+			flags = unix.FAN_CLASS_NOTIF | unix.FAN_CLOEXEC | unix.FAN_REPORT_FID
+		}
+		if min >= 9 {
 			flags = unix.FAN_CLASS_NOTIF | unix.FAN_CLOEXEC | unix.FAN_REPORT_DIR_FID | unix.FAN_REPORT_NAME
 		}
-		// FAN_MARK_MOUNT cannot be specified with FAN_REPORT_FID, FAN_REPORT_DIR_FID, FAN_REPORT_NAME
-		if entireMount {
-			flags = unix.FAN_CLASS_NOTIF | unix.FAN_CLOEXEC
-		}
+	case maj > 5:
+		flags = unix.FAN_CLASS_NOTIF | unix.FAN_CLOEXEC | unix.FAN_REPORT_DIR_FID | unix.FAN_REPORT_NAME
 	}
 	eventFlags = unix.O_RDONLY | unix.O_LARGEFILE | unix.O_CLOEXEC
 	if err := flagsValid(flags); err != nil {
@@ -271,10 +307,6 @@ func newFanotifyWatcher(mountpointPath string, entireMount bool, notificationOnl
 	fd, err := unix.FanotifyInit(flags, eventFlags)
 	if err != nil {
 		return nil, err
-	}
-	mountpoint, err := os.Open(mountpointPath)
-	if err != nil {
-		return nil, fmt.Errorf("error opening mount point %s: %w", mountpointPath, err)
 	}
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -291,16 +323,13 @@ func newFanotifyWatcher(mountpointPath string, entireMount bool, notificationOnl
 	watcher := &Watcher{
 		fd:                 fd,
 		flags:              flags,
-		mountpoint:         mountpoint,
 		kernelMajorVersion: maj,
 		kernelMinorVersion: min,
-		entireMount:        entireMount,
-		notificationOnly:   notificationOnly,
 		stopper: struct {
 			r *os.File
 			w *os.File
 		}{r, w},
-		FanotifyEvents:   make(chan FanotifyEvent),
+		Events:           make(chan FanotifyEvent),
 		PermissionEvents: make(chan FanotifyEvent),
 	}
 	return watcher, nil
@@ -391,6 +420,16 @@ func (w *Watcher) start() {
 	}
 }
 
+// checkPathUnderMountPoint returns true if the path belongs to
+// the mountPoint being watched else returns false.
+func (w *Watcher) checkPathUnderMountPoint(path string) (bool, error) {
+	var pathStat unix.Stat_t
+	if err := unix.Stat(path, &pathStat); err != nil {
+		return false, fmt.Errorf("cannot stat %s: %w", path, err)
+	}
+	return pathStat.Dev == w.mountDeviceID, nil
+}
+
 // fanotifyAddWith adds or modifies the fanotify mark for the specified path.
 // The events are only raised for the specified directory and does raise events
 // for subdirectories. Calling AddWatch to mark the entire mountpoint results in
@@ -399,16 +438,30 @@ func (w *Watcher) start() {
 //  - [FileCreated] cannot be or-ed / combined with [FileClosed]. The fanotify system does not generate any event for this combination.
 //  - [FileOpened] with any of the event types containing OrDirectory causes an event flood for the directory and then stopping raising any events at all.
 //  - [FileOrDirectoryOpened] with any of the other event types causes an event flood for the directory and then stopping raising any events at all.
-func (w *Watcher) fanotifyAddWith(path string, opts ...addOpt) error {
-	if w == nil {
-		panic("nil listener")
-	}
-	// TODO allow entire mount via same API but with option;
-	// remove WatchMount and UnwatchMount
-	if w.entireMount {
-		return os.ErrInvalid
-	}
+func (w *Watcher) fanotifyAddPath(path string) error {
+
 	var eventTypes fanotifyEventType
+	w.findMountPoint.Do(func() {
+		mountPointPath, devID, err := getMountPointForPath(path)
+		if err != nil {
+			return
+		}
+		f, err := os.Open(mountPointPath)
+		if err != nil {
+			return
+		}
+		w.mountPointFile = f
+		w.mountDeviceID = devID
+	})
+	// TODO if w.mountPointFile is nil then return error
+	// indicating invalid watcher
+	inMount, err := w.checkPathUnderMountPoint(path)
+	if err != nil {
+		return err
+	}
+	if !inMount {
+		return ErrMountPoint
+	}
 	eventTypes = fileAccessed |
 		fileOrDirectoryAccessed |
 		fileModified |
@@ -454,9 +507,6 @@ func (w *Watcher) fanotifyRemove(path string) error {
 }
 
 func (w *Watcher) fanotifyMark(path string, flags uint, mask uint64) error {
-	if w == nil {
-		panic("nil listener")
-	}
 	if !fanotifyMarkFlagsKernelSupport(mask, w.kernelMajorVersion, w.kernelMinorVersion) {
 		panic("some of the mark mask combinations specified are not supported on the current kernel; refer to the documentation")
 	}
@@ -522,7 +572,7 @@ func (w *Watcher) readFanotifyEvents() error {
 					mask&unix.FAN_OPEN_EXEC_PERM == unix.FAN_OPEN_EXEC_PERM {
 					w.PermissionEvents <- event
 				} else {
-					w.FanotifyEvents <- event
+					w.Events <- event
 				}
 				i += int(metadata.Event_len)
 				n -= int(metadata.Event_len)
@@ -550,7 +600,7 @@ func (w *Watcher) readFanotifyEvents() error {
 				} else {
 					fileHandle = getFileHandle(metadata.Metadata_len, buf[:], i)
 				}
-				fd, errno := unix.OpenByHandleAt(int(w.mountpoint.Fd()), *fileHandle, unix.O_RDONLY)
+				fd, errno := unix.OpenByHandleAt(int(w.mountPointFile.Fd()), *fileHandle, unix.O_RDONLY)
 				if errno != nil {
 					// log.Println("OpenByHandleAt:", errno)
 					i += int(metadata.Event_len)
@@ -575,7 +625,7 @@ func (w *Watcher) readFanotifyEvents() error {
 				}
 				// As of the kernel release (6.0) permission events cannot have FID flags.
 				// So the event here is always a notification event
-				w.FanotifyEvents <- event
+				w.Events <- event
 				i += int(metadata.Event_len)
 				n -= int(metadata.Event_len)
 				metadata = (*unix.FanotifyEventMetadata)(unsafe.Pointer(&buf[i]))
