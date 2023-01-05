@@ -8,8 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-
-	"golang.org/x/sys/unix"
 )
 
 var (
@@ -19,33 +17,6 @@ var (
 	ErrInvalidFlagValue = errors.New("invalid flag value")
 	// ErrMountPoint indicates the path is not under watched mount point
 	ErrMountPoint = errors.New("path not under watched mount point")
-)
-
-// NotificationClass represents value indicating when the permission event must be requested.
-type NotificationClass int
-
-// PermissionRequest represents the request for which the permission event is created.
-type PermissionRequest uint64
-
-const (
-	// PermissionNone is used to indicate the listener is for notification events only.
-	PermissionNone NotificationClass = 0
-	// PreContent is intended for event listeners that
-	// need to access files before they contain their final data.
-	PreContent NotificationClass = 1
-	// PostContent is intended for event listeners that
-	// need to access files when they already contain their final content.
-	PostContent NotificationClass = 2
-
-	// PermissionRequestToOpen create's an event when a permission to open a file or
-	// directory is requested.
-	PermissionRequestToOpen PermissionRequest = PermissionRequest(fileOpenPermission)
-	// PermissionRequestToAccess create's an event when a permission to read a file or
-	// directory is requested.
-	PermissionRequestToAccess PermissionRequest = PermissionRequest(fileAccessPermission)
-	// PermissionRequestToExecute create an event when a permission to open a file for
-	// execution is requested.
-	PermissionRequestToExecute PermissionRequest = PermissionRequest(fileOpenToExecutePermission)
 )
 
 // Watcher watches a set of paths, delivering events on a channel.
@@ -105,17 +76,25 @@ type Watcher struct {
 	//   fsnotify.PermissionToRead    Permission to read a file or directory. (Applicable only to fanotify watcher.)
 	PermissionEvents chan FanotifyEvent
 
+	// Errors sends any errors.
+	Errors chan error
+
 	fd                 int
-	flags              uint // flags passed to fanotify_init
+	flags              uint   // flags passed to fanotify_init
+	markMask           uint64 // fanotify_mark mask
 	mountPointFile     *os.File
 	mountDeviceID      uint64
 	findMountPoint     sync.Once
+	closeOnce          sync.Once
+	isClosed           bool
 	kernelMajorVersion int
 	kernelMinorVersion int
+	done               chan struct{}
 	stopper            struct {
 		r *os.File
 		w *os.File
 	}
+	isFanotify bool
 }
 
 // FanotifyEvent represents a notification or a permission event from the kernel for the file,
@@ -202,7 +181,9 @@ func (w *Watcher) Add(name string) error { return w.AddWith(name) }
 
 // AddWith is like [Add], but allows adding options.
 func (w *Watcher) AddWith(name string, opts ...addOpt) error {
-	// TODO implement isClosed to return ErrClosed
+	if w.isClosed {
+		return ErrClosed
+	}
 	name = filepath.Clean(name)
 	_ = getOptions(opts...)
 	return w.fanotifyAddPath(name)
@@ -212,10 +193,9 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 //
 // Returns nil if [Watcher.Close] was called.
 func (w *Watcher) Remove(name string) error {
-	// TODO handle watcher closed case
-	// if w.isClosed() {
-	// 	return nil
-	// }
+	if w.isClosed {
+		return nil
+	}
 	name = filepath.Clean(name)
 	return w.fanotifyRemove(name)
 }
@@ -224,16 +204,14 @@ func (w *Watcher) Remove(name string) error {
 //
 // Returns nil if [Watcher.Close] was called.
 func (w *Watcher) WatchList() []string {
-	// TODO impl
+	if w.isClosed {
+		return nil
+	}
 	return nil
 }
 
 // Close stops the watcher and closes the event channels
-func (w *Watcher) Close() {
-	unix.Write(int(w.stopper.w.Fd()), []byte("stop"))
-	w.mountPointFile.Close()
-	w.stopper.r.Close()
-	w.stopper.w.Close()
-	close(w.Events)
-	close(w.PermissionEvents)
+func (w *Watcher) Close() error {
+	w.closeFanotify()
+	return nil
 }

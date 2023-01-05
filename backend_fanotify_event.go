@@ -325,12 +325,15 @@ func newFanotifyWatcher() (*Watcher, error) {
 		flags:              flags,
 		kernelMajorVersion: maj,
 		kernelMinorVersion: min,
+		done:               make(chan struct{}),
 		stopper: struct {
 			r *os.File
 			w *os.File
 		}{r, w},
 		Events:           make(chan FanotifyEvent),
 		PermissionEvents: make(chan FanotifyEvent),
+		Errors:           make(chan error),
+		isFanotify:       true,
 	}
 	return watcher, nil
 }
@@ -387,6 +390,9 @@ func (w *Watcher) start() {
 	if w == nil {
 		panic("nil listener")
 	}
+	defer func() {
+		w.closeFanotify()
+	}()
 	// Fanotify Fd
 	fds[0].Fd = int32(w.fd)
 	fds[0].Events = unix.POLLIN
@@ -402,8 +408,10 @@ func (w *Watcher) start() {
 			if err == unix.EINTR {
 				continue
 			} else {
-				// TODO handle error
-				return
+				if !w.sendError(err) {
+					return
+				}
+				continue
 			}
 		}
 		if fds[1].Revents != 0 {
@@ -418,6 +426,23 @@ func (w *Watcher) start() {
 			}
 		}
 	}
+}
+
+func (w *Watcher) closeFanotify() {
+	w.closeOnce.Do(func() {
+		close(w.done)
+		unix.Write(int(w.stopper.w.Fd()), []byte("stop"))
+		if err := unix.Close(w.fd); err != nil {
+			w.Errors <- err
+		}
+		w.isClosed = true
+		w.mountPointFile.Close()
+		w.stopper.r.Close()
+		w.stopper.w.Close()
+		close(w.Events)
+		close(w.PermissionEvents)
+		close(w.Errors)
+	})
 }
 
 // checkPathUnderMountPoint returns true if the path belongs to
@@ -439,8 +464,9 @@ func (w *Watcher) checkPathUnderMountPoint(path string) (bool, error) {
 //  - [FileOpened] with any of the event types containing OrDirectory causes an event flood for the directory and then stopping raising any events at all.
 //  - [FileOrDirectoryOpened] with any of the other event types causes an event flood for the directory and then stopping raising any events at all.
 func (w *Watcher) fanotifyAddPath(path string) error {
-
-	var eventTypes fanotifyEventType
+	if w.isClosed {
+		return ErrClosed
+	}
 	w.findMountPoint.Do(func() {
 		mountPointPath, devID, err := getMountPointForPath(path)
 		if err != nil {
@@ -462,7 +488,7 @@ func (w *Watcher) fanotifyAddPath(path string) error {
 	if !inMount {
 		return ErrMountPoint
 	}
-	eventTypes = fileAccessed |
+	eventTypes := fileAccessed |
 		fileOrDirectoryAccessed |
 		fileModified |
 		fileOpenedForExec |
@@ -484,8 +510,7 @@ func (w *Watcher) fanotifyAddPath(path string) error {
 }
 
 func (w *Watcher) fanotifyRemove(path string) error {
-	var eventTypes fanotifyEventType
-	eventTypes = fileAccessed |
+	eventTypes := fileAccessed |
 		fileOrDirectoryAccessed |
 		fileModified |
 		fileOpenedForExec |
@@ -519,6 +544,14 @@ func (w *Watcher) fanotifyMark(path string, flags uint, mask uint64) error {
 	return nil
 }
 
+func (w *Watcher) clearWatch() error {
+	if err := unix.FanotifyMark(w.fd, unix.FAN_MARK_FLUSH, 0, -1, ""); err != nil {
+		return err
+	}
+	w.markMask = 0
+	return nil
+}
+
 func (w *Watcher) readFanotifyEvents() error {
 	var fid *fanotifyEventInfoFID
 	var metadata *unix.FanotifyEventMetadata
@@ -533,7 +566,9 @@ func (w *Watcher) readFanotifyEvents() error {
 			continue
 		}
 		if err != nil {
-			return err
+			if !w.sendError(err) {
+				return err
+			}
 		}
 		if n == 0 || n < int(sizeOfFanotifyEventMetadata) {
 			break
@@ -541,15 +576,20 @@ func (w *Watcher) readFanotifyEvents() error {
 		i := 0
 		metadata = (*unix.FanotifyEventMetadata)(unsafe.Pointer(&buf[i]))
 		for fanotifyEventOK(metadata, n) {
+			// fmt.Println("Processing event", metadata, n)
 			if metadata.Vers != unix.FANOTIFY_METADATA_VERSION {
 				// fmt.Println("metadata.Vers", metadata.Vers, "FANOTIFY_METADATA_VERSION", unix.FANOTIFY_METADATA_VERSION, "metadata:", metadata)
 				panic("metadata structure from the kernel does not match the structure definition at compile time")
 			}
 			if metadata.Fd != unix.FAN_NOFD {
+				// fmt.Println("non FID")
 				// no fid (applicable to kernels 5.0 and earlier)
 				procFdPath := fmt.Sprintf("/proc/self/fd/%d", metadata.Fd)
 				n1, err := unix.Readlink(procFdPath, name[:])
 				if err != nil {
+					if !w.sendError(err) {
+						return err
+					}
 					i += int(metadata.Event_len)
 					n -= int(metadata.Event_len)
 					metadata = (*unix.FanotifyEventMetadata)(unsafe.Pointer(&buf[i]))
@@ -570,9 +610,13 @@ func (w *Watcher) readFanotifyEvents() error {
 				if mask&unix.FAN_ACCESS_PERM == unix.FAN_ACCESS_PERM ||
 					mask&unix.FAN_OPEN_PERM == unix.FAN_OPEN_PERM ||
 					mask&unix.FAN_OPEN_EXEC_PERM == unix.FAN_OPEN_EXEC_PERM {
-					w.PermissionEvents <- event
+					if !w.sendPermissionEvent(event) {
+						return nil
+					}
 				} else {
-					w.Events <- event
+					if !w.sendNotificationEvent(event) {
+						return nil
+					}
 				}
 				i += int(metadata.Event_len)
 				n -= int(metadata.Event_len)
@@ -580,6 +624,7 @@ func (w *Watcher) readFanotifyEvents() error {
 			} else {
 				// fid (applicable to kernels 5.1+)
 				fid = (*fanotifyEventInfoFID)(unsafe.Pointer(&buf[i+int(metadata.Metadata_len)]))
+				// fmt.Println("FID", fid)
 				withName := false
 				switch {
 				case fid.Header.InfoType == unix.FAN_EVENT_INFO_TYPE_FID:
@@ -589,6 +634,7 @@ func (w *Watcher) readFanotifyEvents() error {
 				case fid.Header.InfoType == unix.FAN_EVENT_INFO_TYPE_DFID_NAME:
 					withName = true
 				default:
+					// fmt.Println("default case continue: fid.Header.InfoType", fid.Header.InfoType)
 					i += int(metadata.Event_len)
 					n -= int(metadata.Event_len)
 					metadata = (*unix.FanotifyEventMetadata)(unsafe.Pointer(&buf[i]))
@@ -602,7 +648,11 @@ func (w *Watcher) readFanotifyEvents() error {
 				}
 				fd, errno := unix.OpenByHandleAt(int(w.mountPointFile.Fd()), *fileHandle, unix.O_RDONLY)
 				if errno != nil {
-					// log.Println("OpenByHandleAt:", errno)
+					if !w.sendError(errno) {
+						// fmt.Println("oops something wrong. returning:", errno)
+						return errno
+					}
+					// fmt.Println("something wrong wrote error to Errors channel:", errno)
 					i += int(metadata.Event_len)
 					n -= int(metadata.Event_len)
 					metadata = (*unix.FanotifyEventMetadata)(unsafe.Pointer(&buf[i]))
@@ -625,7 +675,10 @@ func (w *Watcher) readFanotifyEvents() error {
 				}
 				// As of the kernel release (6.0) permission events cannot have FID flags.
 				// So the event here is always a notification event
-				w.Events <- event
+				// fmt.Println("Sending Event:", event)
+				if !w.sendNotificationEvent(event) {
+					return nil
+				}
 				i += int(metadata.Event_len)
 				n -= int(metadata.Event_len)
 				metadata = (*unix.FanotifyEventMetadata)(unsafe.Pointer(&buf[i]))
@@ -633,6 +686,44 @@ func (w *Watcher) readFanotifyEvents() error {
 		}
 	}
 	return nil
+}
+
+func (w *Watcher) sendNotificationEvent(event FanotifyEvent) bool {
+	if w.isClosed {
+		return false
+	}
+	select {
+	case w.Events <- event:
+		return true
+	case <-w.done:
+	}
+	return false
+}
+
+func (w *Watcher) sendPermissionEvent(event FanotifyEvent) bool {
+	if w.isClosed {
+		return false
+	}
+	select {
+	case w.PermissionEvents <- event:
+		return true
+	case <-w.done:
+	}
+	return false
+}
+
+func (w *Watcher) sendError(err error) bool {
+	if w.isClosed {
+		// fmt.Println("sendError: isClosed is true; returning false")
+		return false
+	}
+	select {
+	case w.Errors <- err:
+		return true
+	case <-w.done:
+		// fmt.Println("done was closed; returning false")
+	}
+	return false
 }
 
 // Has returns true if event types (e) contains the passed in event type (et).
