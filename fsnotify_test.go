@@ -1480,6 +1480,47 @@ func TestWatchList(t *testing.T) {
 	}
 }
 
+func TestOpHas(t *testing.T) {
+	tests := []struct {
+		name string
+		o    Op
+		h    Op
+		want bool
+	}{
+		{
+			name: "single bit match",
+			o:    Remove,
+			h:    Remove,
+			want: true,
+		},
+		{
+			name: "single bit no match",
+			o:    Remove,
+			h:    Create,
+			want: false,
+		},
+		{
+			name: "two bits match",
+			o:    Remove | Create,
+			h:    Create,
+			want: true,
+		},
+		{
+			name: "two bits no match",
+			o:    Remove | Create,
+			h:    Chmod,
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.o.Has(tt.h); got != tt.want {
+				t.Errorf("Has() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func BenchmarkWatch(b *testing.B) {
 	w, err := NewWatcher()
 	if err != nil {

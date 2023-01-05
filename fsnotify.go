@@ -93,7 +93,7 @@ func (o Op) String() string {
 }
 
 // Has reports if this operation has the given operation.
-func (o Op) Has(h Op) bool { return o&h == h }
+func (o Op) Has(h Op) bool { return o&h != 0 }
 
 // Has reports if this event has the given operation.
 func (e Event) Has(op Op) bool { return e.Op.Has(op) }
