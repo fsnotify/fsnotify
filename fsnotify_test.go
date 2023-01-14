@@ -1556,3 +1556,22 @@ func BenchmarkWatch(b *testing.B) {
 	}
 	wg.Wait()
 }
+
+func BenchmarkAddRemove(b *testing.B) {
+	w, err := NewWatcher()
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	tmp := b.TempDir()
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		if err := w.Add(tmp); err != nil {
+			b.Fatal(err)
+		}
+		if err := w.Remove(tmp); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
