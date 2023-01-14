@@ -105,13 +105,17 @@ func createFiles(t *testing.T, dir, prefix string, n int, d time.Duration) int {
 			t.Logf("createFiles: stopped at %s files because it took longer than %s", fmtNum(created), d)
 			return created
 		default:
-			fp, err := os.Create(join(dir, prefix+fmtNum(i)))
+			path := join(dir, prefix+fmtNum(i))
+			fp, err := os.Create(path)
 			if err != nil {
 				t.Errorf("create failed for %s: %s", fmtNum(i), err)
 				continue
 			}
 			if err := fp.Close(); err != nil {
 				t.Errorf("close failed for %s: %s", fmtNum(i), err)
+			}
+			if err := os.Remove(path); err != nil {
+				t.Errorf("remove failed for %s: %s", fmtNum(i), err)
 			}
 			if i%10_000 == 0 {
 				t.Logf("createFiles: %s", fmtNum(i))
