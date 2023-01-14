@@ -29,7 +29,7 @@ jobs:
 
       - name: test
         run: |
-          go test -race ./...
+          go test -count=10 -race ./...
 
   # Test gccgo
   testgcc:
@@ -70,7 +70,7 @@ jobs:
 
       - name: test
         run: |
-          go test -race ./...
+          go test -count=10 -race ./...
 
   # OpenBSD; no -race as the VM doesn't include the comp set.
   #
@@ -91,7 +91,7 @@ jobs:
           prepare: pkg_add go
           run: |
             useradd -mG wheel action
-            su action -c 'go test ./...'
+            su action -c 'go test -count=10 ./...'
 
   # NetBSD
   testNetBSD:
@@ -125,7 +125,7 @@ jobs:
           useradd action
           export GOCACHE=/tmp/go-cache
           export GOPATH=/tmp/go-path
-          su action -c '/opt/ooce/go-1.19/bin/go test ./...'
+          su action -c '/opt/ooce/go-1.19/bin/go test -count=10 ./...'
 
   # Older Debian 6, for old Linux kernels.
   testDebian6:
