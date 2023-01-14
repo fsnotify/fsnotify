@@ -3,6 +3,7 @@ package fsnotify
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -1145,6 +1147,33 @@ func TestClose(t *testing.T) {
 }
 
 func TestAdd(t *testing.T) {
+	t.Run("doesn't exist", func(t *testing.T) {
+		t.Parallel()
+		tmp := t.TempDir()
+
+		w := newWatcher(t)
+		err := w.Add(join(tmp, "non-existent"))
+		if err == nil {
+			t.Fatal("err is nil")
+		}
+
+		// Errors for this are inconsistent; should be fixed in v2. See #144
+		switch runtime.GOOS {
+		case "linux":
+			if _, ok := err.(syscall.Errno); !ok {
+				t.Errorf("wrong error type: %[1]T: %#[1]v", err)
+			}
+		case "windows":
+			if _, ok := err.(*os.SyscallError); !ok {
+				t.Errorf("wrong error type: %[1]T: %#[1]v", err)
+			}
+		default:
+			if _, ok := err.(*fs.PathError); !ok {
+				t.Errorf("wrong error type: %[1]T: %#[1]v", err)
+			}
+		}
+	})
+
 	t.Run("permission denied", func(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("chmod doesn't work on Windows") // See if we can make a file unreadable
