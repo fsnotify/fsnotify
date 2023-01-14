@@ -1401,9 +1401,6 @@ func TestWatchStress(t *testing.T) {
 			}
 		}
 
-		for i := 0; i < numFiles; i++ {
-			rm(t, tmp, prefix+fmtNum(i), noWait)
-		}
 		close(done)
 	}()
 	<-done
