@@ -130,19 +130,110 @@ type Watcher struct {
 	// Store fd here as os.File.Read() will no longer return on close after
 	// calling Fd(). See: https://github.com/golang/go/issues/26439
 	fd          int
-	mu          sync.Mutex // Map access
 	inotifyFile *os.File
-	watches     map[string]*watch // Map of inotify watches (path → watch)
-	paths       map[int]string    // Map of watched paths (watch descriptor → path)
-	done        chan struct{}     // Channel for sending a "quit message" to the reader goroutine
-	doneResp    chan struct{}     // Channel to respond to Close
+	watches     *watches
+	done        chan struct{} // Channel for sending a "quit message" to the reader goroutine
+	closeMu     sync.Mutex
+	doneResp    chan struct{} // Channel to respond to Close
+}
+
+type (
+	watches struct {
+		mu   sync.RWMutex
+		wd   map[uint32]*watch // wd → watch
+		path map[string]uint32 // pathname → wd
+	}
+	watch struct {
+		wd    uint32 // Watch descriptor (as returned by the inotify_add_watch() syscall)
+		flags uint32 // inotify flags of this watch (see inotify(7) for the list of valid flags)
+		path  string // Watch path.
+	}
+)
+
+func newWatches() *watches {
+	return &watches{
+		wd:   make(map[uint32]*watch),
+		path: make(map[string]uint32),
+	}
+}
+
+func (w *watches) len() int {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return len(w.wd)
+}
+
+func (w *watches) add(ww *watch) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.wd[ww.wd] = ww
+	w.path[ww.path] = ww.wd
+}
+
+func (w *watches) remove(wd uint32) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	delete(w.path, w.wd[wd].path)
+	delete(w.wd, wd)
+}
+
+func (w *watches) removePath(path string) (uint32, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	wd, ok := w.path[path]
+	if !ok {
+		return 0, false
+	}
+
+	delete(w.path, path)
+	delete(w.wd, wd)
+
+	return wd, true
+}
+
+func (w *watches) byPath(path string) *watch {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.wd[w.path[path]]
+}
+
+func (w *watches) byWd(wd uint32) *watch {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.wd[wd]
+}
+
+func (w *watches) updatePath(path string, f func(*watch) (*watch, error)) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	var existing *watch
+	wd, ok := w.path[path]
+	if ok {
+		existing = w.wd[wd]
+	}
+
+	upd, err := f(existing)
+	if err != nil {
+		return err
+	}
+	if upd != nil {
+		w.wd[upd.wd] = upd
+		w.path[upd.path] = upd.wd
+
+		if upd.wd != wd {
+			delete(w.wd, wd)
+		}
+	}
+
+	return nil
 }
 
 // NewWatcher creates a new Watcher.
 func NewWatcher() (*Watcher, error) {
-	// Create inotify fd
-	// Need to set the FD to nonblocking mode in order for SetDeadline methods to work
-	// Otherwise, blocking i/o operations won't terminate on close
+	// Need to set nonblocking mode for SetDeadline to work, otherwise blocking
+	// I/O operations won't terminate on close.
 	fd, errno := unix.InotifyInit1(unix.IN_CLOEXEC | unix.IN_NONBLOCK)
 	if fd == -1 {
 		return nil, errno
@@ -151,8 +242,7 @@ func NewWatcher() (*Watcher, error) {
 	w := &Watcher{
 		fd:          fd,
 		inotifyFile: os.NewFile(uintptr(fd), ""),
-		watches:     make(map[string]*watch),
-		paths:       make(map[int]string),
+		watches:     newWatches(),
 		Events:      make(chan Event),
 		Errors:      make(chan error),
 		done:        make(chan struct{}),
@@ -169,8 +259,8 @@ func (w *Watcher) sendEvent(e Event) bool {
 	case w.Events <- e:
 		return true
 	case <-w.done:
+		return false
 	}
-	return false
 }
 
 // Returns true if the error was sent, or false if watcher is closed.
@@ -194,15 +284,13 @@ func (w *Watcher) isClosed() bool {
 
 // Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error {
-	w.mu.Lock()
+	w.closeMu.Lock()
 	if w.isClosed() {
-		w.mu.Unlock()
+		w.closeMu.Unlock()
 		return nil
 	}
-
-	// Send 'close' signal to goroutine, and set the Watcher to closed.
 	close(w.done)
-	w.mu.Unlock()
+	w.closeMu.Unlock()
 
 	// Causes any blocking reads to return with an error, provided the file
 	// still supports deadline operations.
@@ -273,26 +361,28 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 		unix.IN_CREATE | unix.IN_ATTRIB | unix.IN_MODIFY |
 		unix.IN_MOVE_SELF | unix.IN_DELETE | unix.IN_DELETE_SELF
 
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	watchEntry := w.watches[name]
-	if watchEntry != nil {
-		flags |= watchEntry.flags | unix.IN_MASK_ADD
-	}
-	wd, errno := unix.InotifyAddWatch(w.fd, name, flags)
-	if wd == -1 {
-		return errno
-	}
+	return w.watches.updatePath(name, func(existing *watch) (*watch, error) {
+		if existing != nil {
+			flags |= existing.flags | unix.IN_MASK_ADD
+		}
 
-	if watchEntry == nil {
-		w.watches[name] = &watch{wd: uint32(wd), flags: flags}
-		w.paths[wd] = name
-	} else {
-		watchEntry.wd = uint32(wd)
-		watchEntry.flags = flags
-	}
+		wd, err := unix.InotifyAddWatch(w.fd, name, flags)
+		if wd == -1 {
+			return nil, err
+		}
 
-	return nil
+		if existing == nil {
+			return &watch{
+				wd:    uint32(wd),
+				path:  name,
+				flags: flags,
+			}, nil
+		}
+
+		existing.wd = uint32(wd)
+		existing.flags = flags
+		return existing, nil
+	})
 }
 
 // Remove stops monitoring the path for changes.
@@ -314,27 +404,16 @@ func (w *Watcher) Remove(name string) error {
 	if w.isClosed() {
 		return nil
 	}
+	return w.remove(filepath.Clean(name))
+}
 
-	name = filepath.Clean(name)
-
-	// Fetch the watch.
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	watch, ok := w.watches[name]
+func (w *Watcher) remove(name string) error {
+	wd, ok := w.watches.removePath(name)
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrNonExistentWatch, name)
 	}
 
-	return w.remove(name, watch)
-}
-
-// Unlocked!
-func (w *Watcher) remove(name string, watch *watch) error {
-	delete(w.paths, int(watch.wd))
-	delete(w.watches, name)
-
-	success, errno := unix.InotifyRmWatch(w.fd, watch.wd)
+	success, errno := unix.InotifyRmWatch(w.fd, wd)
 	if success == -1 {
 		// TODO: Perhaps it's not helpful to return an error here in every case;
 		//       The only two possible errors are:
@@ -359,20 +438,14 @@ func (w *Watcher) WatchList() []string {
 		return nil
 	}
 
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	entries := make([]string, 0, len(w.watches))
-	for pathname := range w.watches {
+	entries := make([]string, 0, w.watches.len())
+	w.watches.mu.RLock()
+	for pathname := range w.watches.path {
 		entries = append(entries, pathname)
 	}
+	w.watches.mu.RUnlock()
 
 	return entries
-}
-
-type watch struct {
-	wd    uint32 // Watch descriptor (as returned by the inotify_add_watch() syscall)
-	flags uint32 // inotify flags of this watch (see inotify(7) for the list of valid flags)
 }
 
 // readEvents reads from the inotify file descriptor, converts the
@@ -441,27 +514,29 @@ func (w *Watcher) readEvents() {
 			// doesn't append the filename to the event, but we would like to always fill the
 			// the "Name" field with a valid filename. We retrieve the path of the watch from
 			// the "paths" map.
-			w.mu.Lock()
-			name, ok := w.paths[int(raw.Wd)]
+			watch := w.watches.byWd(uint32(raw.Wd))
+
 			// inotify will automatically remove the watch on deletes; just need
 			// to clean our state here.
-			if ok && mask&unix.IN_DELETE_SELF == unix.IN_DELETE_SELF {
-				delete(w.paths, int(raw.Wd))
-				delete(w.watches, name)
+			if watch != nil && mask&unix.IN_DELETE_SELF == unix.IN_DELETE_SELF {
+				w.watches.remove(watch.wd)
 			}
 			// We can't really update the state when a watched path is moved;
 			// only IN_MOVE_SELF is sent and not IN_MOVED_{FROM,TO}. So remove
 			// the watch.
-			if ok && mask&unix.IN_MOVE_SELF == unix.IN_MOVE_SELF {
-				err := w.remove(name, w.watches[name])
-				if err != nil {
+			if watch != nil && mask&unix.IN_MOVE_SELF == unix.IN_MOVE_SELF {
+				err := w.remove(watch.path)
+				if err != nil && !errors.Is(err, ErrNonExistentWatch) {
 					if !w.sendError(err) {
 						return
 					}
 				}
 			}
-			w.mu.Unlock()
 
+			var name string
+			if watch != nil {
+				name = watch.path
+			}
 			if nameLen > 0 {
 				// Point "bytes" at the first byte of the filename
 				bytes := (*[unix.PathMax]byte)(unsafe.Pointer(&buf[offset+unix.SizeofInotifyEvent]))[:nameLen:nameLen]
