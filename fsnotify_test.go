@@ -968,7 +968,7 @@ func TestClose(t *testing.T) {
 		// which may take a little bit.
 		switch runtime.GOOS {
 		case "freebsd", "openbsd", "netbsd", "dragonfly", "darwin", "solaris", "illumos":
-			time.Sleep(5 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 		}
 
 		select {
