@@ -20,8 +20,8 @@ Platform support:
 | USN Journals          | Windows    | [Needs support in x/sys/windows][usn]                                     |
 | Polling               | *All*      | [Not yet](https://github.com/fsnotify/fsnotify/issues/9)                  |
 
-Linux, macOS, and illumos should include Android, iOS, and Solaris, but these
-are currently untested.
+Linux and illumos should include Android and Solaris, but these are currently
+untested.
 
 [fsevents]:   https://github.com/fsnotify/fsnotify/issues/11#issuecomment-1279133120
 [usn]:        https://github.com/fsnotify/fsnotify/issues/53#issuecomment-1279829847
