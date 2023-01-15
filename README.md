@@ -8,22 +8,24 @@ https://pkg.go.dev/github.com/fsnotify/fsnotify
 
 Platform support:
 
-| Backend               | OS             | Status                                                       |
-| :-------------------- | :------------- | :----------------------------------------------------------- |
-| inotify               | Linux 2.6.32+  | Supported                                                    |
-| kqueue                | BSD, macOS     | Supported                                                    |
-| ReadDirectoryChangesW | Windows        | Supported                                                    |
-| FEN                   | illumos        | Supported in main branch                                     |
-| FSEvents              | macOS          | [Needs support in x/sys/unix][fsevents]                      |
-| fanotify              | Linux 5.9+     | [Not yet](https://github.com/fsnotify/fsnotify/issues/114)   |
-| USN Journals          | Windows        | [Needs support in x/sys/windows][usn]                        |
-| Polling               | *All*          | [Not yet](https://github.com/fsnotify/fsnotify/issues/9)     |
+| Backend               | OS         | Status                                                                    |
+| :-------------------- | :--------- | :------------------------------------------------------------------------ |
+| inotify               | Linux      | Supported                                                                 |
+| kqueue                | BSD, macOS | Supported                                                                 |
+| ReadDirectoryChangesW | Windows    | Supported                                                                 |
+| FEN                   | illumos    | Supported in main branch                                                  |
+| fanotify              | Linux 5.9+ | [Not yet](https://github.com/fsnotify/fsnotify/issues/114)                |
+| AHAFS                 | AIX        | [aix branch]; experimental due to lack of maintainer and test environment |
+| FSEvents              | macOS      | [Needs support in x/sys/unix][fsevents]                                   |
+| USN Journals          | Windows    | [Needs support in x/sys/windows][usn]                                     |
+| Polling               | *All*      | [Not yet](https://github.com/fsnotify/fsnotify/issues/9)                  |
 
 Linux, macOS, and illumos should include Android, iOS, and Solaris, but these
 are currently untested.
 
-[fsevents]: https://github.com/fsnotify/fsnotify/issues/11#issuecomment-1279133120
-[usn]:      https://github.com/fsnotify/fsnotify/issues/53#issuecomment-1279829847
+[fsevents]:   https://github.com/fsnotify/fsnotify/issues/11#issuecomment-1279133120
+[usn]:        https://github.com/fsnotify/fsnotify/issues/53#issuecomment-1279829847
+[aix branch]: https://github.com/fsnotify/fsnotify/issues/353#issuecomment-1284590129
 
 Usage
 -----
