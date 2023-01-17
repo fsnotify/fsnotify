@@ -197,8 +197,8 @@ func (w *Watcher) Close() error {
 
 // Add starts monitoring the path for changes.
 //
-// A path can only be watched once; attempting to watch it more than once will
-// return an error. Paths that do not yet exist on the filesystem cannot be
+// A path can only be watched once; watching it more than once is a no-op and will
+// not return an error. Paths that do not yet exist on the filesystem cannot
 // watched.
 //
 // A watch will be automatically removed if the watched path is deleted or
