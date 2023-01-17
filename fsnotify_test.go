@@ -1203,6 +1203,26 @@ func TestAdd(t *testing.T) {
 			t.Errorf("not syscall.EACCESS: %T %#[1]v", err)
 		}
 	})
+
+	t.Run("add same path twice", func(t *testing.T) {
+		tmp := t.TempDir()
+		w := newCollector(t)
+		if err := w.w.Add(tmp); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.w.Add(tmp); err != nil {
+			t.Fatal(err)
+		}
+
+		w.collect(t)
+		touch(t, tmp, "file")
+		rm(t, tmp, "file")
+
+		cmpEvents(t, tmp, w.events(t), newEvents(t, `
+			create /file
+			remove /file
+		`))
+	})
 }
 
 // TODO: should also check internal state is correct/cleaned up; e.g. no
