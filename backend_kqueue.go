@@ -142,13 +142,14 @@ type pathInfo struct {
 	isDir bool
 }
 
-// NewWatcher creates a new Watcher.
+// NewWatcher creates a new Watcher with an optional set of Option functions.
 func NewWatcher() (*Watcher, error) {
 	kq, closepipe, err := newKqueue()
 	if err != nil {
 		return nil, err
 	}
 
+	o := getNewOptions(opts...)
 	w := &Watcher{
 		kq:           kq,
 		closepipe:    closepipe,
@@ -158,7 +159,7 @@ func NewWatcher() (*Watcher, error) {
 		paths:        make(map[int]pathInfo),
 		fileExists:   make(map[string]struct{}),
 		userWatches:  make(map[string]struct{}),
-		Events:       make(chan Event),
+		Events:       o.eventChannel(),
 		Errors:       make(chan error),
 		done:         make(chan struct{}),
 	}

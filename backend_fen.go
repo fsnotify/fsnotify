@@ -131,10 +131,11 @@ type Watcher struct {
 	watches map[string]struct{} // Explicitly watched non-directories
 }
 
-// NewWatcher creates a new Watcher.
-func NewWatcher() (*Watcher, error) {
+// NewWatcher creates a new Watcher with an optional set of Option functions.
+func NewWatcher(opts ...newOpt) (*Watcher, error) {
+	o := getNewOptions(opts...)
 	w := &Watcher{
-		Events:  make(chan Event),
+		Events:  o.eventChannel(),
 		Errors:  make(chan error),
 		dirs:    make(map[string]struct{}),
 		watches: make(map[string]struct{}),

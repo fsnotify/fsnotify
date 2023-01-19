@@ -141,17 +141,29 @@ type Watcher struct {
 	closed  bool       // Set to true when Close() is first called
 }
 
-// NewWatcher creates a new Watcher.
-func NewWatcher() (*Watcher, error) {
+// NewWatcher creates a new Watcher with an optional set of Option functions.
+func NewWatcher(opts ...newOpt) (*Watcher, error) {
 	port, err := windows.CreateIoCompletionPort(windows.InvalidHandle, 0, 0, 0)
 	if err != nil {
 		return nil, os.NewSyscallError("CreateIoCompletionPort", err)
+	}
+
+	o := getNewOptions(opts...)
+
+	// Windows doesn't have an internal kernel buffer so we default to an Event
+	// channel buffer of 50 if no manual buffer is set.
+	var ch chan Event
+	if o.eventbuffer > 0 {
+		ch = make(chan Event, o.eventbuffer)
+	} else {
+		//no manual buffer set, use the default of 50
+		ch = make(chan Event, 50)
 	}
 	w := &Watcher{
 		port:    port,
 		watches: make(watchMap),
 		input:   make(chan *input, 1),
-		Events:  make(chan Event, 50),
+		Events:  ch,
 		Errors:  make(chan error),
 		quit:    make(chan chan<- error, 1),
 	}

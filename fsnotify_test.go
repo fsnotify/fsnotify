@@ -1526,6 +1526,34 @@ func TestWatchList(t *testing.T) {
 	}
 }
 
+func TestWatchBufferedChannel(t *testing.T) {
+	//create a watcher without a buffer
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatal(err)
+	}
+	//check that the channel exists
+	if w.Events == nil {
+		t.Fatal("nil channel")
+	} else if err = w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	//check with a buffered channel
+	if w, err = NewWatcher(WithBufferedEventChannel(42)); err != nil {
+		t.Fatal(err)
+	}
+	//check that the channel exists
+	if w.Events == nil {
+		t.Fatal("nil channel")
+	} else if cap(w.Events) != 42 {
+		t.Fatalf("event channel cap is wrong: %d != 42", cap(w.Events))
+	} else if err = w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+}
+
 func BenchmarkWatch(b *testing.B) {
 	w, err := NewWatcher()
 	if err != nil {

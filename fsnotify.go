@@ -141,3 +141,49 @@ func recursivePath(path string) (string, bool) {
 	}
 	return path, false
 }
+
+type newOpt func(opt *newOpts) //option function to be passed to the NewWatcher
+
+// newOpts is used to configure some optional items in the Watcher structure during configuration.
+// The newOpts structure is extensible so that new optional configuration items can be added later
+type newOpts struct {
+	eventbuffer uint
+}
+
+var defaultNewOpts = newOpts{
+	eventbuffer: 0, // Default to an unbuffered channel
+}
+
+// WithBufferedEventChannel configures the Watcher with an optionally buffered Event channel
+//
+// The default Event channel is unbuffered, which means that the host kernel is solely
+// responsible for buffering events.  A buffered Event channel allows for a userspace
+// application to add additional event buffering without modifying kernel parameters.
+// Adjusting the kernel buffers will always provide better performance on highly loaded
+// systems, but a user space buffer can potentially provide some resiliency when it is
+// not possible to change the kernel parameters
+func WithBufferedEventChannel(sz uint) newOpt {
+	return func(opt *newOpts) {
+		if opt != nil {
+			opt.eventbuffer = sz
+		}
+	}
+}
+
+// getNewOptions is just a little helper function simplify the usage of options in NewWatcher
+func getNewOptions(opts ...newOpt) (r newOpts) {
+	r = defaultNewOpts
+	for _, o := range opts {
+		o(&r)
+	}
+	return
+}
+
+// eventChannel creates a new Event channel based on eventbuffer value.
+// A value of zero indicates an un buffered channel, values > 0 createa buffered channel.
+func (o newOpts) eventChannel() chan Event {
+	if o.eventbuffer == 0 {
+		return make(chan Event)
+	}
+	return make(chan Event, o.eventbuffer)
+}

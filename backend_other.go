@@ -117,8 +117,8 @@ type Watcher struct {
 	Errors chan error
 }
 
-// NewWatcher creates a new Watcher.
-func NewWatcher() (*Watcher, error) {
+// NewWatcher creates a new Watcher with an optional set of Option functions.
+func NewWatcher(opts ...newOpt) (*Watcher, error) {
 	return nil, errors.New("fsnotify not supported on the current platform")
 }
 

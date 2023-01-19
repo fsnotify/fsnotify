@@ -230,8 +230,8 @@ func (w *watches) updatePath(path string, f func(*watch) (*watch, error)) error 
 	return nil
 }
 
-// NewWatcher creates a new Watcher.
-func NewWatcher() (*Watcher, error) {
+// NewWatcher creates a new Watcher with an optional set of Option functions.
+func NewWatcher(opts ...newOpt) (*Watcher, error) {
 	// Need to set nonblocking mode for SetDeadline to work, otherwise blocking
 	// I/O operations won't terminate on close.
 	fd, errno := unix.InotifyInit1(unix.IN_CLOEXEC | unix.IN_NONBLOCK)
@@ -239,11 +239,12 @@ func NewWatcher() (*Watcher, error) {
 		return nil, errno
 	}
 
+	o := getNewOptions(opts...)
 	w := &Watcher{
 		fd:          fd,
 		inotifyFile: os.NewFile(uintptr(fd), ""),
 		watches:     newWatches(),
-		Events:      make(chan Event),
+		Events:      o.eventChannel(),
 		Errors:      make(chan error),
 		done:        make(chan struct{}),
 		doneResp:    make(chan struct{}),
