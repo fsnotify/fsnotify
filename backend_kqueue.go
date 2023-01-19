@@ -143,7 +143,7 @@ type pathInfo struct {
 }
 
 // NewWatcher creates a new Watcher with an optional set of Option functions.
-func NewWatcher() (*Watcher, error) {
+func NewWatcher(opts ...newOpt) (*Watcher, error) {
 	kq, closepipe, err := newKqueue()
 	if err != nil {
 		return nil, err
