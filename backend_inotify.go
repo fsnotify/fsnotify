@@ -452,9 +452,9 @@ func (w *Watcher) WatchList() []string {
 // received events into Event objects and sends them via the Events channel
 func (w *Watcher) readEvents() {
 	defer func() {
-		close(w.doneResp)
-		close(w.Errors)
 		close(w.Events)
+		close(w.Errors)
+		close(w.doneResp)
 	}()
 
 	var (
