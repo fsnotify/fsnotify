@@ -134,3 +134,38 @@ func TestRemoveState(t *testing.T) {
 	}
 	check(0)
 }
+
+func TestInotifyCloseOrder(t *testing.T) {
+	t.Parallel()
+
+	var (
+		tmp = t.TempDir()
+	)
+
+	w := newWatcher(t, tmp)
+	addWatch(t, w, tmp)
+
+	c := make(chan struct{})
+
+	var closed bool
+	go func() {
+		select {
+		case _, ok := <-w.Events:
+			if !ok {
+				closed = true
+			}
+		case _, ok := <-w.Errors:
+			_ = ok
+		}
+		close(c)
+	}()
+
+	time.Sleep(1 * time.Second)
+	w.Close()
+
+	<-c
+
+	if !closed {
+		t.Error("events was not closed")
+	}
+}
