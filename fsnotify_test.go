@@ -1148,30 +1148,32 @@ func TestClose(t *testing.T) {
 	t.Run("events close is received", func(t *testing.T) {
 		t.Parallel()
 
-		tmp := t.TempDir()
-		w := newWatcher(t, tmp)
-		addWatch(t, w, tmp)
+		for i := 0; i < 10; i++ {
+			tmp := t.TempDir()
+			w := newWatcher(t, tmp)
+			addWatch(t, w, tmp)
 
-		c := make(chan struct{})
+			c := make(chan struct{})
 
-		var closed bool
-		go func() {
-			select {
-			case _, ok := <-w.Events:
-				if !ok {
-					closed = true
+			var closed bool
+			go func() {
+				select {
+				case _, ok := <-w.Events:
+					if !ok {
+						closed = true
+					}
+				case _, ok := <-w.Errors:
+					_ = ok
 				}
-			case _, ok := <-w.Errors:
-				_ = ok
+				close(c)
+			}()
+
+			w.Close()
+
+			<-c
+			if !closed {
+				t.Fatal("events was not closed")
 			}
-			close(c)
-		}()
-
-		w.Close()
-
-		<-c
-		if !closed {
-			t.Error("events was not closed")
 		}
 	})
 }
