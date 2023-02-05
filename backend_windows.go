@@ -143,6 +143,11 @@ type Watcher struct {
 
 // NewWatcher creates a new Watcher.
 func NewWatcher() (*Watcher, error) {
+	return NewBufferedWatcher(50) // Windows backend defaults to a buffered channel of size 50
+}
+
+// NewBufferedWatcher creates a new Watcher with an optionally buffered Event channel
+func NewBufferedWatcher(sz uint) (*Watcher, error) {
 	port, err := windows.CreateIoCompletionPort(windows.InvalidHandle, 0, 0, 0)
 	if err != nil {
 		return nil, os.NewSyscallError("CreateIoCompletionPort", err)
@@ -151,7 +156,7 @@ func NewWatcher() (*Watcher, error) {
 		port:    port,
 		watches: make(watchMap),
 		input:   make(chan *input, 1),
-		Events:  make(chan Event, 50),
+		Events:  make(chan Event, sz),
 		Errors:  make(chan error),
 		quit:    make(chan chan<- error, 1),
 	}

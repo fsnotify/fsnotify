@@ -72,6 +72,10 @@ EOF
 new=$(<<EOF
 // NewWatcher creates a new Watcher.
 EOF
+
+newbuffered=$(<<EOF
+// NewBufferedWatcher creates a new Watcher with an optionally buffered event channel.
+EOF
 )
 
 add=$(<<EOF
@@ -236,6 +240,7 @@ set-cmt() {
 
 set-cmt '^type Watcher struct '             $watcher
 set-cmt '^func NewWatcher('                 $new
+set-cmt '^func NewBufferedWatcher('         $newbuffered
 set-cmt '^func (w \*Watcher) Add('          $add
 set-cmt '^func (w \*Watcher) AddWith('      $addwith
 set-cmt '^func (w \*Watcher) Remove('       $remove

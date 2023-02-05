@@ -144,6 +144,11 @@ type pathInfo struct {
 
 // NewWatcher creates a new Watcher.
 func NewWatcher() (*Watcher, error) {
+	return NewBufferedWatcher(0)
+}
+
+// NewBufferedWatcher creates a new Watcher with an optionally buffered Event channel
+func NewBufferedWatcher(sz uint) (*Watcher, error) {
 	kq, closepipe, err := newKqueue()
 	if err != nil {
 		return nil, err
@@ -158,7 +163,7 @@ func NewWatcher() (*Watcher, error) {
 		paths:        make(map[int]pathInfo),
 		fileExists:   make(map[string]struct{}),
 		userWatches:  make(map[string]struct{}),
-		Events:       make(chan Event),
+		Events:       make(chan Event, sz),
 		Errors:       make(chan error),
 		done:         make(chan struct{}),
 	}

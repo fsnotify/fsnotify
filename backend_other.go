@@ -122,6 +122,11 @@ func NewWatcher() (*Watcher, error) {
 	return nil, errors.New("fsnotify not supported on the current platform")
 }
 
+// NewBufferedWatcher creates a new Watcher with an optionally buffered Event channel
+func NewBufferedWatcher(sz uint) (*Watcher, error) {
+	return NewWatcher() //just re-use the original error response
+}
+
 // Close removes all watches and closes the events channel.
 func (w *Watcher) Close() error { return nil }
 

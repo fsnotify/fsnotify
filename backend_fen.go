@@ -133,8 +133,13 @@ type Watcher struct {
 
 // NewWatcher creates a new Watcher.
 func NewWatcher() (*Watcher, error) {
+	return NewBufferedWatcher(0)
+}
+
+// NewBufferedWatcher creates a new Watcher with an optionally buffered Event channel
+func NewBufferedWatcher(sz uint) (*Watcher, error) {
 	w := &Watcher{
-		Events:  make(chan Event),
+		Events:  make(chan Event, sz),
 		Errors:  make(chan error),
 		dirs:    make(map[string]struct{}),
 		watches: make(map[string]struct{}),

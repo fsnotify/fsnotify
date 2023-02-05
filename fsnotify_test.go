@@ -1577,8 +1577,78 @@ func BenchmarkWatch(b *testing.B) {
 	wg.Wait()
 }
 
+func BenchmarkBufferedWatch(b *testing.B) {
+	w, err := NewBufferedWatcher(4096)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	tmp := b.TempDir()
+	file := join(tmp, "file")
+	err = w.Add(tmp)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		for {
+			select {
+			case err, ok := <-w.Errors:
+				if !ok {
+					wg.Done()
+					return
+				}
+				b.Error(err)
+			case _, ok := <-w.Events:
+				if !ok {
+					wg.Done()
+					return
+				}
+			}
+		}
+	}()
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		fp, err := os.Create(file)
+		if err != nil {
+			b.Fatal(err)
+		}
+		err = fp.Close()
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+	err = w.Close()
+	if err != nil {
+		b.Fatal(err)
+	}
+	wg.Wait()
+}
+
 func BenchmarkAddRemove(b *testing.B) {
 	w, err := NewWatcher()
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	tmp := b.TempDir()
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		if err := w.Add(tmp); err != nil {
+			b.Fatal(err)
+		}
+		if err := w.Remove(tmp); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkBufferedAddRemove(b *testing.B) {
+	w, err := NewBufferedWatcher(4096)
 	if err != nil {
 		b.Fatal(err)
 	}
