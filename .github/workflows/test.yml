@@ -15,8 +15,8 @@ jobs:
           - ubuntu-latest
           - windows-latest
         go:
-          - '1.16'
-          - '1.19'
+          - '1.17'
+          - '1.20'
     runs-on: ${{ matrix.os }}
     steps:
       - name: setup Go
@@ -46,7 +46,7 @@ jobs:
 
   # Test only the latest Go version on macOS; we use the macOS builders for BSD
   # and illumos, and GitHub doesn't allow many of them to run concurrently. If
-  # it works on Windows and Linux with Go 1.16, then it probably does on macOS
+  # it works on Windows and Linux with Go 1.17, then it probably does on macOS
   # too.
   testMacOS:
     name: test
@@ -57,7 +57,7 @@ jobs:
           - macos-11
           - macos-12
         go:
-          - '1.19'
+          - '1.20'
     runs-on: ${{ matrix.os }}
     steps:
       - name: setup Go

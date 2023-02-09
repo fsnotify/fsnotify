@@ -2,6 +2,7 @@
 
 Unreleased
 ----------
+This version of fsnotify needs Go 1.17.
 
 ### Additions
 
