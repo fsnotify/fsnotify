@@ -958,7 +958,7 @@ func TestWatchRecursive(t *testing.T) {
 	}
 }
 
-// TODO: this fails reguarly in the CI; not sure if it's a bug with the test or
+// TODO: this fails regularly in the CI; not sure if it's a bug with the test or
 // code; need to look in to it.
 func TestClose(t *testing.T) {
 	chanClosed := func(t *testing.T, w *Watcher) {
