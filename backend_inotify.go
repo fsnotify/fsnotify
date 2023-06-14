@@ -1,5 +1,5 @@
-//go:build linux && !appengine
-// +build linux,!appengine
+//go:build ignore
+// +build ignore
 
 // Note: the documentation on the Watcher type and methods is generated from
 // mkdoc.zsh

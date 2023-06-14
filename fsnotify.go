@@ -60,6 +60,27 @@ const (
 	// get triggered very frequently by some software. For example, Spotlight
 	// indexing on macOS, anti-virus software, backup software, etc.
 	Chmod
+
+	// The path was read.
+	Read
+
+	// The file was closed (without write).
+	Close
+
+	// The file/directory was opened.
+	Open
+
+	// The file was opened for execution.
+	Execute
+
+	// Request for permission to open a file or directory.
+	PermissionToOpen
+
+	// Request for permission to open a file for execution.
+	PermissionToExecute
+
+	// Request for permission to read a file
+	PermissionToRead
 )
 
 // Common errors that can be reported.
@@ -85,6 +106,27 @@ func (o Op) String() string {
 	}
 	if o.Has(Chmod) {
 		b.WriteString("|CHMOD")
+	}
+	if o.Has(Read) {
+		b.WriteString("|READ")
+	}
+	if o.Has(Close) {
+		b.WriteString("|CLOSE")
+	}
+	if o.Has(Open) {
+		b.WriteString("|OPEN")
+	}
+	if o.Has(Execute) {
+		b.WriteString("|EXECUTE")
+	}
+	if o.Has(PermissionToOpen) {
+		b.WriteString("|PERMISSION_TO_OPEN")
+	}
+	if o.Has(PermissionToExecute) {
+		b.WriteString("|PERMISSION_TO_EXECUTE")
+	}
+	if o.Has(PermissionToRead) {
+		b.WriteString("|PERMISSION_TO_READ")
 	}
 	if b.Len() == 0 {
 		return "[no events]"

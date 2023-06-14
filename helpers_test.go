@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify/internal"
+	"golang.org/x/sys/unix"
 )
 
 type testCase struct {
@@ -291,6 +292,7 @@ func rmAll(t *testing.T, path ...string) {
 	if len(path) < 1 {
 		t.Fatalf("rmAll: path must have at least one element: %s", path)
 	}
+
 	err := os.RemoveAll(join(path...))
 	if err != nil {
 		t.Fatalf("rmAll(%q): %s", join(path...), err)
@@ -394,7 +396,8 @@ func (w *eventCollector) collect(t *testing.T) {
 					return
 				}
 				w.mu.Lock()
-				w.e = append(w.e, e)
+				w.e = append(w.e, e.Event)
+				unix.Close(e.Fd)
 				w.mu.Unlock()
 			}
 		}
@@ -506,6 +509,20 @@ func newEvents(t *testing.T, s string) Events {
 					op |= Rename
 				case "CHMOD":
 					op |= Chmod
+				case "READ":
+					op |= Read
+				case "CLOSE":
+					op |= Close
+				case "OPEN":
+					op |= Open
+				case "EXECUTE":
+					op |= Execute
+				case "PERMISSION_TO_OPEN":
+					op |= PermissionToOpen
+				case "PERMISSION_TO_READ":
+					op |= PermissionToRead
+				case "PERMISSION_TO_EXECUTE":
+					op |= PermissionToExecute
 				default:
 					t.Fatalf("newEvents: line %d has unknown event %q: %s", no, ee, line)
 				}
@@ -529,6 +546,11 @@ func newEvents(t *testing.T, s string) Events {
 	// fen shortcut
 	case "solaris", "illumos":
 		if e, ok := events["fen"]; ok {
+			return e
+		}
+	// fanotify shortcut
+	case "linux":
+		if e, ok := events["fanotify"]; ok {
 			return e
 		}
 	}
