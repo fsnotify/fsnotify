@@ -235,14 +235,15 @@ func NewWatcher() (*Watcher, error) {
 	return NewBufferedWatcher(0)
 }
 
-// NewBufferedWatcher creates a new Watcher with an optionally buffered event channel.
-// For almost all use cases an unbuffered Watcher will perform better than buffered.
-// Most kernels have de-duplication logic which allows for less activity in userspace
-// and generally better performance.  However there may be some cases where a very
-// large buffers can enable an application to keep up with mass file rotations.
-// You will always be better off increasing the kernel buffers over adding a large
-// userspace buffer, but if you can't control the kernel buffer then a buffered
-// watcher is a reasonable option.  You probably want NewWatcher.
+// NewBufferedWatcher creates a new Watcher with a buffered event channel.
+//
+// For almost all use cases an unbuffered Watcher will perform better; most
+// kernels have de-duplication logic, which means less activity in userspace and
+// generally better performance. However there may be some cases where a very
+// large buffer can enable an application to keep up with a very large number of
+// events. You will always be better off increasing the kernel buffers over
+// adding a large userspace buffer, but if you can't control the kernel buffer
+// then a buffered watcher is a reasonable option.
 func NewBufferedWatcher(sz uint) (*Watcher, error) {
 	// Need to set nonblocking mode for SetDeadline to work, otherwise blocking
 	// I/O operations won't terminate on close.

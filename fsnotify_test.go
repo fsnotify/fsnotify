@@ -28,6 +28,25 @@ func init() {
 	internal.SetRlimit()
 }
 
+// Quick but somewhat ugly way to run tests against both the standard fsnotify
+// and the buffered one. Should rewrite the tests to run more than once, but
+// effort...
+func TestMain(m *testing.M) {
+	c1 := m.Run()
+	os.Setenv("FSNOTIFY_BUFFER", "1")
+	c2 := m.Run()
+	os.Setenv("FSNOTIFY_BUFFER", "1024")
+	c3 := m.Run()
+
+	if c1 != 0 {
+		os.Exit(c1)
+	}
+	if c2 != 0 {
+		os.Exit(c2)
+	}
+	os.Exit(c3)
+}
+
 func TestWatch(t *testing.T) {
 	tests := []testCase{
 		{"multiple creates", func(t *testing.T, w *Watcher, tmp string) {
@@ -948,20 +967,27 @@ func TestClose(t *testing.T) {
 			time.Sleep(50 * time.Millisecond)
 		}
 
-		select {
-		default:
-			t.Fatal("blocking on Events")
-		case _, ok := <-w.Events:
-			if ok {
-				t.Fatal("Events not closed")
+		tim := time.NewTimer(50 * time.Millisecond)
+	loop:
+		for {
+			select {
+			default:
+				t.Fatal("blocking on Events")
+			case <-tim.C:
+				t.Fatalf("Events not closed")
+			case _, ok := <-w.Events:
+				if !ok {
+					break loop
+				}
 			}
 		}
+
 		select {
 		default:
 			t.Fatal("blocking on Errors")
-		case _, ok := <-w.Errors:
+		case err, ok := <-w.Errors:
 			if ok {
-				t.Fatal("Errors not closed")
+				t.Fatalf("Errors not closed; read:\n\t%s", err)
 			}
 		}
 	}
@@ -1001,6 +1027,7 @@ func TestClose(t *testing.T) {
 
 		touch(t, tmp, "file")
 		rm(t, tmp, "file")
+		eventSeparator()
 		if err := w.Close(); err != nil {
 			t.Fatal(err)
 		}

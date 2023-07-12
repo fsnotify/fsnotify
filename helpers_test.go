@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -46,6 +47,14 @@ func waitForEvents()  { time.Sleep(500 * time.Millisecond) }
 func newWatcher(t *testing.T, add ...string) *Watcher {
 	t.Helper()
 	w, err := NewWatcher()
+	if e, ok := os.LookupEnv("FSNOTIFY_BUFFER"); ok {
+		t.Logf("using FSNOTIFY_BUFFER=%v", e)
+		n, err2 := strconv.Atoi(e)
+		if err2 != nil {
+			t.Fatalf("FSNOTIFY_BUFFER: %v", err2)
+		}
+		w, err = NewBufferedWatcher(uint(n))
+	}
 	if err != nil {
 		t.Fatalf("newWatcher: %s", err)
 	}
