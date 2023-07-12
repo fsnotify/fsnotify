@@ -49,3 +49,20 @@ func TestRemoveState(t *testing.T) {
 	}
 	check(0)
 }
+
+func TestWindowsRemWatch(t *testing.T) {
+	tmp := t.TempDir()
+
+	touch(t, tmp, "file")
+
+	w := newWatcher(t)
+	defer w.Close()
+
+	addWatch(t, w, tmp)
+	if err := w.Remove(tmp); err != nil {
+		t.Fatalf("Could not remove the watch: %v\n", err)
+	}
+	if err := w.remWatch(tmp); err == nil {
+		t.Fatal("Should be fail with closed handle\n")
+	}
+}

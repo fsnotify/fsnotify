@@ -1302,6 +1302,53 @@ func TestRemove(t *testing.T) {
 		}
 	})
 
+	// Make sure file handles are correctly released.
+	//
+	// regression test for #42 see https://gist.github.com/timshannon/603f92824c5294269797
+	t.Run("", func(t *testing.T) {
+		w := newWatcher(t)
+		defer w.Close()
+
+		// consume the events
+		var werr error
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case werr = <-w.Errors:
+					return
+				case <-w.Events:
+				}
+			}
+		}()
+
+		tmp := t.TempDir()
+		dir := join(tmp, "child")
+		addWatch(t, w, tmp)
+		mkdir(t, dir)
+		addWatch(t, w, dir) // start watching child
+		rmWatch(t, w, dir)  // stop watching child
+		rmAll(t, dir)       // delete child dir
+
+		// Child dir should no longer exist
+		_, err := os.Stat(dir)
+		if err == nil {
+			t.Fatalf("dir %q should no longer exist!", dir)
+		}
+		if _, ok := err.(*os.PathError); err != nil && !ok {
+			t.Errorf("Expected a PathError, got %v", err)
+		}
+
+		w.Close()
+		wg.Wait()
+
+		if werr != nil {
+			t.Fatal(werr)
+		}
+	})
+
 	t.Run("remove with ... when non-recursive", func(t *testing.T) {
 		recurseOnly(t)
 		t.Parallel()
@@ -1317,7 +1364,6 @@ func TestRemove(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-
 }
 
 func TestEventString(t *testing.T) {
