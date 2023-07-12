@@ -15,17 +15,17 @@ jobs:
           - ubuntu-latest
           - windows-latest
         go:
-          - '1.16'
-          - '1.19'
+          - '1.17'
+          - '1.20'
     runs-on: ${{ matrix.os }}
     steps:
-      - name: setup Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: ${{ matrix.go }}
-
       - name: checkout
         uses: actions/checkout@v3
+
+      - name: setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go }}
 
       - name: test
         run: |
@@ -46,7 +46,7 @@ jobs:
 
   # Test only the latest Go version on macOS; we use the macOS builders for BSD
   # and illumos, and GitHub doesn't allow many of them to run concurrently. If
-  # it works on Windows and Linux with Go 1.16, then it probably does on macOS
+  # it works on Windows and Linux with Go 1.17, then it probably does on macOS
   # too.
   testMacOS:
     name: test
@@ -57,16 +57,16 @@ jobs:
           - macos-11
           - macos-12
         go:
-          - '1.19'
+          - '1.20'
     runs-on: ${{ matrix.os }}
     steps:
-      - name: setup Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: ${{ matrix.go }}
-
       - name: checkout
         uses: actions/checkout@v3
+
+      - name: setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go }}
 
       - name: test
         run: |
@@ -96,10 +96,10 @@ jobs:
   # NetBSD
   testNetBSD:
     runs-on: macos-12
-    name: test (netbsd, 1.18)
+    name: test (netbsd, 1.20)
     steps:
       - uses: actions/checkout@v3
-      - name: test (netbsd, 1.18)
+      - name: test (netbsd, 1.20)
         id: test
         uses: vmactions/netbsd-vm@v0
         with:
@@ -107,14 +107,14 @@ jobs:
           # TODO: no -race for the same reason as OpenBSD (the timing; it does run).
           run: |
             useradd -mG wheel action
-            su action -c 'go118 test ./...'
+            su action -c 'go120 test ./...'
 
   # illumos
   testillumos:
     runs-on: macos-12
     name: test (illumos, 1.19)
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: test (illumos, 1.19)
       id: test
       uses: papertigers/illumos-vm@r38
@@ -145,7 +145,7 @@ jobs:
             ${{ runner.os }}-vagrant-
 
       - name: setup Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: '1.19'
 

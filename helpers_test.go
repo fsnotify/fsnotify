@@ -70,6 +70,18 @@ func addWatch(t *testing.T, w *Watcher, path ...string) {
 	}
 }
 
+// rmWatch removes a watch.
+func rmWatch(t *testing.T, watcher *Watcher, path ...string) {
+	t.Helper()
+	if len(path) < 1 {
+		t.Fatalf("rmWatch: path must have at least one element: %s", path)
+	}
+	err := watcher.Remove(join(path...))
+	if err != nil {
+		t.Fatalf("rmWatch(%q): %s", join(path...), err)
+	}
+}
+
 const noWait = ""
 
 func shouldWait(path ...string) bool {

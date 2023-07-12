@@ -64,7 +64,7 @@ const (
 
 // Common errors that can be reported.
 var (
-	ErrNonExistentWatch = errors.New("fsnotify: can't remove non-existent watcher")
+	ErrNonExistentWatch = errors.New("fsnotify: can't remove non-existent watch")
 	ErrEventOverflow    = errors.New("fsnotify: queue or buffer overflow")
 	ErrClosed           = errors.New("fsnotify: watcher already closed")
 )

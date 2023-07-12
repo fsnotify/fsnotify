@@ -10,16 +10,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ['1.16', '1.19']
+        go: ['1.17', '1.20']
     runs-on: ubuntu-latest
     steps:
-      - name: setup Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: ${{ matrix.go }}
-
       - name: checkout
         uses: actions/checkout@v3
+
+      - name: setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go }}
 
       - name: build
         run: |

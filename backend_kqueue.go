@@ -412,9 +412,10 @@ func (w *Watcher) WatchList() []string {
 // Watch all events (except NOTE_EXTEND, NOTE_LINK, NOTE_REVOKE)
 const noteAllEvents = unix.NOTE_DELETE | unix.NOTE_WRITE | unix.NOTE_ATTRIB | unix.NOTE_RENAME
 
-// addWatch adds name to the watched file set.
-// The flags are interpreted as described in kevent(2).
-// Returns the real path to the file which was added, if any, which may be different from the one passed in the case of symlinks.
+// addWatch adds name to the watched file set; the flags are interpreted as
+// described in kevent(2).
+//
+// Returns the real path to the file which was added, with symlinks resolved.
 func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 	var isDir bool
 	name = filepath.Clean(name)
@@ -442,27 +443,30 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 			return "", nil
 		}
 
-		// Follow Symlinks
-		//
-		// Linux can add unresolvable symlinks to the watch list without issue,
-		// and Windows can't do symlinks period. To maintain consistency, we
-		// will act like everything is fine if the link can't be resolved.
-		// There will simply be no file events for broken symlinks. Hence the
-		// returns of nil on errors.
+		// Follow Symlinks.
 		if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
-			name, err = filepath.EvalSymlinks(name)
+			link, err := os.Readlink(name)
 			if err != nil {
+				// Return nil because Linux can add unresolvable symlinks to the
+				// watch list without problems, so maintain consistency with
+				// that. There will be no file events for broken symlinks.
+				// TODO: more specific check; returns os.PathError; ENOENT?
 				return "", nil
 			}
 
 			w.mu.Lock()
-			_, alreadyWatching = w.watches[name]
+			_, alreadyWatching = w.watches[link]
 			w.mu.Unlock()
 
 			if alreadyWatching {
-				return name, nil
+				// Add to watches so we don't get spurious Create events later
+				// on when we diff the directories.
+				w.watches[name] = 0
+				w.fileExists[name] = struct{}{}
+				return link, nil
 			}
 
+			name = link
 			fi, err = os.Lstat(name)
 			if err != nil {
 				return "", nil
@@ -470,7 +474,7 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 		}
 
 		// Retry on EINTR; open() can return EINTR in practice on macOS.
-		// See #354, and go issues 11180 and 39237.
+		// See #354, and Go issues 11180 and 39237.
 		for {
 			watchfd, err = unix.Open(name, openMode, 0)
 			if err == nil {
@@ -503,14 +507,13 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 			w.watchesByDir[parentName] = watchesByDir
 		}
 		watchesByDir[watchfd] = struct{}{}
-
 		w.paths[watchfd] = pathInfo{name: name, isDir: isDir}
 		w.mu.Unlock()
 	}
 
 	if isDir {
-		// Watch the directory if it has not been watched before,
-		// or if it was watched before, but perhaps only a NOTE_DELETE (watchDirectoryFiles)
+		// Watch the directory if it has not been watched before, or if it was
+		// watched before, but perhaps only a NOTE_DELETE (watchDirectoryFiles)
 		w.mu.Lock()
 
 		watchDir := (flags&unix.NOTE_WRITE) == unix.NOTE_WRITE &&
@@ -532,13 +535,10 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 // Event values that it sends down the Events channel.
 func (w *Watcher) readEvents() {
 	defer func() {
-		err := unix.Close(w.kq)
-		if err != nil {
-			w.Errors <- err
-		}
-		unix.Close(w.closepipe[0])
 		close(w.Events)
 		close(w.Errors)
+		_ = unix.Close(w.kq)
+		unix.Close(w.closepipe[0])
 	}()
 
 	eventBuffer := make([]unix.Kevent_t, 10)

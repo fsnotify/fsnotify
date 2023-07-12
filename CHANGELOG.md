@@ -2,6 +2,7 @@
 
 Unreleased
 ----------
+This version of fsnotify needs Go 1.17.
 
 ### Additions
 
@@ -38,9 +39,17 @@ Unreleased
   Before it would merely return "short read", making it hard to detect this
   error.
 
-- all: return `ErrClosed` on `Add()` when the watcher is closed ([#516])
+- kqueue: make sure events for all files are delivered properly when removing a
+  watched directory ([#526])
 
-- kqueue: deal with `rm -rf watched-dir` better ([#526], [#537])
+  Previously they would get sent with "" or "." as the path name.
+
+- kqueue: don't emit spurious Create events for symbolic links ([#524])
+
+  The link would get resolved but kqueue would "forget" it already saw the link
+  itself, resulting on a Create for every Write event for the directory.
+
+- all: return ErrClosed on Add() when the watcher is closed ([#516])
 
 - other: add `Watcher.Errors` and `Watcher.Events` to the no-op `Watcher` in
   `backend_other.go`, making it easier to use on unsupported platforms such as

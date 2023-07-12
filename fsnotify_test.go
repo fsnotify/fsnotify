@@ -108,7 +108,7 @@ func TestWatch(t *testing.T) {
 
 		{"file in directory is not readable", func(t *testing.T, w *Watcher, tmp string) {
 			if runtime.GOOS == "windows" {
-				t.Skip("attributes don't work on Windows") // Figure out how to make a file unreadable
+				t.Skip("attributes don't work on Windows") // TODO: figure out how to make a file unreadable
 			}
 
 			touch(t, tmp, "file-unreadable")
@@ -159,66 +159,6 @@ func TestWatch(t *testing.T) {
 			cat(t, "hello", tmp, "file")
 		}, `
 			write    /file
-		`},
-
-		{"watch a symlink to a file", func(t *testing.T, w *Watcher, tmp string) {
-			if runtime.GOOS == "darwin" {
-				// TODO
-				// WRITE "/private/var/folders/.../TestWatchwatch_a_symlink_to_a_file183391030/001/file"
-				// Pretty sure this is caused by the broken symlink-follow
-				// behaviour too.
-				t.Skip("broken on macOS")
-			}
-			if !internal.HasPrivilegesForSymlink() {
-				t.Skip("does not have privileges for symlink on this OS")
-			}
-
-			file := join(tmp, "file")
-			link := join(tmp, "link")
-			touch(t, file)
-			symlink(t, file, link)
-			addWatch(t, w, link)
-
-			cat(t, "hello", file)
-		}, `
-			write    /link
-
-			# TODO: Symlinks followed on kqueue; it shouldn't do this, but I'm
-			# afraid changing it will break stuff. See #227, #390
-			kqueue:
-				write    /file
-
-			# TODO: see if we can fix this.
-			windows:
-				empty
-		`},
-
-		{"watch a symlink to a dir", func(t *testing.T, w *Watcher, tmp string) {
-			if runtime.GOOS == "darwin" {
-				// TODO
-				// CREATE "/private/var/.../TestWatchwatch_a_symlink_to_a_dir2551725268/001/dir/file"
-				// Pretty sure this is caused by the broken symlink-follow
-				// behaviour too.
-				t.Skip("broken on macOS")
-			}
-			if !internal.HasPrivilegesForSymlink() {
-				t.Skip("does not have privileges for symlink on this OS")
-			}
-
-			dir := join(tmp, "dir")
-			link := join(tmp, "link")
-			mkdir(t, dir)
-			symlink(t, dir, link)
-			addWatch(t, w, link)
-
-			touch(t, dir, "file")
-		}, `
-			create    /link/file
-
-			# TODO: Symlinks followed on kqueue; it shouldn't do this, but I'm
-			# afraid changing it will break stuff. See #227, #390
-			kqueue:
-				create /dir/file
 		`},
 	}
 
@@ -277,7 +217,7 @@ func TestWatchCreate(t *testing.T) {
 		// FIFO
 		{"create new named pipe", func(t *testing.T, w *Watcher, tmp string) {
 			if runtime.GOOS == "windows" {
-				t.Skip() // No named pipes on Windows.
+				t.Skip("No named pipes on Windows")
 			}
 			touch(t, tmp, "file")
 			addWatch(t, w, tmp)
@@ -288,7 +228,7 @@ func TestWatchCreate(t *testing.T) {
 		// Device node
 		{"create new device node pipe", func(t *testing.T, w *Watcher, tmp string) {
 			if runtime.GOOS == "windows" {
-				t.Skip() // No device nodes on Windows.
+				t.Skip("No device nodes on Windows")
 			}
 			if isKqueue() {
 				// Don't want to use os/user to check uid, since that pulls in
@@ -405,7 +345,7 @@ func TestWatchRename(t *testing.T) {
 
 		{"rename to unwatched dir", func(t *testing.T, w *Watcher, tmp string) {
 			if runtime.GOOS == "netbsd" && isCI() {
-				t.Skip("fails in CI; see #488")
+				t.Skip("fails in CI; see #488") // TODO
 			}
 
 			unwatched := t.TempDir()
@@ -525,6 +465,44 @@ func TestWatchSymlink(t *testing.T) {
 	}
 
 	tests := []testCase{
+		{"watch a symlink to a file", func(t *testing.T, w *Watcher, tmp string) {
+			file := join(tmp, "file")
+			link := join(tmp, "link")
+			touch(t, file)
+			symlink(t, file, link)
+			addWatch(t, w, link)
+
+			cat(t, "hello", file)
+		}, `
+			write    /link
+
+			# TODO: Symlinks followed on kqueue; it shouldn't do this, but I'm
+			# afraid changing it will break stuff. See #227, #390
+			kqueue:
+				write    /file
+
+			# TODO: see if we can fix this.
+			windows:
+				empty
+		`},
+
+		{"watch a symlink to a dir", func(t *testing.T, w *Watcher, tmp string) {
+			dir := join(tmp, "dir")
+			link := join(tmp, "link")
+			mkdir(t, dir)
+			symlink(t, dir, link)
+			addWatch(t, w, link)
+
+			touch(t, dir, "file")
+		}, `
+			create    /link/file
+
+			# TODO: Symlinks followed on kqueue; it shouldn't do this, but I'm
+			# afraid changing it will break stuff. See #227, #390
+			kqueue:
+				create /dir/file
+		`},
+
 		{"create unresolvable symlink", func(t *testing.T, w *Watcher, tmp string) {
 			addWatch(t, w, tmp)
 
@@ -539,21 +517,6 @@ func TestWatchSymlink(t *testing.T) {
 		`},
 
 		{"cyclic symlink", func(t *testing.T, w *Watcher, tmp string) {
-			if runtime.GOOS == "darwin" {
-				// This test is borked on macOS; it reports events outside the
-				// watched directory:
-				//
-				//   create "/private/.../testwatchsymlinkcyclic_symlink3681444267/001/link"
-				//   create "/link"
-				//   write  "/link"
-				//   write  "/private/.../testwatchsymlinkcyclic_symlink3681444267/001/link"
-				//
-				// kqueue.go does a lot of weird things with symlinks that I
-				// don't think are necessarily correct, but need to test a bit
-				// more.
-				t.Skip("broken on macOS")
-			}
-
 			symlink(t, ".", tmp, "link")
 			addWatch(t, w, tmp)
 			rm(t, tmp, "link")
@@ -571,13 +534,20 @@ func TestWatchSymlink(t *testing.T) {
 
 		// Bug #277
 		{"277", func(t *testing.T, w *Watcher, tmp string) {
-			if isKqueue() {
-				// TODO: fix it; this seems a bit hard though; the entire way
-				//       kqueue backend deals with symlinks is meh, and need to
-				//       be careful not to break compatibility.
-				t.Skip("broken on kqueue")
+			if runtime.GOOS == "netbsd" && isCI() {
+				t.Skip("fails in CI") // TODO
 			}
 
+			// TODO: there is some strange fuckery going on if I use go test
+			// -count=2; the second test run has unix.Kqueue() in newKqueue()
+			// return 0, which is a very odd fd number, but the first event does
+			// work (create /foo). After that we get EBADF (Bad file
+			// descriptor).
+			//
+			// This is *only* for this test, and *only* if we have the symlinks
+			// below. kqueue(2) doesn't document returning fd 0.
+			//
+			// This happens on both FreeBSD and NetBSD.
 			touch(t, tmp, "file1")
 			touch(t, tmp, "file2")
 			symlink(t, join(tmp, "file1"), tmp, "link1")
@@ -596,9 +566,17 @@ func TestWatchSymlink(t *testing.T) {
 			rename   /apple   # mv apple pear
 			create   /pear
 			remove   /pear    # rm -r pear
+
+			# TODO: the CREATE/REMOVE for /pear don't show; I'm not entirely
+			# sure why; sendDirectoryChangeEvents() doesn't pick it up. It does
+			# seem consistent though, both locally and in CI.
+			freebsd, netbsd:
+				create   /foo     # touch foo
+				remove   /foo     # rm foo
+				create   /apple   # mkdir apple
+				rename   /apple   # mv apple pear
 		`},
 	}
-
 	for _, tt := range tests {
 		tt := tt
 		tt.run(t)
@@ -710,7 +688,6 @@ func TestWatchRemove(t *testing.T) {
 			touch(t, tmp, "e")
 			touch(t, tmp, "f")
 			touch(t, tmp, "g")
-
 			mkdir(t, tmp, "h")
 			mkdir(t, tmp, "h", "a")
 			mkdir(t, tmp, "i")
@@ -1104,7 +1081,7 @@ func TestClose(t *testing.T) {
 
 	t.Run("closes channels after read", func(t *testing.T) {
 		if runtime.GOOS == "netbsd" {
-			t.Skip("flaky")
+			t.Skip("flaky") // TODO
 		}
 
 		t.Parallel()
@@ -1176,7 +1153,7 @@ func TestAdd(t *testing.T) {
 
 	t.Run("permission denied", func(t *testing.T) {
 		if runtime.GOOS == "windows" {
-			t.Skip("chmod doesn't work on Windows") // See if we can make a file unreadable
+			t.Skip("chmod doesn't work on Windows") // TODO: see if we can make a file unreadable
 		}
 
 		t.Parallel()
@@ -1302,6 +1279,53 @@ func TestRemove(t *testing.T) {
 		}
 	})
 
+	// Make sure file handles are correctly released.
+	//
+	// regression test for #42 see https://gist.github.com/timshannon/603f92824c5294269797
+	t.Run("", func(t *testing.T) {
+		w := newWatcher(t)
+		defer w.Close()
+
+		// consume the events
+		var werr error
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case werr = <-w.Errors:
+					return
+				case <-w.Events:
+				}
+			}
+		}()
+
+		tmp := t.TempDir()
+		dir := join(tmp, "child")
+		addWatch(t, w, tmp)
+		mkdir(t, dir)
+		addWatch(t, w, dir) // start watching child
+		rmWatch(t, w, dir)  // stop watching child
+		rmAll(t, dir)       // delete child dir
+
+		// Child dir should no longer exist
+		_, err := os.Stat(dir)
+		if err == nil {
+			t.Fatalf("dir %q should no longer exist!", dir)
+		}
+		if _, ok := err.(*os.PathError); err != nil && !ok {
+			t.Errorf("Expected a PathError, got %v", err)
+		}
+
+		w.Close()
+		wg.Wait()
+
+		if werr != nil {
+			t.Fatal(werr)
+		}
+	})
+
 	t.Run("remove with ... when non-recursive", func(t *testing.T) {
 		recurseOnly(t)
 		t.Parallel()
@@ -1317,7 +1341,6 @@ func TestRemove(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-
 }
 
 func TestEventString(t *testing.T) {
@@ -1351,7 +1374,7 @@ func TestEventString(t *testing.T) {
 // Verify the watcher can keep up with file creations/deletions when under load.
 func TestWatchStress(t *testing.T) {
 	if isCI() {
-		t.Skip("fails too often on the CI")
+		t.Skip("fails too often on the CI") // TODO
 	}
 
 	// On NetBSD ioutil.ReadDir in sendDirectoryChangeEvents() returns EINVAL
