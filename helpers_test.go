@@ -117,13 +117,17 @@ func createFiles(t *testing.T, dir, prefix string, n int, d time.Duration) int {
 			t.Logf("createFiles: stopped at %s files because it took longer than %s", fmtNum(created), d)
 			return created
 		default:
-			fp, err := os.Create(join(dir, prefix+fmtNum(i)))
+			path := join(dir, prefix+fmtNum(i))
+			fp, err := os.Create(path)
 			if err != nil {
 				t.Errorf("create failed for %s: %s", fmtNum(i), err)
 				continue
 			}
 			if err := fp.Close(); err != nil {
 				t.Errorf("close failed for %s: %s", fmtNum(i), err)
+			}
+			if err := os.Remove(path); err != nil {
+				t.Errorf("remove failed for %s: %s", fmtNum(i), err)
 			}
 			if i%10_000 == 0 {
 				t.Logf("createFiles: %s", fmtNum(i))
@@ -150,19 +154,19 @@ func mkdir(t *testing.T, path ...string) {
 }
 
 // mkdir -p
-// func mkdirAll(t *testing.T, path ...string) {
-// 	t.Helper()
-// 	if len(path) < 1 {
-// 		t.Fatalf("mkdirAll: path must have at least one element: %s", path)
-// 	}
-// 	err := os.MkdirAll(join(path...), 0o0755)
-// 	if err != nil {
-// 		t.Fatalf("mkdirAll(%q): %s", join(path...), err)
-// 	}
-// 	if shouldWait(path...) {
-// 		eventSeparator()
-// 	}
-// }
+func mkdirAll(t *testing.T, path ...string) {
+	t.Helper()
+	if len(path) < 1 {
+		t.Fatalf("mkdirAll: path must have at least one element: %s", path)
+	}
+	err := os.MkdirAll(join(path...), 0o0755)
+	if err != nil {
+		t.Fatalf("mkdirAll(%q): %s", join(path...), err)
+	}
+	if shouldWait(path...) {
+		eventSeparator()
+	}
+}
 
 // ln -s
 func symlink(t *testing.T, target string, link ...string) {
@@ -441,8 +445,8 @@ func (e Events) copy() Events {
 
 // Create a new Events list from a string; for example:
 //
-//   CREATE        path
-//   CREATE|WRITE  path
+//	CREATE        path
+//	CREATE|WRITE  path
 //
 // Every event is one line, and any whitespace between the event and path are
 // ignored. The path can optionally be surrounded in ". Anything after a "#" is
@@ -450,12 +454,12 @@ func (e Events) copy() Events {
 //
 // Platform-specific tests can be added after GOOS:
 //
-//   # Tested if nothing else matches
-//   CREATE   path
+//	# Tested if nothing else matches
+//	CREATE   path
 //
-//   # Windows-specific test.
-//   windows:
-//     WRITE    path
+//	# Windows-specific test.
+//	windows:
+//	  WRITE    path
 //
 // You can specify multiple platforms with a comma (e.g. "windows, linux:").
 // "kqueue" is a shortcut for all kqueue systems (BSD, macOS).
@@ -587,4 +591,13 @@ func isSolaris() bool {
 		return true
 	}
 	return false
+}
+
+func recurseOnly(t *testing.T) {
+	switch runtime.GOOS {
+	case "windows":
+		// Run test.
+	default:
+		t.Skip("recursion not yet supported on " + runtime.GOOS)
+	}
 }

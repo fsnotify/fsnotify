@@ -8,19 +8,24 @@ https://pkg.go.dev/github.com/fsnotify/fsnotify
 
 Platform support:
 
-| Backend               | OS             | Status                                                       |
-| :-------------------- | :------------- | :----------------------------------------------------------- |
-| inotify               | Linux 2.6.32+  | Supported                                                    |
-| kqueue                | BSD, macOS     | Supported                                                    |
-| ReadDirectoryChangesW | Windows        | Supported                                                    |
-| FEN                   | illumos        | Supported in main branch                                     |
-| FSEvents              | macOS          | [Not yet](https://github.com/fsnotify/fsnotify/issues/11)    |
-| fanotify              | Linux 5.9+     | [Not yet](https://github.com/fsnotify/fsnotify/issues/114)   |
-| USN Journals          | Windows        | [Maybe](https://github.com/fsnotify/fsnotify/issues/53)      |
-| Polling               | *All*          | [Not yet](https://github.com/fsnotify/fsnotify/issues/9)     |
+| Backend               | OS         | Status                                                                    |
+| :-------------------- | :--------- | :------------------------------------------------------------------------ |
+| inotify               | Linux      | Supported                                                                 |
+| kqueue                | BSD, macOS | Supported                                                                 |
+| ReadDirectoryChangesW | Windows    | Supported                                                                 |
+| FEN                   | illumos    | Supported in main branch                                                  |
+| fanotify              | Linux 5.9+ | [Not yet](https://github.com/fsnotify/fsnotify/issues/114)                |
+| AHAFS                 | AIX        | [aix branch]; experimental due to lack of maintainer and test environment |
+| FSEvents              | macOS      | [Needs support in x/sys/unix][fsevents]                                   |
+| USN Journals          | Windows    | [Needs support in x/sys/windows][usn]                                     |
+| Polling               | *All*      | [Not yet](https://github.com/fsnotify/fsnotify/issues/9)                  |
 
-Linux, macOS, and illumos should include Android, iOS, and Solaris, but these
-are currently untested.
+Linux and illumos should include Android and Solaris, but these are currently
+untested.
+
+[fsevents]:   https://github.com/fsnotify/fsnotify/issues/11#issuecomment-1279133120
+[usn]:        https://github.com/fsnotify/fsnotify/issues/53#issuecomment-1279829847
+[aix branch]: https://github.com/fsnotify/fsnotify/issues/353#issuecomment-1284590129
 
 Usage
 -----
@@ -80,6 +85,9 @@ run with:
 
     % go run ./cmd/fsnotify
 
+Further detailed documentation can be found in godoc:
+https://pkg.go.dev/github.com/fsnotify/fsnotify
+
 FAQ
 ---
 ### Will a file still be watched when it's moved to another directory?
@@ -103,6 +111,19 @@ neither do the /proc and /sys virtual filesystems.
 This could be fixed with a polling watcher ([#9]), but it's not yet implemented.
 
 [#9]: https://github.com/fsnotify/fsnotify/issues/9
+
+### Why do I get many Chmod events?
+Some programs may generate a lot of attribute changes; for example Spotlight on
+macOS, anti-virus programs, backup applications, and some others are known to do
+this. As a rule, it's typically best to ignore Chmod events. They're often not
+useful, and tend to cause problems.
+
+Spotlight indexing on macOS can result in multiple events (see [#15]). A
+temporary workaround is to add your folder(s) to the *Spotlight Privacy
+settings* until we have a native FSEvents implementation (see [#11]).
+
+[#11]: https://github.com/fsnotify/fsnotify/issues/11
+[#15]: https://github.com/fsnotify/fsnotify/issues/15
 
 Platform-specific notes
 -----------------------
@@ -148,11 +169,3 @@ these platforms.
 
 The sysctl variables `kern.maxfiles` and `kern.maxfilesperproc` can be used to
 control the maximum number of open files.
-
-### macOS
-Spotlight indexing on macOS can result in multiple events (see [#15]). A temporary
-workaround is to add your folder(s) to the *Spotlight Privacy settings* until we
-have a native FSEvents implementation (see [#11]).
-
-[#11]: https://github.com/fsnotify/fsnotify/issues/11
-[#15]: https://github.com/fsnotify/fsnotify/issues/15

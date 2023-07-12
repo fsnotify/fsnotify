@@ -7,7 +7,7 @@ var names = []struct {
 	m uint32
 }{
 	{"NOTE_ATTRIB", unix.NOTE_ATTRIB},
-	{"NOTE_CHANGE", unix.NOTE_CHANGE},
+	// {"NOTE_CHANGE", unix.NOTE_CHANGE}, // Not on 386?
 	{"NOTE_CHILD", unix.NOTE_CHILD},
 	{"NOTE_DELETE", unix.NOTE_DELETE},
 	{"NOTE_EOF", unix.NOTE_EOF},

@@ -3,6 +3,7 @@ package fsnotify
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -167,6 +169,9 @@ func TestWatch(t *testing.T) {
 				// behaviour too.
 				t.Skip("broken on macOS")
 			}
+			if !internal.HasPrivilegesForSymlink() {
+				t.Skip("does not have privileges for symlink on this OS")
+			}
 
 			file := join(tmp, "file")
 			link := join(tmp, "link")
@@ -195,6 +200,9 @@ func TestWatch(t *testing.T) {
 				// Pretty sure this is caused by the broken symlink-follow
 				// behaviour too.
 				t.Skip("broken on macOS")
+			}
+			if !internal.HasPrivilegesForSymlink() {
+				t.Skip("does not have privileges for symlink on this OS")
 			}
 
 			dir := join(tmp, "dir")
@@ -247,6 +255,9 @@ func TestWatchCreate(t *testing.T) {
 
 		// Links
 		{"create new symlink to file", func(t *testing.T, w *Watcher, tmp string) {
+			if !internal.HasPrivilegesForSymlink() {
+				t.Skip("does not have privileges for symlink on this OS")
+			}
 			touch(t, tmp, "file")
 			addWatch(t, w, tmp)
 			symlink(t, join(tmp, "file"), tmp, "link")
@@ -254,6 +265,9 @@ func TestWatchCreate(t *testing.T) {
 			create  /link
 		`},
 		{"create new symlink to directory", func(t *testing.T, w *Watcher, tmp string) {
+			if !internal.HasPrivilegesForSymlink() {
+				t.Skip("does not have privileges for symlink on this OS")
+			}
 			addWatch(t, w, tmp)
 			symlink(t, tmp, tmp, "link")
 		}, `
@@ -506,6 +520,10 @@ func TestWatchRename(t *testing.T) {
 }
 
 func TestWatchSymlink(t *testing.T) {
+	if !internal.HasPrivilegesForSymlink() {
+		t.Skip("does not have privileges for symlink on this OS")
+	}
+
 	tests := []testCase{
 		{"create unresolvable symlink", func(t *testing.T, w *Watcher, tmp string) {
 			addWatch(t, w, tmp)
@@ -641,7 +659,7 @@ func TestWatchAttrib(t *testing.T) {
 	}
 }
 
-func TestWatchRm(t *testing.T) {
+func TestWatchRemove(t *testing.T) {
 	tests := []testCase{
 		{"remove watched file", func(t *testing.T, w *Watcher, tmp string) {
 			file := join(tmp, "file")
@@ -744,6 +762,194 @@ func TestWatchRm(t *testing.T) {
 				WRITE                "/j"
 				WRITE                "/j"
 		`},
+
+		{"remove recursive", func(t *testing.T, w *Watcher, tmp string) {
+			recurseOnly(t)
+
+			mkdirAll(t, tmp, "dir1", "subdir")
+			mkdirAll(t, tmp, "dir2", "subdir")
+			touch(t, tmp, "dir1", "subdir", "file")
+			touch(t, tmp, "dir2", "subdir", "file")
+
+			addWatch(t, w, tmp, "dir1", "...")
+			addWatch(t, w, tmp, "dir2", "...")
+			cat(t, "asd", tmp, "dir1", "subdir", "file")
+			cat(t, "asd", tmp, "dir2", "subdir", "file")
+
+			if err := w.Remove(join(tmp, "dir1")); err != nil {
+				t.Fatal(err)
+			}
+			if err := w.Remove(join(tmp, "dir2", "...")); err != nil {
+				t.Fatal(err)
+			}
+
+			if w := w.WatchList(); len(w) != 0 {
+				t.Errorf("WatchList not empty: %s", w)
+			}
+
+			cat(t, "asd", tmp, "dir1", "subdir", "file")
+			cat(t, "asd", tmp, "dir2", "subdir", "file")
+		}, `
+			write /dir1/subdir
+			write /dir1/subdir/file
+			write /dir2/subdir
+			write /dir2/subdir/file
+		`},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		tt.run(t)
+	}
+}
+
+func TestWatchRecursive(t *testing.T) {
+	recurseOnly(t)
+
+	tests := []testCase{
+		// Make a nested directory tree, then write some files there.
+		{"basic", func(t *testing.T, w *Watcher, tmp string) {
+			mkdirAll(t, tmp, "/one/two/three/four")
+			addWatch(t, w, tmp, "/...")
+
+			cat(t, "asd", tmp, "/file.txt")
+			cat(t, "asd", tmp, "/one/two/three/file.txt")
+		}, `
+			create    /file.txt                  # cat asd >file.txt
+			write     /file.txt
+
+			write     /one/two/three             # cat asd >one/two/three/file.txt
+			create    /one/two/three/file.txt
+			write     /one/two/three/file.txt
+		`},
+
+		// Create a new directory tree and then some files under that.
+		{"add directory", func(t *testing.T, w *Watcher, tmp string) {
+			mkdirAll(t, tmp, "/one/two/three/four")
+			addWatch(t, w, tmp, "/...")
+
+			mkdirAll(t, tmp, "/one/two/new/dir")
+			touch(t, tmp, "/one/two/new/file")
+			touch(t, tmp, "/one/two/new/dir/file")
+		}, `
+			write     /one/two                # mkdir -p one/two/new/dir
+			create    /one/two/new
+			create    /one/two/new/dir
+
+			write     /one/two/new            # touch one/two/new/file
+			create    /one/two/new/file
+
+			create    /one/two/new/dir/file   # touch one/two/new/dir/file
+		`},
+
+		// Remove nested directory
+		{"remove directory", func(t *testing.T, w *Watcher, tmp string) {
+			mkdirAll(t, tmp, "one/two/three/four")
+			addWatch(t, w, tmp, "...")
+
+			cat(t, "asd", tmp, "one/two/three/file.txt")
+			rmAll(t, tmp, "one/two")
+		}, `
+			write                /one/two/three            # cat asd >one/two/three/file.txt
+			create               /one/two/three/file.txt
+			write                /one/two/three/file.txt
+
+			write                /one/two                  # rm -r one/two
+			write                /one/two/three
+			remove               /one/two/three/file.txt
+			remove               /one/two/three/four
+			write                /one/two/three
+			remove               /one/two/three
+			write                /one/two
+			remove               /one/two
+		`},
+
+		// Rename nested directory
+		{"rename directory", func(t *testing.T, w *Watcher, tmp string) {
+			mkdirAll(t, tmp, "/one/two/three/four")
+			addWatch(t, w, tmp, "...")
+
+			mv(t, join(tmp, "one"), tmp, "one-rename")
+			touch(t, tmp, "one-rename/file")
+			touch(t, tmp, "one-rename/two/three/file")
+		}, `
+			rename               "/one"                        # mv one one-rename
+			create               "/one-rename"
+
+			write                "/one-rename"                 # touch one-rename/file
+			create               "/one-rename/file"
+
+			write                "/one-rename/two/three"       # touch one-rename/two/three/file
+			create               "/one-rename/two/three/file"
+		`},
+
+		{"remove watched directory", func(t *testing.T, w *Watcher, tmp string) {
+			mk := func(r string) {
+				touch(t, r, "a")
+				touch(t, r, "b")
+				touch(t, r, "c")
+				touch(t, r, "d")
+				touch(t, r, "e")
+				touch(t, r, "f")
+				touch(t, r, "g")
+
+				mkdir(t, r, "h")
+				mkdir(t, r, "h", "a")
+				mkdir(t, r, "i")
+				mkdir(t, r, "i", "a")
+				mkdir(t, r, "j")
+				mkdir(t, r, "j", "a")
+			}
+			mk(tmp)
+			mkdir(t, tmp, "sub")
+			mk(join(tmp, "sub"))
+
+			addWatch(t, w, tmp, "...")
+			rmAll(t, tmp)
+		}, `
+			remove               "/a"
+			remove               "/b"
+			remove               "/c"
+			remove               "/d"
+			remove               "/e"
+			remove               "/f"
+			remove               "/g"
+			write                "/h"
+			remove               "/h/a"
+			write                "/h"
+			remove               "/h"
+			write                "/i"
+			remove               "/i/a"
+			write                "/i"
+			remove               "/i"
+			write                "/j"
+			remove               "/j/a"
+			write                "/j"
+			remove               "/j"
+			write                "/sub"
+			remove               "/sub/a"
+			remove               "/sub/b"
+			remove               "/sub/c"
+			remove               "/sub/d"
+			remove               "/sub/e"
+			remove               "/sub/f"
+			remove               "/sub/g"
+			write                "/sub/h"
+			remove               "/sub/h/a"
+			write                "/sub/h"
+			remove               "/sub/h"
+			write                "/sub/i"
+			remove               "/sub/i/a"
+			write                "/sub/i"
+			remove               "/sub/i"
+			write                "/sub/j"
+			remove               "/sub/j/a"
+			write                "/sub/j"
+			remove               "/sub/j"
+			write                "/sub"
+			remove               "/sub"
+			remove               "/"
+		`},
 	}
 
 	for _, tt := range tests {
@@ -753,7 +959,7 @@ func TestWatchRm(t *testing.T) {
 }
 
 // TODO: this fails reguarly in the CI; not sure if it's a bug with the test or
-//       code; need to look in to it.
+// code; need to look in to it.
 func TestClose(t *testing.T) {
 	chanClosed := func(t *testing.T, w *Watcher) {
 		t.Helper()
@@ -762,7 +968,7 @@ func TestClose(t *testing.T) {
 		// which may take a little bit.
 		switch runtime.GOOS {
 		case "freebsd", "openbsd", "netbsd", "dragonfly", "darwin", "solaris", "illumos":
-			time.Sleep(5 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 		}
 
 		select {
@@ -941,6 +1147,33 @@ func TestClose(t *testing.T) {
 }
 
 func TestAdd(t *testing.T) {
+	t.Run("doesn't exist", func(t *testing.T) {
+		t.Parallel()
+		tmp := t.TempDir()
+
+		w := newWatcher(t)
+		err := w.Add(join(tmp, "non-existent"))
+		if err == nil {
+			t.Fatal("err is nil")
+		}
+
+		// Errors for this are inconsistent; should be fixed in v2. See #144
+		switch runtime.GOOS {
+		case "linux":
+			if _, ok := err.(syscall.Errno); !ok {
+				t.Errorf("wrong error type: %[1]T: %#[1]v", err)
+			}
+		case "windows":
+			if _, ok := err.(*os.SyscallError); !ok {
+				t.Errorf("wrong error type: %[1]T: %#[1]v", err)
+			}
+		default:
+			if _, ok := err.(*fs.PathError); !ok {
+				t.Errorf("wrong error type: %[1]T: %#[1]v", err)
+			}
+		}
+	})
+
 	t.Run("permission denied", func(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("chmod doesn't work on Windows") // See if we can make a file unreadable
@@ -970,10 +1203,30 @@ func TestAdd(t *testing.T) {
 			t.Errorf("not syscall.EACCESS: %T %#[1]v", err)
 		}
 	})
+
+	t.Run("add same path twice", func(t *testing.T) {
+		tmp := t.TempDir()
+		w := newCollector(t)
+		if err := w.w.Add(tmp); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.w.Add(tmp); err != nil {
+			t.Fatal(err)
+		}
+
+		w.collect(t)
+		touch(t, tmp, "file")
+		rm(t, tmp, "file")
+
+		cmpEvents(t, tmp, w.events(t), newEvents(t, `
+			create /file
+			remove /file
+		`))
+	})
 }
 
 // TODO: should also check internal state is correct/cleaned up; e.g. no
-//       left-over file descriptors or whatnot.
+// left-over file descriptors or whatnot.
 func TestRemove(t *testing.T) {
 	t.Run("works", func(t *testing.T) {
 		t.Parallel()
@@ -1093,6 +1346,22 @@ func TestRemove(t *testing.T) {
 
 		if werr != nil {
 			t.Fatal(werr)
+		}
+	})
+
+	t.Run("remove with ... when non-recursive", func(t *testing.T) {
+		recurseOnly(t)
+		t.Parallel()
+
+		tmp := t.TempDir()
+		w := newWatcher(t)
+		addWatch(t, w, tmp)
+
+		if err := w.Remove(join(tmp, "...")); err == nil {
+			t.Fatal("err was nil")
+		}
+		if err := w.Remove(tmp); err != nil {
+			t.Fatal(err)
 		}
 	})
 }
@@ -1227,9 +1496,6 @@ func TestWatchStress(t *testing.T) {
 			}
 		}
 
-		for i := 0; i < numFiles; i++ {
-			rm(t, tmp, prefix+fmtNum(i), noWait)
-		}
 		close(done)
 	}()
 	<-done
@@ -1303,5 +1569,75 @@ func TestWatchList(t *testing.T) {
 	want := []string{tmp, file}
 	if !reflect.DeepEqual(have, want) {
 		t.Errorf("\nhave: %s\nwant: %s", have, want)
+	}
+}
+
+func BenchmarkWatch(b *testing.B) {
+	w, err := NewWatcher()
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	tmp := b.TempDir()
+	file := join(tmp, "file")
+	err = w.Add(tmp)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		for {
+			select {
+			case err, ok := <-w.Errors:
+				if !ok {
+					wg.Done()
+					return
+				}
+				b.Error(err)
+			case _, ok := <-w.Events:
+				if !ok {
+					wg.Done()
+					return
+				}
+			}
+		}
+	}()
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		fp, err := os.Create(file)
+		if err != nil {
+			b.Fatal(err)
+		}
+		err = fp.Close()
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+	err = w.Close()
+	if err != nil {
+		b.Fatal(err)
+	}
+	wg.Wait()
+}
+
+func BenchmarkAddRemove(b *testing.B) {
+	w, err := NewWatcher()
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	tmp := b.TempDir()
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		if err := w.Add(tmp); err != nil {
+			b.Fatal(err)
+		}
+		if err := w.Remove(tmp); err != nil {
+			b.Fatal(err)
+		}
 	}
 }

@@ -1,6 +1,9 @@
 //go:build solaris
 // +build solaris
 
+// Note: the documentation on the Watcher type and methods is generated from
+// mkdoc.zsh
+
 package fsnotify
 
 import (
@@ -23,9 +26,9 @@ import (
 // When a file is removed a Remove event won't be emitted until all file
 // descriptors are closed, and deletes will always emit a Chmod. For example:
 //
-//     fp := os.Open("file")
-//     os.Remove("file")        // Triggers Chmod
-//     fp.Close()               // Triggers Remove
+//	fp := os.Open("file")
+//	os.Remove("file")        // Triggers Chmod
+//	fp.Close()               // Triggers Remove
 //
 // This is the event that inotify sends, so not much can be changed about this.
 //
@@ -39,16 +42,16 @@ import (
 //
 // To increase them you can use sysctl or write the value to the /proc file:
 //
-//     # Default values on Linux 5.18
-//     sysctl fs.inotify.max_user_watches=124983
-//     sysctl fs.inotify.max_user_instances=128
+//	# Default values on Linux 5.18
+//	sysctl fs.inotify.max_user_watches=124983
+//	sysctl fs.inotify.max_user_instances=128
 //
 // To make the changes persist on reboot edit /etc/sysctl.conf or
 // /usr/lib/sysctl.d/50-default.conf (details differ per Linux distro; check
 // your distro's documentation):
 //
-//     fs.inotify.max_user_watches=124983
-//     fs.inotify.max_user_instances=128
+//	fs.inotify.max_user_watches=124983
+//	fs.inotify.max_user_instances=128
 //
 // Reaching the limit will result in a "no space left on device" or "too many open
 // files" error.
@@ -64,14 +67,15 @@ import (
 // control the maximum number of open files, as well as /etc/login.conf on BSD
 // systems.
 //
-// # macOS notes
+// # Windows notes
 //
-// Spotlight indexing on macOS can result in multiple events (see [#15]). A
-// temporary workaround is to add your folder(s) to the "Spotlight Privacy
-// Settings" until we have a native FSEvents implementation (see [#11]).
+// Paths can be added as "C:\path\to\dir", but forward slashes
+// ("C:/path/to/dir") will also work.
 //
-// [#11]: https://github.com/fsnotify/fsnotify/issues/11
-// [#15]: https://github.com/fsnotify/fsnotify/issues/15
+// The default buffer size is 64K, which is the largest value that is guaranteed
+// to work with SMB filesystems. If you have many events in quick succession
+// this may not be enough, and you will have to use [WithBufferSize] to increase
+// the value.
 type Watcher struct {
 	// Events sends the filesystem change events.
 	//
@@ -101,6 +105,8 @@ type Watcher struct {
 	//                      you may get hundreds of Write events, so you
 	//                      probably want to wait until you've stopped receiving
 	//                      them (see the dedup example in cmd/fsnotify).
+	//                      Some systems may send Write event for directories
+	//                      when the directory content changes.
 	//
 	//   fsnotify.Chmod     Attributes were changed. On Linux this is also sent
 	//                      when a file is removed (or more accurately, when a
@@ -111,10 +117,10 @@ type Watcher struct {
 
 	// Errors sends any errors.
 	//
-	// [ErrEventOverflow] is used to indicate ther are too many events:
+	// [ErrEventOverflow] is used to indicate there are too many events:
 	//
 	//  - inotify: there are too many queued events (fs.inotify.max_queued_events sysctl)
-	//  - windows: The buffer size is too small.
+	//  - windows: The buffer size is too small; [WithBufferSize] can be used to increase it.
 	//  - kqueue, fen: not used.
 	Errors chan error
 
@@ -191,9 +197,9 @@ func (w *Watcher) Close() error {
 
 // Add starts monitoring the path for changes.
 //
-// A path can only be watched once; attempting to watch it more than once will
-// return an error. Paths that do not yet exist on the filesystem cannot be
-// added.
+// A path can only be watched once; watching it more than once is a no-op and will
+// not return an error. Paths that do not yet exist on the filesystem cannot
+// watched.
 //
 // A watch will be automatically removed if the watched path is deleted or
 // renamed. The exception is the Windows backend, which doesn't remove the
@@ -204,11 +210,14 @@ func (w *Watcher) Close() error {
 //
 // Returns [ErrClosed] if [Watcher.Close] was called.
 //
+// See [AddWith] for a version that allows adding options.
+//
 // # Watching directories
 //
 // All files in a directory are monitored, including new files that are created
-// after the watcher is started. Subdirectories are not watched (i.e. it's
-// non-recursive).
+// after the watcher is started. By default subdirectories are not watched (i.e.
+// it's non-recursive), but if the path ends with "/..." all files and
+// subdirectories are watched too.
 //
 // # Watching files
 //
@@ -221,13 +230,24 @@ func (w *Watcher) Close() error {
 //
 // Instead, watch the parent directory and use Event.Name to filter out files
 // you're not interested in. There is an example of this in [cmd/fsnotify/file.go].
-func (w *Watcher) Add(name string) error {
+func (w *Watcher) Add(name string) error { return w.AddWith(name) }
+
+// AddWith is like [Add], but allows adding options. When using Add() the
+// defaults described below are used.
+//
+// Possible options are:
+//
+//   - [WithBufferSize] sets the buffer size for the Windows backend; no-op on
+//     other platforms. The default is 64K (65536 bytes).
+func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 	if w.isClosed() {
 		return ErrClosed
 	}
 	if w.port.PathIsWatched(name) {
 		return nil
 	}
+
+	_ = getOptions(opts...)
 
 	// Currently we resolve symlinks that were explicitly requested to be
 	// watched. Otherwise we would use LStat here.
@@ -262,10 +282,19 @@ func (w *Watcher) Add(name string) error {
 
 // Remove stops monitoring the path for changes.
 //
-// Directories are always removed non-recursively. For example, if you added
-// /tmp/dir and /tmp/dir/subdir then you will need to remove both.
+// If the path was added as a recursive watch (e.g. as "/tmp/dir/...") then the
+// entire recursive watch will be removed. You can use either "/tmp/dir" or
+// "/tmp/dir/..." (they behave identically).
+//
+// You cannot remove individual files or subdirectories from recursive watches;
+// e.g. Add("/tmp/path/...") and then Remove("/tmp/path/sub") will fail.
+//
+// For other watches directories are removed non-recursively. For example, if
+// you added "/tmp/dir" and "/tmp/dir/subdir" then you will need to remove both.
 //
 // Removing a path that has not yet been added returns [ErrNonExistentWatch].
+//
+// Returns nil if [Watcher.Close] was called.
 func (w *Watcher) Remove(name string) error {
 	if w.isClosed() {
 		return nil

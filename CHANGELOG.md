@@ -1,15 +1,21 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
+Unreleased
+----------
+This version of fsnotify needs Go 1.17.
 
 ### Additions
 
 - illumos: add FEN backend to support illumos and Solaris. ([#371])
+
+- all: add `AddWith()`, which is identical to `Add()` but allows passing
+  options. ([#521])
+
+- all: support recursively watching paths with `Add("path/...")`. ([#540])
+
+- windows: allow setting the buffer size with `fsnotify.WithBufferSize()`; the
+  default of 64K is the highest value that works on all platforms and is enough
+  for most purposes, but in some cases a highest buffer is needed. ([#521])
 
 ### Changes and fixes
 
@@ -23,27 +29,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - windows: don't listen for file attribute changes ([#520])
 
-  File attribute changes are sent as FILE_ACTION_MODIFIED by the Windows API,
+  File attribute changes are sent as `FILE_ACTION_MODIFIED` by the Windows API,
   with no way to see if they're a file write or attribute change, so would show
   up as a fsnotify.Write event. This is never useful, and could result in many
   spurious Write events.
 
-- windows: return ErrEventOverflow if the buffer is full ([#525])
+- windows: return `ErrEventOverflow` if the buffer is full ([#525])
 
   Before it would merely return "short read", making it hard to detect this
   error.
 
-- all: return ErrClosed on Add() when the watcher is closed ([#516])
+- all: return `ErrClosed` on `Add()` when the watcher is closed ([#516])
+
+- kqueue: deal with `rm -rf watched-dir` better ([#526], [#537])
+
+- other: add `Watcher.Errors` and `Watcher.Events` to the no-op `Watcher` in
+  `backend_other.go`, making it easier to use on unsupported platforms such as
+  WASM, AIX, etc. ([#528])
+
+- other: use the backend_other.go no-op if the `appengine` build tag is set;
+  Google AppEngine forbids usage of the unsafe package so the inotify backend
+  won't compile there.
 
 
 [#371]: https://github.com/fsnotify/fsnotify/pull/371
 [#516]: https://github.com/fsnotify/fsnotify/pull/516
 [#518]: https://github.com/fsnotify/fsnotify/pull/518
 [#520]: https://github.com/fsnotify/fsnotify/pull/520
+[#521]: https://github.com/fsnotify/fsnotify/pull/521
 [#525]: https://github.com/fsnotify/fsnotify/pull/525
+[#526]: https://github.com/fsnotify/fsnotify/pull/526
+[#528]: https://github.com/fsnotify/fsnotify/pull/528
+[#537]: https://github.com/fsnotify/fsnotify/pull/537
+[#540]: https://github.com/fsnotify/fsnotify/pull/540
 
-## [1.6.0] - 2022-10-13
-
+1.6.0 - 2022-10-13
+-------------------
 This version of fsnotify needs Go 1.16 (this was already the case since 1.5.1,
 but not documented). It also increases the minimum Linux version to 2.6.32.
 
