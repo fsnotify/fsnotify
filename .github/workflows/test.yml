@@ -29,7 +29,7 @@ jobs:
 
       - name: test
         run: |
-          go test -race ./...
+          go test -parallel 1 -race ./...
 
   # Test gccgo
   testgcc:
@@ -42,7 +42,7 @@ jobs:
       - name: test
         run: |
           sudo apt-get -y install gccgo-12
-          go-12 test ./...
+          go-12 test -parallel 1 ./...
 
   # Test only the latest Go version on macOS; we use the macOS builders for BSD
   # and illumos, and GitHub doesn't allow many of them to run concurrently. If
@@ -70,7 +70,7 @@ jobs:
 
       - name: test
         run: |
-          go test -race ./...
+          go test -parallel 1 -race ./...
 
   # OpenBSD; no -race as the VM doesn't include the comp set.
   #
@@ -91,7 +91,7 @@ jobs:
           prepare: pkg_add go
           run: |
             useradd -mG wheel action
-            su action -c 'go test ./...'
+            su action -c 'go test -parallel 1 ./...'
 
   # NetBSD
   testNetBSD:
@@ -107,7 +107,7 @@ jobs:
           # TODO: no -race for the same reason as OpenBSD (the timing; it does run).
           run: |
             useradd -mG wheel action
-            su action -c 'go120 test ./...'
+            su action -c 'go120 test -parallel 1 ./...'
 
   # illumos
   testillumos:
@@ -125,7 +125,7 @@ jobs:
           useradd action
           export GOCACHE=/tmp/go-cache
           export GOPATH=/tmp/go-path
-          su action -c '/opt/ooce/go-1.19/bin/go test ./...'
+          su action -c '/opt/ooce/go-1.19/bin/go test -parallel 1 ./...'
 
   # Older Debian 6, for old Linux kernels.
   testDebian6:
@@ -160,5 +160,5 @@ jobs:
           done
           vagrant up
           for t in *.test; do
-            vagrant ssh -c "/vagrant/$t"
+            vagrant ssh -c "/vagrant/$t -test.parallel 1"
           done
