@@ -35,7 +35,7 @@ func TestMain(m *testing.M) {
 	c1 := m.Run()
 	os.Setenv("FSNOTIFY_BUFFER", "1")
 	c2 := m.Run()
-	os.Setenv("FSNOTIFY_BUFFER", "1024")
+	os.Setenv("FSNOTIFY_BUFFER", "4")
 	c3 := m.Run()
 
 	if c1 != 0 {

@@ -29,7 +29,7 @@ jobs:
 
       - name: test
         run: |
-          go test -race -parallel 1 ./...
+          go test -parallel 1 -race ./...
 
   # Test gccgo
   testgcc:
@@ -70,7 +70,7 @@ jobs:
 
       - name: test
         run: |
-          go test -race -parallel 1 ./...
+          go test -parallel 1 -race ./...
 
   # OpenBSD; no -race as the VM doesn't include the comp set.
   #
