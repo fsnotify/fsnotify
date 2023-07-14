@@ -8,14 +8,15 @@ This version of fsnotify needs Go 1.17.
 
 - illumos: add FEN backend to support illumos and Solaris. ([#371])
 
+- all: support recursively watching paths with `Add("path/...")`. ([#540],
+  [#472])
+
 - all: add `AddWith()`, which is identical to `Add()` but allows passing
   options. ([#521])
 
-- all: support recursively watching paths with `Add("path/...")`. ([#540])
-
 - windows: allow setting the buffer size with `fsnotify.WithBufferSize()`; the
-  default of 64K is the highest value that works on all platforms and is enough
-  for most purposes, but in some cases a highest buffer is needed. ([#521])
+  default of 64K is the highest allowed value for SMB mounts and is enough for
+  most purposes, but in some cases a highest buffer is needed. ([#521])
 
 ### Changes and fixes
 
@@ -61,6 +62,7 @@ This version of fsnotify needs Go 1.17.
 
 
 [#371]: https://github.com/fsnotify/fsnotify/pull/371
+[#472]: https://github.com/fsnotify/fsnotify/pull/472
 [#516]: https://github.com/fsnotify/fsnotify/pull/516
 [#518]: https://github.com/fsnotify/fsnotify/pull/518
 [#520]: https://github.com/fsnotify/fsnotify/pull/520
@@ -72,7 +74,7 @@ This version of fsnotify needs Go 1.17.
 [#540]: https://github.com/fsnotify/fsnotify/pull/540
 
 1.6.0 - 2022-10-13
--------------------
+------------------
 This version of fsnotify needs Go 1.16 (this was already the case since 1.5.1,
 but not documented). It also increases the minimum Linux version to 2.6.32.
 

@@ -593,9 +593,19 @@ func isSolaris() bool {
 	return false
 }
 
+func errorContains(out error, want string) bool {
+	if out == nil {
+		return want == ""
+	}
+	if want == "" {
+		return false
+	}
+	return strings.Contains(out.Error(), want)
+}
+
 func recurseOnly(t *testing.T) {
 	switch runtime.GOOS {
-	case "windows":
+	case "windows", "linux":
 		// Run test.
 	default:
 		t.Skip("recursion not yet supported on " + runtime.GOOS)

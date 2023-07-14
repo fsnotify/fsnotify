@@ -767,10 +767,14 @@ func TestWatchRemove(t *testing.T) {
 			cat(t, "asd", tmp, "dir1", "subdir", "file")
 			cat(t, "asd", tmp, "dir2", "subdir", "file")
 		}, `
-			write /dir1/subdir
 			write /dir1/subdir/file
-			write /dir2/subdir
 			write /dir2/subdir/file
+
+			windows:
+				write /dir1/subdir
+				write /dir1/subdir/file
+				write /dir2/subdir
+				write /dir2/subdir/file
 		`},
 	}
 
@@ -795,9 +799,16 @@ func TestWatchRecursive(t *testing.T) {
 			create    /file.txt                  # cat asd >file.txt
 			write     /file.txt
 
-			write     /one/two/three             # cat asd >one/two/three/file.txt
-			create    /one/two/three/file.txt
+			create    /one/two/three/file.txt    # cat asd >one/two/three/file.txt
 			write     /one/two/three/file.txt
+
+			windows:
+				create    /file.txt                  # cat asd >file.txt
+				write     /file.txt
+
+				write     /one/two/three             # cat asd >one/two/three/file.txt
+				create    /one/two/three/file.txt
+				write     /one/two/three/file.txt
 		`},
 
 		// Create a new directory tree and then some files under that.
@@ -809,14 +820,21 @@ func TestWatchRecursive(t *testing.T) {
 			touch(t, tmp, "/one/two/new/file")
 			touch(t, tmp, "/one/two/new/dir/file")
 		}, `
-			write     /one/two                # mkdir -p one/two/new/dir
-			create    /one/two/new
-			create    /one/two/new/dir
+			create        /one/two/new            # mkdir -p one/two/new/dir
+			create        /one/two/new/dir
 
-			write     /one/two/new            # touch one/two/new/file
-			create    /one/two/new/file
+			create        /one/two/new/file       # touch one/two/new/file
+			create        /one/two/new/dir/file   # touch one/two/new/dir/file
 
-			create    /one/two/new/dir/file   # touch one/two/new/dir/file
+			windows:
+				write     /one/two                # mkdir -p one/two/new/dir
+				create    /one/two/new
+				create    /one/two/new/dir
+
+				write     /one/two/new            # touch one/two/new/file
+				create    /one/two/new/file
+
+				create    /one/two/new/dir/file   # touch one/two/new/dir/file
 		`},
 
 		// Remove nested directory
@@ -827,18 +845,31 @@ func TestWatchRecursive(t *testing.T) {
 			cat(t, "asd", tmp, "one/two/three/file.txt")
 			rmAll(t, tmp, "one/two")
 		}, `
-			write                /one/two/three            # cat asd >one/two/three/file.txt
-			create               /one/two/three/file.txt
+			create               /one/two/three/file.txt  # cat asd >one/two/three/file.txt
 			write                /one/two/three/file.txt
 
-			write                /one/two                  # rm -r one/two
-			write                /one/two/three
-			remove               /one/two/three/file.txt
+			# TODO: some duplicates in here
+			remove               /one/two/three/file.txt  # rm -r one/two
 			remove               /one/two/three/four
-			write                /one/two/three
+			remove               /one/two/three/four
 			remove               /one/two/three
-			write                /one/two
+			remove               /one/two/three
 			remove               /one/two
+			remove               /one/two
+
+			windows:
+				write                /one/two/three            # cat asd >one/two/three/file.txt
+				create               /one/two/three/file.txt
+				write                /one/two/three/file.txt
+
+				write                /one/two                  # rm -r one/two
+				write                /one/two/three
+				remove               /one/two/three/file.txt
+				remove               /one/two/three/four
+				write                /one/two/three
+				remove               /one/two/three
+				write                /one/two
+				remove               /one/two
 		`},
 
 		// Rename nested directory
@@ -853,11 +884,20 @@ func TestWatchRecursive(t *testing.T) {
 			rename               "/one"                        # mv one one-rename
 			create               "/one-rename"
 
-			write                "/one-rename"                 # touch one-rename/file
-			create               "/one-rename/file"
+			#rename               "/one-rename"                 # mv one one-rename
 
-			write                "/one-rename/two/three"       # touch one-rename/two/three/file
-			create               "/one-rename/two/three/file"
+			# TODO: events missing. This is because we remove the watch on renames.
+			# Should kind of fix the way renames work...
+
+			windows:
+				rename               "/one"                        # mv one one-rename
+				create               "/one-rename"
+
+				write                "/one-rename"                 # touch one-rename/file
+				create               "/one-rename/file"
+
+				write                "/one-rename/two/three"       # touch one-rename/two/three/file
+				create               "/one-rename/two/three/file"
 		`},
 
 		{"remove watched directory", func(t *testing.T, w *Watcher, tmp string) {
@@ -884,48 +924,92 @@ func TestWatchRecursive(t *testing.T) {
 			addWatch(t, w, tmp, "...")
 			rmAll(t, tmp)
 		}, `
-			remove               "/a"
-			remove               "/b"
-			remove               "/c"
-			remove               "/d"
-			remove               "/e"
-			remove               "/f"
-			remove               "/g"
-			write                "/h"
-			remove               "/h/a"
-			write                "/h"
-			remove               "/h"
-			write                "/i"
-			remove               "/i/a"
-			write                "/i"
-			remove               "/i"
-			write                "/j"
-			remove               "/j/a"
-			write                "/j"
-			remove               "/j"
-			write                "/sub"
-			remove               "/sub/a"
-			remove               "/sub/b"
-			remove               "/sub/c"
-			remove               "/sub/d"
-			remove               "/sub/e"
-			remove               "/sub/f"
-			remove               "/sub/g"
-			write                "/sub/h"
-			remove               "/sub/h/a"
-			write                "/sub/h"
-			remove               "/sub/h"
-			write                "/sub/i"
-			remove               "/sub/i/a"
-			write                "/sub/i"
-			remove               "/sub/i"
-			write                "/sub/j"
+			# TODO: some duplicates
 			remove               "/sub/j/a"
-			write                "/sub/j"
+			remove               "/sub/j/a"
 			remove               "/sub/j"
-			write                "/sub"
+			remove               "/sub/j"
+			remove               "/sub/i/a"
+			remove               "/sub/i/a"
+			remove               "/sub/i"
+			remove               "/sub/i"
+			remove               "/sub/h/a"
+			remove               "/sub/h/a"
+			remove               "/sub/h"
+			remove               "/sub/h"
+			remove               "/sub/g"
+			remove               "/sub/f"
+			remove               "/sub/e"
+			remove               "/sub/d"
+			remove               "/sub/c"
+			remove               "/sub/b"
+			remove               "/sub/a"
 			remove               "/sub"
+			remove               "/sub"
+			remove               "/j/a"
+			remove               "/j/a"
+			remove               "/j"
+			remove               "/j"
+			remove               "/i/a"
+			remove               "/i/a"
+			remove               "/i"
+			remove               "/i"
+			remove               "/h/a"
+			remove               "/h/a"
+			remove               "/h"
+			remove               "/h"
+			remove               "/g"
+			remove               "/f"
+			remove               "/e"
+			remove               "/d"
+			remove               "/c"
+			remove               "/b"
+			remove               "/a"
 			remove               "/"
+
+			windows:
+				remove               "/a"
+				remove               "/b"
+				remove               "/c"
+				remove               "/d"
+				remove               "/e"
+				remove               "/f"
+				remove               "/g"
+				write                "/h"
+				remove               "/h/a"
+				write                "/h"
+				remove               "/h"
+				write                "/i"
+				remove               "/i/a"
+				write                "/i"
+				remove               "/i"
+				write                "/j"
+				remove               "/j/a"
+				write                "/j"
+				remove               "/j"
+				write                "/sub"
+				remove               "/sub/a"
+				remove               "/sub/b"
+				remove               "/sub/c"
+				remove               "/sub/d"
+				remove               "/sub/e"
+				remove               "/sub/f"
+				remove               "/sub/g"
+				write                "/sub/h"
+				remove               "/sub/h/a"
+				write                "/sub/h"
+				remove               "/sub/h"
+				write                "/sub/i"
+				remove               "/sub/i/a"
+				write                "/sub/i"
+				remove               "/sub/i"
+				write                "/sub/j"
+				remove               "/sub/j/a"
+				write                "/sub/j"
+				remove               "/sub/j"
+				write                "/sub"
+				remove               "/sub"
+				remove               "/"
 		`},
 	}
 

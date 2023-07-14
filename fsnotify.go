@@ -67,6 +67,7 @@ var (
 	ErrNonExistentWatch = errors.New("fsnotify: can't remove non-existent watch")
 	ErrEventOverflow    = errors.New("fsnotify: queue or buffer overflow")
 	ErrClosed           = errors.New("fsnotify: watcher already closed")
+	ErrNotDirectory     = errors.New("fsnotify: not a directory")
 )
 
 func (o Op) String() string {
@@ -103,10 +104,20 @@ func (e Event) String() string {
 	return fmt.Sprintf("%-13s %q", e.Op.String(), e.Name)
 }
 
+// Check if this path is recursive (ends with "/..."), and return the path with
+// the /... stripped.
+func recursivePath(path string) (string, bool) {
+	if filepath.Base(path) == "..." {
+		return filepath.Dir(path), true
+	}
+	return filepath.Clean(path), false
+}
+
 type (
 	addOpt   func(opt *withOpts)
 	withOpts struct {
-		bufsize int
+		bufsize    int
+		sendCreate bool
 	}
 )
 
@@ -133,11 +144,6 @@ func WithBufferSize(bytes int) addOpt {
 	return func(opt *withOpts) { opt.bufsize = bytes }
 }
 
-// Check if this path is recursive (ends with "/..." or "\..."), and return the
-// path with the /... stripped.
-func recursivePath(path string) (string, bool) {
-	if filepath.Base(path) == "..." {
-		return filepath.Dir(path), true
-	}
-	return path, false
+func withCreate() addOpt {
+	return func(opt *withOpts) { opt.sendCreate = true }
 }
