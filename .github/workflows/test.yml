@@ -20,7 +20,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: setup Go
         uses: actions/setup-go@v4
@@ -37,7 +37,7 @@ jobs:
     name: test (ubuntu-22.04, gccgo 12.1)
     steps:
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: test
         run: |
@@ -61,7 +61,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: setup Go
         uses: actions/setup-go@v4
@@ -83,7 +83,7 @@ jobs:
     runs-on: macos-12
     name: test (openbsd, 1.17)
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: test (openbsd, 1.17)
         id: test
         uses: vmactions/openbsd-vm@v0
@@ -98,7 +98,7 @@ jobs:
     runs-on: macos-12
     name: test (netbsd, 1.20)
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: test (netbsd, 1.20)
         id: test
         uses: vmactions/netbsd-vm@v0
@@ -114,7 +114,7 @@ jobs:
     runs-on: macos-12
     name: test (illumos, 1.19)
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: test (illumos, 1.19)
       id: test
       uses: papertigers/illumos-vm@r38
@@ -134,7 +134,7 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Cache Vagrant boxes
         uses: actions/cache@v3
