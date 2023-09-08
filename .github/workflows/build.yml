@@ -10,7 +10,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ['1.17', '1.20']
+        go:
+          - "1.17"
+          - oldstable
+          - stable
     runs-on: ubuntu-latest
     steps:
       - name: checkout
