@@ -81,7 +81,7 @@ jobs:
   #       much faster race detector, so maybe waiting until we have that is
   #       enough.
   testOpenBSD:
-    runs-on: macos-13
+    runs-on: macos-12
     name: test (openbsd, 1.17)
     steps:
       - uses: actions/checkout@v3
@@ -96,7 +96,7 @@ jobs:
 
   # NetBSD
   testNetBSD:
-    runs-on: macos-13
+    runs-on: macos-12
     name: test (netbsd, 1.20)
     steps:
       - uses: actions/checkout@v3
@@ -112,7 +112,7 @@ jobs:
 
   # illumos
   testillumos:
-    runs-on: macos-13
+    runs-on: macos-12
     name: test (illumos, 1.19)
     steps:
     - uses: actions/checkout@v3
@@ -130,7 +130,7 @@ jobs:
 
   # Older Debian 6, for old Linux kernels.
   testDebian6:
-    runs-on: macos-13
+    runs-on: macos-12
     name: test (debian6, 1.19)
     strategy:
       fail-fast: false
