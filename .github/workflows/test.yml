@@ -55,7 +55,7 @@ jobs:
       matrix:
         os:
           - macos-11
-          - macos-12
+          - macos-13
         go:
           - '1.21'
     runs-on: ${{ matrix.os }}
