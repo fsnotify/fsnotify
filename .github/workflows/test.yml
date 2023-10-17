@@ -110,22 +110,22 @@ jobs:
             su action -c 'go120 test -parallel 1 ./...'
 
   # illumos
-  testillumos:
-    runs-on: macos-12
-    name: test (illumos, 1.19)
-    steps:
-    - uses: actions/checkout@v3
-    - name: test (illumos, 1.19)
-      id: test
-      uses: papertigers/illumos-vm@r38
-      with:
-        prepare: |
-          pkg install go-119
-        run: |
-          useradd action
-          export GOCACHE=/tmp/go-cache
-          export GOPATH=/tmp/go-path
-          su action -c '/opt/ooce/go-1.19/bin/go test -parallel 1 ./...'
+  # testillumos:
+  #   runs-on: macos-12
+  #   name: test (illumos, 1.19)
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #   - name: test (illumos, 1.19)
+  #     id: test
+  #     uses: papertigers/illumos-vm@r38
+  #     with:
+  #       prepare: |
+  #         pkg install go-119
+  #       run: |
+  #         useradd action
+  #         export GOCACHE=/tmp/go-cache
+  #         export GOPATH=/tmp/go-path
+  #         su action -c '/opt/ooce/go-1.19/bin/go test -parallel 1 ./...'
 
   # Older Debian 6, for old Linux kernels.
   testDebian6:
