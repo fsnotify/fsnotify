@@ -11,8 +11,6 @@ This version of fsnotify needs Go 1.17.
 - all: add `AddWith()`, which is identical to `Add()` but allows passing
   options. ([#521])
 
-- all: support recursively watching paths with `Add("path/...")`. ([#540])
-
 - windows: allow setting the buffer size with `fsnotify.WithBufferSize()`; the
   default of 64K is the highest value that works on all platforms and is enough
   for most purposes, but in some cases a highest buffer is needed. ([#521])
@@ -69,7 +67,6 @@ This version of fsnotify needs Go 1.17.
 [#526]: https://github.com/fsnotify/fsnotify/pull/526
 [#528]: https://github.com/fsnotify/fsnotify/pull/528
 [#537]: https://github.com/fsnotify/fsnotify/pull/537
-[#540]: https://github.com/fsnotify/fsnotify/pull/540
 
 1.6.0 - 2022-10-13
 -------------------

@@ -228,9 +228,8 @@ func (w *Watcher) Close() error {
 // # Watching directories
 //
 // All files in a directory are monitored, including new files that are created
-// after the watcher is started. By default subdirectories are not watched (i.e.
-// it's non-recursive), but if the path ends with "/..." all files and
-// subdirectories are watched too.
+// after the watcher is started. Subdirectories are not watched (i.e. it's
+// non-recursive).
 //
 // # Watching files
 //
@@ -278,15 +277,8 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 
 // Remove stops monitoring the path for changes.
 //
-// If the path was added as a recursive watch (e.g. as "/tmp/dir/...") then the
-// entire recursive watch will be removed. You can use either "/tmp/dir" or
-// "/tmp/dir/..." (they behave identically).
-//
-// You cannot remove individual files or subdirectories from recursive watches;
-// e.g. Add("/tmp/path/...") and then Remove("/tmp/path/sub") will fail.
-//
-// For other watches directories are removed non-recursively. For example, if
-// you added "/tmp/dir" and "/tmp/dir/subdir" then you will need to remove both.
+// Directories are always removed non-recursively. For example, if you added
+// /tmp/dir and /tmp/dir/subdir then you will need to remove both.
 //
 // Removing a path that has not yet been added returns [ErrNonExistentWatch].
 //
@@ -470,7 +462,9 @@ func (m watchMap) set(ino *inode, watch *watch) {
 
 // Must run within the I/O thread.
 func (w *Watcher) addWatch(pathname string, flags uint64, bufsize int) error {
-	pathname, recurse := recursivePath(pathname)
+	//pathname, recurse := recursivePath(pathname)
+	recurse := false
+
 	dir, err := w.getDir(pathname)
 	if err != nil {
 		return err
