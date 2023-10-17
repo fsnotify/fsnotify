@@ -644,7 +644,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 
 		fi, err := f.Info()
 		if err != nil {
-			return fmt.Errorf("%q: %w", filepath.Join(dirPath, fi.Name()), err)
+			return fmt.Errorf("%q: %w", path, err)
 		}
 
 		cleanPath, err := w.internalWatch(path, fi)
@@ -657,7 +657,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 			case errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM):
 				cleanPath = filepath.Clean(path)
 			default:
-				return fmt.Errorf("%q: %w", filepath.Join(dirPath, fi.Name()), err)
+				return fmt.Errorf("%q: %w", path, err)
 			}
 		}
 
