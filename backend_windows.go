@@ -110,9 +110,10 @@ type Watcher struct {
 	//                      initiated by the user may show up as one or multiple
 	//                      writes, depending on when the system syncs things to
 	//                      disk. For example when compiling a large Go program
-	//                      you may get hundreds of Write events, so you
-	//                      probably want to wait until you've stopped receiving
-	//                      them (see the dedup example in cmd/fsnotify).
+	//                      you may get hundreds of Write events, and you may
+	//                      want to wait until you've stopped receiving them
+	//                      (see the dedup example in cmd/fsnotify).
+	//
 	//                      Some systems may send Write event for directories
 	//                      when the directory content changes.
 	//
@@ -241,21 +242,22 @@ func (w *Watcher) Close() error {
 // # Watching directories
 //
 // All files in a directory are monitored, including new files that are created
-// after the watcher is started. By default subdirectories are not watched (i.e.
-// it's non-recursive), but if the path ends with "/..." all files and
-// subdirectories are watched too.
+// after the watcher is started. Subdirectories are not watched (i.e. it's
+// non-recursive).
 //
 // # Watching files
 //
 // Watching individual files (rather than directories) is generally not
-// recommended as many tools update files atomically. Instead of "just" writing
-// to the file a temporary file will be written to first, and if successful the
-// temporary file is moved to to destination removing the original, or some
-// variant thereof. The watcher on the original file is now lost, as it no
-// longer exists.
+// recommended as many programs (especially editors) update files atomically: it
+// will write to a temporary file which is then moved to to destination,
+// overwriting the original (or some variant thereof). The watcher on the
+// original file is now lost, as that no longer exists.
 //
-// Instead, watch the parent directory and use Event.Name to filter out files
-// you're not interested in. There is an example of this in [cmd/fsnotify/file.go].
+// The upshot of this is that a power failure or crash won't leave a
+// half-written file.
+//
+// Watch the parent directory and use [Event.Name] to filter out files you're
+// not interested in. There is an example of this in [cmd/fsnotify/file.go].
 func (w *Watcher) Add(name string) error { return w.AddWith(name) }
 
 // AddWith is like [Add], but allows adding options. When using Add() the
@@ -291,15 +293,8 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 
 // Remove stops monitoring the path for changes.
 //
-// If the path was added as a recursive watch (e.g. as "/tmp/dir/...") then the
-// entire recursive watch will be removed. You can use either "/tmp/dir" or
-// "/tmp/dir/..." (they behave identically).
-//
-// You cannot remove individual files or subdirectories from recursive watches;
-// e.g. Add("/tmp/path/...") and then Remove("/tmp/path/sub") will fail.
-//
-// For other watches directories are removed non-recursively. For example, if
-// you added "/tmp/dir" and "/tmp/dir/subdir" then you will need to remove both.
+// Directories are always removed non-recursively. For example, if you added
+// /tmp/dir and /tmp/dir/subdir then you will need to remove both.
 //
 // Removing a path that has not yet been added returns [ErrNonExistentWatch].
 //
@@ -483,7 +478,9 @@ func (m watchMap) set(ino *inode, watch *watch) {
 
 // Must run within the I/O thread.
 func (w *Watcher) addWatch(pathname string, flags uint64, bufsize int) error {
-	pathname, recurse := recursivePath(pathname)
+	//pathname, recurse := recursivePath(pathname)
+	recurse := false
+
 	dir, err := w.getDir(pathname)
 	if err != nil {
 		return err
