@@ -93,15 +93,15 @@ FAQ
 ### Will a file still be watched when it's moved to another directory?
 No, not unless you are watching the location it was moved to.
 
-### Are subdirectories watched too?
+### Are subdirectories watched?
 No, you must add watches for any directory you want to watch (a recursive
 watcher is on the roadmap: [#18]).
 
 [#18]: https://github.com/fsnotify/fsnotify/issues/18
 
 ### Do I have to watch the Error and Event channels in a goroutine?
-As of now, yes (you can read both channels in the same goroutine using `select`,
-you don't need a separate goroutine for both channels; see the example).
+Yes. You can read both channels in the same goroutine using `select` (you don't
+need a separate goroutine for both channels; see the example).
 
 ### Why don't notifications work with NFS, SMB, FUSE, /proc, or /sys?
 fsnotify requires support from underlying OS to work. The current NFS and SMB
@@ -124,6 +124,19 @@ settings* until we have a native FSEvents implementation (see [#11]).
 
 [#11]: https://github.com/fsnotify/fsnotify/issues/11
 [#15]: https://github.com/fsnotify/fsnotify/issues/15
+
+### Watching a file doesn't work well
+Watching individual files (rather than directories) is generally not recommended
+as many programs (especially editors) update files atomically: it will write to
+a temporary file which is then moved to to destination, overwriting the original
+(or some variant thereof). The watcher on the original file is now lost, as that
+no longer exists.
+
+The upshot of this is that a power failure or crash won't leave a half-written
+file.
+
+Watch the parent directory and use `Event.Name` to filter out files you're not
+interested in. There is an example of this in `cmd/fsnotify/file.go`.
 
 Platform-specific notes
 -----------------------
