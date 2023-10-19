@@ -80,6 +80,11 @@ import (
 // Paths can be added as "C:\path\to\dir", but forward slashes
 // ("C:/path/to/dir") will also work.
 //
+// When a watched directory is removed it will always send an event for the
+// directory itself, but may not send events for all files in that directory.
+// Sometimes it will send events for all times, sometimes it will send no
+// events, and often only for some files. 
+//
 // The default buffer size is 64K, which is the largest value that is guaranteed
 // to work with SMB filesystems. If you have many events in quick succession
 // this may not be enough, and you will have to use [WithBufferSize] to increase
