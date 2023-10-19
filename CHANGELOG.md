@@ -8,12 +8,17 @@ This version of fsnotify needs Go 1.17.
 
 - illumos: add FEN backend to support illumos and Solaris. ([#371])
 
+- all: add `NewBufferedWatcher()` to use a buffered channel, which can be useful
+  in cases where you can't control the kernel buffer and receive a large number
+  of events in bursts. ([#550], [#572])
+
 - all: add `AddWith()`, which is identical to `Add()` but allows passing
   options. ([#521])
 
-- windows: allow setting the buffer size with `fsnotify.WithBufferSize()`; the
-  default of 64K is the highest value that works on all platforms and is enough
-  for most purposes, but in some cases a highest buffer is needed. ([#521])
+- windows: allow setting the ReadDirectoryChangesW() buffer size with
+  `fsnotify.WithBufferSize()`; the default of 64K is the highest value that
+  works on all platforms and is enough for most purposes, but in some cases a
+  highest buffer is needed. ([#521])
 
 ### Changes and fixes
 
@@ -57,7 +62,6 @@ This version of fsnotify needs Go 1.17.
   Google AppEngine forbids usage of the unsafe package so the inotify backend
   won't compile there.
 
-
 [#371]: https://github.com/fsnotify/fsnotify/pull/371
 [#516]: https://github.com/fsnotify/fsnotify/pull/516
 [#518]: https://github.com/fsnotify/fsnotify/pull/518
@@ -67,6 +71,8 @@ This version of fsnotify needs Go 1.17.
 [#526]: https://github.com/fsnotify/fsnotify/pull/526
 [#528]: https://github.com/fsnotify/fsnotify/pull/528
 [#537]: https://github.com/fsnotify/fsnotify/pull/537
+[#550]: https://github.com/fsnotify/fsnotify/pull/550
+[#572]: https://github.com/fsnotify/fsnotify/pull/572
 
 1.6.0 - 2022-10-13
 -------------------

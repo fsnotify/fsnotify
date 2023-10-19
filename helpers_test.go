@@ -43,17 +43,35 @@ func (tt testCase) run(t *testing.T) {
 func eventSeparator() { time.Sleep(50 * time.Millisecond) }
 func waitForEvents()  { time.Sleep(500 * time.Millisecond) }
 
+// To test the buffered watcher we run the tests twice in the CI: once as "go
+// test" and once with FSNOTIFY_BUFFER set. This is a bit hacky, but saves
+// having to refactor a lot of this code. Besides, running the tests in the CI
+// more than once isn't a bad thing, since it helps catch flaky tests (should
+// probably run it even more).
+var testBuffered = func() uint {
+	s, ok := os.LookupEnv("FSNOTIFY_BUFFER")
+	if ok {
+		i, err := strconv.ParseUint(s, 0, 0)
+		if err != nil {
+			panic(fmt.Sprintf("FSNOTIFY_BUFFER: %s", err))
+		}
+		return uint(i)
+	}
+	return 0
+}()
+
 // newWatcher initializes an fsnotify Watcher instance.
 func newWatcher(t *testing.T, add ...string) *Watcher {
 	t.Helper()
-	w, err := NewWatcher()
-	if e, ok := os.LookupEnv("FSNOTIFY_BUFFER"); ok {
-		t.Logf("using FSNOTIFY_BUFFER=%v", e)
-		n, err2 := strconv.Atoi(e)
-		if err2 != nil {
-			t.Fatalf("FSNOTIFY_BUFFER: %v", err2)
-		}
-		w, err = NewBufferedWatcher(uint(n))
+
+	var (
+		w   *Watcher
+		err error
+	)
+	if testBuffered > 0 {
+		w, err = NewBufferedWatcher(testBuffered)
+	} else {
+		w, err = NewWatcher()
 	}
 	if err != nil {
 		t.Fatalf("newWatcher: %s", err)

@@ -77,10 +77,10 @@ import (
 // Sometimes it will send events for all times, sometimes it will send no
 // events, and often only for some files. 
 //
-// The default buffer size is 64K, which is the largest value that is guaranteed
-// to work with SMB filesystems. If you have many events in quick succession
-// this may not be enough, and you will have to use [WithBufferSize] to increase
-// the value.
+// The default ReadDirectoryChangesW() buffer size is 64K, which is the largest
+// value that is guaranteed to work with SMB filesystems. If you have many
+// events in quick succession this may not be enough, and you will have to use
+// [WithBufferSize] to increase the value.
 type Watcher struct {
 	// Events sends the filesystem change events.
 	//
@@ -142,15 +142,13 @@ func NewWatcher() (*Watcher, error) {
 	return NewBufferedWatcher(0)
 }
 
-// NewBufferedWatcher creates a new Watcher with a buffered event channel.
+// NewBufferedWatcher creates a new Watcher with a buffered [Events] channel.
 //
-// For almost all use cases an unbuffered Watcher will perform better; most
-// kernels have de-duplication logic, which means less activity in userspace and
-// generally better performance. However there may be some cases where a very
-// large buffer can enable an application to keep up with a very large number of
-// events. You will always be better off increasing the kernel buffers over
-// adding a large userspace buffer, but if you can't control the kernel buffer
-// then a buffered watcher is a reasonable option.
+// The main use-case for this is situations with a very large number of events
+// where the kernel buffer size can't be increased (e.g. due to lack of
+// permissions). An unbuffered Watcher will perform better for almost all use
+// cases, and whenever possible you will be better off increasing the kernel
+// buffers instead of adding a large userspace buffer.
 func NewBufferedWatcher(sz uint) (*Watcher, error) {
 	w := &Watcher{
 		Events:  make(chan Event, sz),

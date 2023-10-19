@@ -28,25 +28,6 @@ func init() {
 	internal.SetRlimit()
 }
 
-// Quick but somewhat ugly way to run tests against both the standard fsnotify
-// and the buffered one. Should rewrite the tests to run more than once, but
-// effort...
-func TestMain(m *testing.M) {
-	c1 := m.Run()
-	os.Setenv("FSNOTIFY_BUFFER", "1")
-	c2 := m.Run()
-	os.Setenv("FSNOTIFY_BUFFER", "4")
-	c3 := m.Run()
-
-	if c1 != 0 {
-		os.Exit(c1)
-	}
-	if c2 != 0 {
-		os.Exit(c2)
-	}
-	os.Exit(c3)
-}
-
 func TestWatch(t *testing.T) {
 	tests := []testCase{
 		{"multiple creates", func(t *testing.T, w *Watcher, tmp string) {
@@ -1089,21 +1070,40 @@ func TestClose(t *testing.T) {
 	// a good reproducible test for this, but running it 150 times seems to
 	// reproduce it in ~75% of cases and isn't too slow (~0.06s on my system).
 	t.Run("double close", func(t *testing.T) {
-		t.Parallel()
+		t.Run("default", func(t *testing.T) {
+			t.Parallel()
 
-		for i := 0; i < 150; i++ {
-			w, err := NewWatcher()
-			if err != nil {
-				if strings.Contains(err.Error(), "too many") { // syscall.EMFILE
-					time.Sleep(100 * time.Millisecond)
-					continue
+			for i := 0; i < 150; i++ {
+				w, err := NewWatcher()
+				if err != nil {
+					if strings.Contains(err.Error(), "too many") { // syscall.EMFILE
+						time.Sleep(100 * time.Millisecond)
+						continue
+					}
+					t.Fatal(err)
 				}
-				t.Fatal(err)
+				go w.Close()
+				go w.Close()
+				go w.Close()
 			}
-			go w.Close()
-			go w.Close()
-			go w.Close()
-		}
+		})
+		t.Run("buffered=4096", func(t *testing.T) {
+			t.Parallel()
+
+			for i := 0; i < 150; i++ {
+				w, err := NewBufferedWatcher(4096)
+				if err != nil {
+					if strings.Contains(err.Error(), "too many") { // syscall.EMFILE
+						time.Sleep(100 * time.Millisecond)
+						continue
+					}
+					t.Fatal(err)
+				}
+				go w.Close()
+				go w.Close()
+				go w.Close()
+			}
+		})
 	})
 
 	t.Run("closes channels after read", func(t *testing.T) {
@@ -1618,141 +1618,122 @@ func TestOpHas(t *testing.T) {
 }
 
 func BenchmarkWatch(b *testing.B) {
-	w, err := NewWatcher()
-	if err != nil {
-		b.Fatal(err)
-	}
+	do := func(b *testing.B, w *Watcher) {
+		tmp := b.TempDir()
+		file := join(tmp, "file")
+		err := w.Add(tmp)
+		if err != nil {
+			b.Fatal(err)
+		}
 
-	tmp := b.TempDir()
-	file := join(tmp, "file")
-	err = w.Add(tmp)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		for {
-			select {
-			case err, ok := <-w.Errors:
-				if !ok {
-					wg.Done()
-					return
-				}
-				b.Error(err)
-			case _, ok := <-w.Events:
-				if !ok {
-					wg.Done()
-					return
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			for {
+				select {
+				case err, ok := <-w.Errors:
+					if !ok {
+						wg.Done()
+						return
+					}
+					b.Error(err)
+				case _, ok := <-w.Events:
+					if !ok {
+						wg.Done()
+						return
+					}
 				}
 			}
-		}
-	}()
+		}()
 
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		fp, err := os.Create(file)
-		if err != nil {
-			b.Fatal(err)
-		}
-		err = fp.Close()
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-	err = w.Close()
-	if err != nil {
-		b.Fatal(err)
-	}
-	wg.Wait()
-}
-
-func BenchmarkBufferedWatch(b *testing.B) {
-	w, err := NewBufferedWatcher(4096)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	tmp := b.TempDir()
-	file := join(tmp, "file")
-	err = w.Add(tmp)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		for {
-			select {
-			case err, ok := <-w.Errors:
-				if !ok {
-					wg.Done()
-					return
-				}
-				b.Error(err)
-			case _, ok := <-w.Events:
-				if !ok {
-					wg.Done()
-					return
-				}
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			fp, err := os.Create(file)
+			if err != nil {
+				b.Fatal(err)
+			}
+			err = fp.Close()
+			if err != nil {
+				b.Fatal(err)
 			}
 		}
-	}()
+		err = w.Close()
+		if err != nil {
+			b.Fatal(err)
+		}
+		wg.Wait()
+	}
 
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		fp, err := os.Create(file)
+	b.Run("default", func(b *testing.B) {
+		w, err := NewWatcher()
 		if err != nil {
 			b.Fatal(err)
 		}
-		err = fp.Close()
+		do(b, w)
+	})
+	b.Run("buffered=1", func(b *testing.B) {
+		w, err := NewBufferedWatcher(1)
 		if err != nil {
 			b.Fatal(err)
 		}
-	}
-	err = w.Close()
-	if err != nil {
-		b.Fatal(err)
-	}
-	wg.Wait()
+		do(b, w)
+	})
+	b.Run("buffered=1024", func(b *testing.B) {
+		w, err := NewBufferedWatcher(1024)
+		if err != nil {
+			b.Fatal(err)
+		}
+		do(b, w)
+	})
+	b.Run("buffered=4096", func(b *testing.B) {
+		w, err := NewBufferedWatcher(4096)
+		if err != nil {
+			b.Fatal(err)
+		}
+		do(b, w)
+	})
 }
 
 func BenchmarkAddRemove(b *testing.B) {
-	w, err := NewWatcher()
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	tmp := b.TempDir()
-
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		if err := w.Add(tmp); err != nil {
-			b.Fatal(err)
-		}
-		if err := w.Remove(tmp); err != nil {
-			b.Fatal(err)
+	do := func(b *testing.B, w *Watcher) {
+		tmp := b.TempDir()
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			if err := w.Add(tmp); err != nil {
+				b.Fatal(err)
+			}
+			if err := w.Remove(tmp); err != nil {
+				b.Fatal(err)
+			}
 		}
 	}
-}
 
-func BenchmarkBufferedAddRemove(b *testing.B) {
-	w, err := NewBufferedWatcher(4096)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	tmp := b.TempDir()
-
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		if err := w.Add(tmp); err != nil {
+	b.Run("default", func(b *testing.B) {
+		w, err := NewWatcher()
+		if err != nil {
 			b.Fatal(err)
 		}
-		if err := w.Remove(tmp); err != nil {
+		do(b, w)
+	})
+	b.Run("buffered=1", func(b *testing.B) {
+		w, err := NewBufferedWatcher(1)
+		if err != nil {
 			b.Fatal(err)
 		}
-	}
+		do(b, w)
+	})
+	b.Run("buffered=1024", func(b *testing.B) {
+		w, err := NewBufferedWatcher(1024)
+		if err != nil {
+			b.Fatal(err)
+		}
+		do(b, w)
+	})
+	b.Run("buffered=4096", func(b *testing.B) {
+		w, err := NewBufferedWatcher(4096)
+		if err != nil {
+			b.Fatal(err)
+		}
+		do(b, w)
+	})
 }

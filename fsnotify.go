@@ -122,13 +122,16 @@ func getOptions(opts ...addOpt) withOpts {
 	return with
 }
 
-// WithBufferSize sets the buffer size for the Windows backend. This is a no-op
-// for other backends.
+// WithBufferSize sets the [ReadDirectoryChangesW] buffer size.
+//
+// This only has effect on Windows systems, and is a no-op for other backends.
 //
 // The default value is 64K (65536 bytes) which is the highest value that works
 // on all filesystems and should be enough for most applications, but if you
 // have a large burst of events it may not be enough. You can increase it if
 // you're hitting "queue or buffer overflow" errors ([ErrEventOverflow]).
+//
+// [ReadDirectoryChangesW]: https://learn.microsoft.com/en-gb/windows/win32/api/winbase/nf-winbase-readdirectorychangesw
 func WithBufferSize(bytes int) addOpt {
 	return func(opt *withOpts) { opt.bufsize = bytes }
 }
