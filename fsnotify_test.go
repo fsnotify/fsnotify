@@ -680,66 +680,6 @@ func TestWatchRemove(t *testing.T) {
 				CHMOD    "/file"
 		`},
 
-		{"remove watched directory", func(t *testing.T, w *Watcher, tmp string) {
-			touch(t, tmp, "a")
-			touch(t, tmp, "b")
-			touch(t, tmp, "c")
-			touch(t, tmp, "d")
-			touch(t, tmp, "e")
-			touch(t, tmp, "f")
-			touch(t, tmp, "g")
-			mkdir(t, tmp, "h")
-			mkdir(t, tmp, "h", "a")
-			mkdir(t, tmp, "i")
-			mkdir(t, tmp, "i", "a")
-			mkdir(t, tmp, "j")
-			mkdir(t, tmp, "j", "a")
-			addWatch(t, w, tmp)
-			rmAll(t, tmp)
-		}, `
-			remove    /
-			remove    /a
-			remove    /b
-			remove    /c
-			remove    /d
-			remove    /e
-			remove    /f
-			remove    /g
-			remove    /h
-			remove    /i
-			remove    /j
-
-			# TODO: this is broken; I've also seen (/i and /j missing):
-			#    REMOVE               "/"
-			#    REMOVE               "/a"
-			#    REMOVE               "/b"
-			#    REMOVE               "/c"
-			#    REMOVE               "/d"
-			#    REMOVE               "/e"
-			#    REMOVE               "/f"
-			#    REMOVE               "/g"
-			#    WRITE                "/h"
-			#    WRITE                "/h"
-			windows:
-				REMOVE               "/"
-				REMOVE               "/a"
-				REMOVE               "/b"
-				REMOVE               "/c"
-				REMOVE               "/d"
-				REMOVE               "/e"
-				REMOVE               "/f"
-				REMOVE               "/g"
-				REMOVE               "/h"
-				REMOVE               "/i"
-				REMOVE               "/j"
-				WRITE                "/h"
-				WRITE                "/h"
-				WRITE                "/i"
-				WRITE                "/i"
-				WRITE                "/j"
-				WRITE                "/j"
-		`},
-
 		{"remove recursive", func(t *testing.T, w *Watcher, tmp string) {
 			recurseOnly(t)
 
@@ -778,6 +718,66 @@ func TestWatchRemove(t *testing.T) {
 		tt := tt
 		tt.run(t)
 	}
+
+	t.Run("remove watched directory", func(t *testing.T) {
+		t.Parallel()
+		tmp := t.TempDir()
+
+		w := newCollector(t)
+		w.collect(t)
+
+		touch(t, tmp, "a")
+		touch(t, tmp, "b")
+		touch(t, tmp, "c")
+		touch(t, tmp, "d")
+		touch(t, tmp, "e")
+		touch(t, tmp, "f")
+		touch(t, tmp, "g")
+		mkdir(t, tmp, "h")
+		mkdir(t, tmp, "h", "a")
+		mkdir(t, tmp, "i")
+		mkdir(t, tmp, "i", "a")
+		mkdir(t, tmp, "j")
+		mkdir(t, tmp, "j", "a")
+		addWatch(t, w.w, tmp)
+		rmAll(t, tmp)
+
+		if runtime.GOOS != "windows" {
+			cmpEvents(t, tmp, w.stop(t), newEvents(t, `
+				remove    /
+				remove    /a
+				remove    /b
+				remove    /c
+				remove    /d
+				remove    /e
+				remove    /f
+				remove    /g
+				remove    /h
+				remove    /i
+				remove    /j`))
+			return
+		}
+
+		// ReadDirectoryChangesW gives undefined results: not all files are
+		// always present. So test only that 1) we got the directory itself, and
+		// 2) we don't get events for unspected files.
+		var (
+			events = w.stop(t)
+			found  bool
+		)
+		for _, e := range events {
+			if e.Name == tmp && e.Has(Remove) {
+				found = true
+				continue
+			}
+			if filepath.Dir(e.Name) != tmp {
+				t.Errorf("unexpected event: %s", e)
+			}
+		}
+		if !found {
+			t.Fatalf("didn't see directory in:\n%s", events)
+		}
+	})
 }
 
 func TestWatchRecursive(t *testing.T) {
