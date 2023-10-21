@@ -80,10 +80,10 @@ import (
 // Sometimes it will send events for all times, sometimes it will send no
 // events, and often only for some files. 
 //
-// The default buffer size is 64K, which is the largest value that is guaranteed
-// to work with SMB filesystems. If you have many events in quick succession
-// this may not be enough, and you will have to use [WithBufferSize] to increase
-// the value.
+// The default ReadDirectoryChangesW() buffer size is 64K, which is the largest
+// value that is guaranteed to work with SMB filesystems. If you have many
+// events in quick succession this may not be enough, and you will have to use
+// [WithBufferSize] to increase the value.
 type Watcher struct {
 	// Events sends the filesystem change events.
 	//
@@ -238,6 +238,17 @@ func (w *watches) updatePath(path string, f func(*watch) (*watch, error)) error 
 
 // NewWatcher creates a new Watcher.
 func NewWatcher() (*Watcher, error) {
+	return NewBufferedWatcher(0)
+}
+
+// NewBufferedWatcher creates a new Watcher with a buffered [Events] channel.
+//
+// The main use-case for this is situations with a very large number of events
+// where the kernel buffer size can't be increased (e.g. due to lack of
+// permissions). An unbuffered Watcher will perform better for almost all use
+// cases, and whenever possible you will be better off increasing the kernel
+// buffers instead of adding a large userspace buffer.
+func NewBufferedWatcher(sz uint) (*Watcher, error) {
 	// Need to set nonblocking mode for SetDeadline to work, otherwise blocking
 	// I/O operations won't terminate on close.
 	fd, errno := unix.InotifyInit1(unix.IN_CLOEXEC | unix.IN_NONBLOCK)
@@ -249,7 +260,7 @@ func NewWatcher() (*Watcher, error) {
 		fd:          fd,
 		inotifyFile: os.NewFile(uintptr(fd), ""),
 		watches:     newWatches(),
-		Events:      make(chan Event),
+		Events:      make(chan Event, sz),
 		Errors:      make(chan error),
 		done:        make(chan struct{}),
 		doneResp:    make(chan struct{}),

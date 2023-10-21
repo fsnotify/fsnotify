@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -42,10 +43,36 @@ func (tt testCase) run(t *testing.T) {
 func eventSeparator() { time.Sleep(50 * time.Millisecond) }
 func waitForEvents()  { time.Sleep(500 * time.Millisecond) }
 
+// To test the buffered watcher we run the tests twice in the CI: once as "go
+// test" and once with FSNOTIFY_BUFFER set. This is a bit hacky, but saves
+// having to refactor a lot of this code. Besides, running the tests in the CI
+// more than once isn't a bad thing, since it helps catch flaky tests (should
+// probably run it even more).
+var testBuffered = func() uint {
+	s, ok := os.LookupEnv("FSNOTIFY_BUFFER")
+	if ok {
+		i, err := strconv.ParseUint(s, 0, 0)
+		if err != nil {
+			panic(fmt.Sprintf("FSNOTIFY_BUFFER: %s", err))
+		}
+		return uint(i)
+	}
+	return 0
+}()
+
 // newWatcher initializes an fsnotify Watcher instance.
 func newWatcher(t *testing.T, add ...string) *Watcher {
 	t.Helper()
-	w, err := NewWatcher()
+
+	var (
+		w   *Watcher
+		err error
+	)
+	if testBuffered > 0 {
+		w, err = NewBufferedWatcher(testBuffered)
+	} else {
+		w, err = NewWatcher()
+	}
 	if err != nil {
 		t.Fatalf("newWatcher: %s", err)
 	}
