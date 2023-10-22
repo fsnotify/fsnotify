@@ -80,7 +80,7 @@ EOF
 )
 
 newbuffered=$(<<EOF
-// NewBufferedWatcher creates a new Watcher with a buffered [Watcher.Events]
+// NewBufferedWatcher creates a new Watcher with a buffered Watcher.Events
 // channel.
 //
 // The main use case for this is situations with a very large number of events
@@ -211,11 +211,11 @@ EOF
 errors=$(<<EOF
 	// Errors sends any errors.
 	//
-	// [ErrEventOverflow] is used to indicate there are too many events:
+	// ErrEventOverflow is used to indicate there are too many events:
 	//
-	//  - inotify: there are too many queued events (fs.inotify.max_queued_events sysctl)
-	//  - windows: The buffer size is too small; [WithBufferSize] can be used to increase it.
-	//  - kqueue, fen: not used.
+	//  - inotify:      There are too many queued events (fs.inotify.max_queued_events sysctl)
+	//  - windows:      The buffer size is too small; WithBufferSize() can be used to increase it.
+	//  - kqueue, fen:  Not used.
 EOF
 )
 
