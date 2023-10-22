@@ -544,9 +544,9 @@ func TestWatchSymlink(t *testing.T) {
 
 		// Bug #277
 		{"277", func(t *testing.T, w *Watcher, tmp string) {
-			if runtime.GOOS == "netbsd" && isCI() {
-				t.Skip("fails in CI") // TODO
-			}
+			// if runtime.GOOS == "netbsd" && isCI() {
+			// 	t.Skip("fails in CI") // TODO
+			// }
 
 			// TODO: there is some strange fuckery going on if I use go test
 			// -count=2; the second test run has unix.Kqueue() in newKqueue()
