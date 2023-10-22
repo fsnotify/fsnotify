@@ -1,7 +1,7 @@
 fsnotify is a Go library to provide cross-platform filesystem notifications on
 Windows, Linux, macOS, BSD, and illumos.
 
-Go 1.16 or newer is required; the full documentation is at
+Go 1.17 or newer is required; the full documentation is at
 https://pkg.go.dev/github.com/fsnotify/fsnotify
 
 ---
@@ -13,7 +13,7 @@ Platform support:
 | inotify               | Linux      | Supported                                                                 |
 | kqueue                | BSD, macOS | Supported                                                                 |
 | ReadDirectoryChangesW | Windows    | Supported                                                                 |
-| FEN                   | illumos    | Supported in main branch                                                  |
+| FEN                   | illumos    | Supported                                                                 |
 | fanotify              | Linux 5.9+ | [Not yet](https://github.com/fsnotify/fsnotify/issues/114)                |
 | AHAFS                 | AIX        | [aix branch]; experimental due to lack of maintainer and test environment |
 | FSEvents              | macOS      | [Needs support in x/sys/unix][fsevents]                                   |

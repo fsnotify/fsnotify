@@ -2,6 +2,10 @@
 
 Unreleased
 ----------
+Nothing yet.
+
+1.7.0 - 2023-10-22
+------------------
 This version of fsnotify needs Go 1.17.
 
 ### Additions
@@ -45,20 +49,21 @@ This version of fsnotify needs Go 1.17.
 - kqueue: make sure events for all files are delivered properly when removing a
   watched directory ([#526])
 
-  Previously they would get sent with "" or "." as the path name.
+  Previously they would get sent with `""` (empty string) or `"."` as the path
+  name.
 
 - kqueue: don't emit spurious Create events for symbolic links ([#524])
 
   The link would get resolved but kqueue would "forget" it already saw the link
   itself, resulting on a Create for every Write event for the directory.
 
-- all: return ErrClosed on Add() when the watcher is closed ([#516])
+- all: return `ErrClosed` on `Add()` when the watcher is closed ([#516])
 
 - other: add `Watcher.Errors` and `Watcher.Events` to the no-op `Watcher` in
   `backend_other.go`, making it easier to use on unsupported platforms such as
   WASM, AIX, etc. ([#528])
 
-- other: use the backend_other.go no-op if the `appengine` build tag is set;
+- other: use the `backend_other.go` no-op if the `appengine` build tag is set;
   Google AppEngine forbids usage of the unsafe package so the inotify backend
   won't compile there.
 
@@ -67,6 +72,7 @@ This version of fsnotify needs Go 1.17.
 [#518]: https://github.com/fsnotify/fsnotify/pull/518
 [#520]: https://github.com/fsnotify/fsnotify/pull/520
 [#521]: https://github.com/fsnotify/fsnotify/pull/521
+[#524]: https://github.com/fsnotify/fsnotify/pull/524
 [#525]: https://github.com/fsnotify/fsnotify/pull/525
 [#526]: https://github.com/fsnotify/fsnotify/pull/526
 [#528]: https://github.com/fsnotify/fsnotify/pull/528
@@ -75,7 +81,7 @@ This version of fsnotify needs Go 1.17.
 [#572]: https://github.com/fsnotify/fsnotify/pull/572
 
 1.6.0 - 2022-10-13
--------------------
+------------------
 This version of fsnotify needs Go 1.16 (this was already the case since 1.5.1,
 but not documented). It also increases the minimum Linux version to 2.6.32.
 

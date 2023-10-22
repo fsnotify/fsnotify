@@ -120,8 +120,8 @@ type Watcher struct {
 	//   fsnotify.Chmod     Attributes were changed. On Linux this is also sent
 	//                      when a file is removed (or more accurately, when a
 	//                      link to an inode is removed). On kqueue it's sent
-	//                      and on kqueue when a file is truncated. On Windows
-	//                      it's never sent.
+	//                      when a file is truncated. On Windows it's never
+	//                      sent.
 	Events chan Event
 
 	// Errors sends any errors.
@@ -241,9 +241,10 @@ func NewWatcher() (*Watcher, error) {
 	return NewBufferedWatcher(0)
 }
 
-// NewBufferedWatcher creates a new Watcher with a buffered [Events] channel.
+// NewBufferedWatcher creates a new Watcher with a buffered [Watcher.Events]
+// channel.
 //
-// The main use-case for this is situations with a very large number of events
+// The main use case for this is situations with a very large number of events
 // where the kernel buffer size can't be increased (e.g. due to lack of
 // permissions). An unbuffered Watcher will perform better for almost all use
 // cases, and whenever possible you will be better off increasing the kernel
@@ -299,7 +300,7 @@ func (w *Watcher) isClosed() bool {
 	}
 }
 
-// Close removes all watches and closes the events channel.
+// Close removes all watches and closes the Events channel.
 func (w *Watcher) Close() error {
 	w.closeMu.Lock()
 	if w.isClosed() {
@@ -325,7 +326,7 @@ func (w *Watcher) Close() error {
 // Add starts monitoring the path for changes.
 //
 // A path can only be watched once; watching it more than once is a no-op and will
-// not return an error. Paths that do not yet exist on the filesystem cannot
+// not return an error. Paths that do not yet exist on the filesystem cannot be
 // watched.
 //
 // A watch will be automatically removed if the watched path is deleted or
@@ -337,7 +338,7 @@ func (w *Watcher) Close() error {
 //
 // Returns [ErrClosed] if [Watcher.Close] was called.
 //
-// See [AddWith] for a version that allows adding options.
+// See [Watcher.AddWith] for a version that allows adding options.
 //
 // # Watching directories
 //
@@ -356,12 +357,12 @@ func (w *Watcher) Close() error {
 // The upshot of this is that a power failure or crash won't leave a
 // half-written file.
 //
-// Watch the parent directory and use [Event.Name] to filter out files you're
-// not interested in. There is an example of this in [cmd/fsnotify/file.go].
+// Watch the parent directory and use Event.Name to filter out files you're not
+// interested in. There is an example of this in cmd/fsnotify/file.go.
 func (w *Watcher) Add(name string) error { return w.AddWith(name) }
 
-// AddWith is like [Add], but allows adding options. When using Add() the
-// defaults described below are used.
+// AddWith is like [Watcher.Add], but allows adding options. When using Add()
+// the defaults described below are used.
 //
 // Possible options are:
 //
@@ -441,7 +442,8 @@ func (w *Watcher) remove(name string) error {
 	return nil
 }
 
-// WatchList returns all paths added with [Add] (and are not yet removed).
+// WatchList returns all paths explicitly added with [Watcher.Add] (and are not
+// yet removed).
 //
 // Returns nil if [Watcher.Close] was called.
 func (w *Watcher) WatchList() []string {
