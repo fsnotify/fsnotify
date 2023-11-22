@@ -1,0 +1,7 @@
+{
+    "name": "fsnotify",
+    "version": "1.7.1",
+    "license": "BSD-3-Clause",
+    "description": "Functionality to detect file events",
+    "private": true
+}
