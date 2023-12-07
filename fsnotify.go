@@ -62,11 +62,21 @@ const (
 	Chmod
 )
 
-// Common errors that can be reported.
 var (
+	// ErrNonExistentWatch is used when Remove() is called on a path that's not
+	// added.
 	ErrNonExistentWatch = errors.New("fsnotify: can't remove non-existent watch")
-	ErrEventOverflow    = errors.New("fsnotify: queue or buffer overflow")
-	ErrClosed           = errors.New("fsnotify: watcher already closed")
+
+	// ErrClosed is used when trying to operate on a closed Watcher.
+	ErrClosed = errors.New("fsnotify: watcher already closed")
+
+	// ErrEventOverflow is reported from the Errors channel when there are too
+	// many events:
+	//
+	//  - inotify:      There are too many queued events (fs.inotify.max_queued_events sysctl)
+	//  - windows:      The buffer size is too small; WithBufferSize() can be used to increase it.
+	//  - kqueue, fen:  Not used.
+	ErrEventOverflow = errors.New("fsnotify: queue or buffer overflow")
 )
 
 func (o Op) String() string {
