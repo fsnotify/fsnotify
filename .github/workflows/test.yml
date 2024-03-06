@@ -1,21 +1,21 @@
-name: 'test'
+name: "test"
 on:
   pull_request:
-    paths: ['**.go', 'go.mod', '.github/workflows/*']
+    paths: ["**.go", "go.mod", ".github/workflows/*"]
   push:
-    branches: ['main', 'aix']
+    branches: ["main", "aix"]
 
 jobs:
   linux:
     strategy:
       fail-fast: false
       matrix:
-        os: ['ubuntu-latest']
-        go: ['1.17', '1.21']
+        os: ["ubuntu-latest"]
+        go: ["1.17", "1.21"]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: 'actions/checkout@v3'
-      - uses: 'actions/setup-go@v4'
+      - uses: "actions/checkout@v4"
+      - uses: "actions/setup-go@v5"
         with:
           go-version: ${{ matrix.go }}
       - name: test
@@ -27,12 +27,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ['windows-latest']
-        go: ['1.17', '1.21']
+        os: ["windows-latest"]
+        go: ["1.17", "1.21"]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: 'actions/checkout@v3'
-      - uses: 'actions/setup-go@v4'
+      - uses: "actions/checkout@v4"
+      - uses: "actions/setup-go@v5"
         with:
           go-version: ${{ matrix.go }}
       - name: test
@@ -43,10 +43,10 @@ jobs:
 
   # Test gccgo
   gcc:
-    runs-on: 'ubuntu-22.04'
-    name:    'test (ubuntu-22.04, gccgo 12.1)'
+    runs-on: "ubuntu-22.04"
+    name: "test (ubuntu-22.04, gccgo 12.1)"
     steps:
-      - uses: 'actions/checkout@v3'
+      - uses: "actions/checkout@v4"
       - name: test
         run: |
           sudo apt-get -y install gccgo-12
@@ -62,12 +62,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ['macos-11', 'macos-13']
-        go: ['1.21']
+        os: ["macos-11", "macos-13"]
+        go: ["1.21"]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: 'actions/checkout@v3'
-      - uses: 'actions/setup-go@v4'
+      - uses: "actions/checkout@v4"
+      - uses: "actions/setup-go@v5"
         with:
           go-version: ${{ matrix.go }}
       - name: test
@@ -83,14 +83,14 @@ jobs:
   #       much faster race detector, so maybe waiting until we have that is
   #       enough.
   openbsd:
-    runs-on: 'macos-12'
+    runs-on: "macos-12"
     timeout-minutes: 30
-    name: 'test (openbsd, 1.17)'
+    name: "test (openbsd, 1.17)"
     steps:
-      - uses: 'actions/checkout@v3'
-      - name: 'test (openbsd, 1.17)'
-        id:   'openbsd'
-        uses: 'vmactions/openbsd-vm@v0'
+      - uses: "actions/checkout@v4"
+      - name: "test (openbsd, 1.17)"
+        id: "openbsd"
+        uses: "vmactions/openbsd-vm@v0"
         with:
           prepare: pkg_add go
           run: |
@@ -104,10 +104,10 @@ jobs:
     timeout-minutes: 30
     name: test (netbsd, 1.20)
     steps:
-      - uses: 'actions/checkout@v3'
-      - name: 'test (netbsd, 1.20)'
-        id:   'netbsd'
-        uses: 'vmactions/netbsd-vm@v0'
+      - uses: "actions/checkout@v4"
+      - name: "test (netbsd, 1.20)"
+        id: "netbsd"
+        uses: "vmactions/netbsd-vm@v0"
         with:
           prepare: pkg_add go
           # TODO: no -race for the same reason as OpenBSD (the timing; it does run).
@@ -122,19 +122,19 @@ jobs:
     timeout-minutes: 30
     name: test (illumos, 1.19)
     steps:
-    - uses: 'actions/checkout@v3'
-    - name: 'test (illumos, 1.19)'
-      id:   'illumos'
-      uses: 'papertigers/illumos-vm@r38'
-      with:
-        prepare: |
-          pkg install go-119
-        run: |
-          useradd action
-          export GOCACHE=/tmp/go-cache
-          export GOPATH=/tmp/go-path
-          FSNOTIFY_BUFFER=4096 su action -c '/opt/ooce/go-1.19/bin/go test -parallel 1 ./...'
-                               su action -c '/opt/ooce/go-1.19/bin/go test -parallel 1 ./...'
+      - uses: "actions/checkout@v4"
+      - name: "test (illumos, 1.19)"
+        id: "illumos"
+        uses: "papertigers/illumos-vm@r38"
+        with:
+          prepare: |
+            pkg install go-119
+          run: |
+            useradd action
+            export GOCACHE=/tmp/go-cache
+            export GOPATH=/tmp/go-path
+            FSNOTIFY_BUFFER=4096 su action -c '/opt/ooce/go-1.19/bin/go test -parallel 1 ./...'
+                                 su action -c '/opt/ooce/go-1.19/bin/go test -parallel 1 ./...'
 
   # Older Debian 6, for old Linux kernels.
   debian6:
@@ -144,7 +144,7 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Cache Vagrant boxes
         uses: actions/cache@v3
@@ -155,12 +155,12 @@ jobs:
             ${{ runner.os }}-vagrant-
 
       - name: setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.19'
+          go-version: "1.19"
 
-      - name: 'test (debian6, 1.19)'
-        id:   'debian6'
+      - name: "test (debian6, 1.19)"
+        id: "debian6"
         run: |
           cp -f .github/workflows/Vagrantfile.debian6 Vagrantfile
           export GOOS=linux
