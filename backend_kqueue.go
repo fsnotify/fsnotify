@@ -709,7 +709,7 @@ func (w *Watcher) sendDirectoryChangeEvents(dir string) error {
 	return nil
 }
 
-// sendFileCreatedEvent sends a create event if the file isn't already being tracked.
+// sendFileCreatedEventIfNew sends a create event if the file isn't already being tracked.
 func (w *Watcher) sendFileCreatedEventIfNew(filePath string, fi os.FileInfo) (err error) {
 	w.mu.Lock()
 	_, doesExist := w.fileExists[filePath]
