@@ -329,7 +329,13 @@ func (w *Watcher) WatchList() []string {
 	entries := make([]string, 0, len(w.watches))
 	for _, entry := range w.watches {
 		for _, watchEntry := range entry {
-			entries = append(entries, watchEntry.path)
+			for name := range watchEntry.names {
+				entries = append(entries, filepath.Join(watchEntry.path, name))
+			}
+			// the directory itself is being watched
+			if watchEntry.mask != 0 {
+				entries = append(entries, watchEntry.path)
+			}
 		}
 	}
 

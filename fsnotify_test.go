@@ -1551,11 +1551,6 @@ func TestWatchStress(t *testing.T) {
 }
 
 func TestWatchList(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		// TODO: probably should I guess...
-		t.Skip("WatchList has always been broken on Windows and I don't feel like fixing it")
-	}
-
 	t.Parallel()
 
 	tmp := t.TempDir()
