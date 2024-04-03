@@ -504,15 +504,9 @@ func (w *Watcher) handleEvent(event *unix.PortEvent) error {
 	}
 
 	if events&unix.FILE_MODIFIED != 0 {
-		if fmode.IsDir() {
-			if watchedDir {
-				if err := w.updateDirectory(path); err != nil {
-					return err
-				}
-			} else {
-				if !w.sendEvent(path, Write) {
-					return nil
-				}
+		if fmode.IsDir() && watchedDir {
+			if err := w.updateDirectory(path); err != nil {
+				return err
 			}
 		} else {
 			if !w.sendEvent(path, Write) {
