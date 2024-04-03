@@ -73,7 +73,9 @@ var (
 	// ErrEventOverflow is reported from the Errors channel when there are too
 	// many events:
 	//
-	//  - inotify:      There are too many queued events (fs.inotify.max_queued_events sysctl)
+	//  - inotify:      inotify returns IN_Q_OVERFLOW – because there are too
+	//                  many queued events (the fs.inotify.max_queued_events
+	//                  sysctl can be used to increase this).
 	//  - windows:      The buffer size is too small; WithBufferSize() can be used to increase it.
 	//  - kqueue, fen:  Not used.
 	ErrEventOverflow = errors.New("fsnotify: queue or buffer overflow")
