@@ -2,7 +2,17 @@
 
 Unreleased
 ----------
-Nothing yet.
+
+### Additions
+
+### Changes and fixes
+
+- windows: fix behaviour of `WatchList()` ([#610])
+
+- kqueue: ignore events with Ident=0 ([#590])
+
+[#590]: https://github.com/fsnotify/fsnotify/pull/590
+[#610]: https://github.com/fsnotify/fsnotify/pull/610
 
 1.7.0 - 2023-10-22
 ------------------
