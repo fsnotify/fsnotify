@@ -8,16 +8,15 @@ on:
 jobs:
   staticcheck:
     name:    'staticcheck'
-    runs-on: ubuntu-latest
+    runs-on: 'ubuntu-latest'
     steps:
-      - id: install_go
-        uses: WillAbides/setup-go-faster@v1.7.0
+      - uses: 'actions/setup-go@v4'
         with:
-          go-version: "1.19.x"
+          go-version: '1.22'
 
-      - uses: actions/cache@v3
+      - uses: 'actions/cache@v4'
         with:
-          key: ${{ runner.os }}-staticcheck
+          key: '${{ runner.os }}-staticcheck'
           path: |
             ${{ runner.temp }}/staticcheck
             ${{ steps.install_go.outputs.GOCACHE || '' }}
