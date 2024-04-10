@@ -35,5 +35,6 @@ func Debug(name string, mask uint32) {
 			l = append(l, n.n)
 		}
 	}
-	fmt.Fprintf(os.Stderr, "%s  %-20s → %s\n", time.Now().Format("15:04:05.0000"), strings.Join(l, " | "), name)
+	fmt.Fprintf(os.Stderr, "FSNOTIFY_DEBUG: %s  %2d:%-65s → %q\n",
+		time.Now().Format("15:04:05.000000000"), mask, strings.Join(l, " | "), name)
 }

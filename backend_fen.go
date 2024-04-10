@@ -12,7 +12,9 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
+	"github.com/fsnotify/fsnotify/internal"
 	"golang.org/x/sys/unix"
 )
 
@@ -259,6 +261,10 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 	if w.port.PathIsWatched(name) {
 		return nil
 	}
+	if debug {
+		fmt.Fprintf(os.Stderr, "FSNOTIFY_DEBUG: %s  AddWith(%q)\n",
+			time.Now().Format("15:04:05.000000000"), name)
+	}
 
 	_ = getOptions(opts...)
 
@@ -307,6 +313,10 @@ func (w *Watcher) Remove(name string) error {
 	}
 	if !w.port.PathIsWatched(name) {
 		return fmt.Errorf("%w: %s", ErrNonExistentWatch, name)
+	}
+	if debug {
+		fmt.Fprintf(os.Stderr, "FSNOTIFY_DEBUG: %s  Remove(%q)\n",
+			time.Now().Format("15:04:05.000000000"), name)
 	}
 
 	// The user has expressed an intent. Immediately remove this name from
@@ -374,6 +384,10 @@ func (w *Watcher) readEvents() {
 					return
 				}
 				continue
+			}
+
+			if debug {
+				internal.Debug(pevent.Path, pevent.Events)
 			}
 
 			err = w.handleEvent(&pevent)

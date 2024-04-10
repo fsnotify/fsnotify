@@ -13,7 +13,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"time"
 
+	"github.com/fsnotify/fsnotify/internal"
 	"golang.org/x/sys/unix"
 )
 
@@ -309,6 +311,11 @@ func (w *Watcher) Add(name string) error { return w.AddWith(name) }
 //   - [WithBufferSize] sets the buffer size for the Windows backend; no-op on
 //     other platforms. The default is 64K (65536 bytes).
 func (w *Watcher) AddWith(name string, opts ...addOpt) error {
+	if debug {
+		fmt.Fprintf(os.Stderr, "FSNOTIFY_DEBUG: %s  AddWith(%q)\n",
+			time.Now().Format("15:04:05.000000000"), name)
+	}
+
 	_ = getOptions(opts...)
 
 	w.mu.Lock()
@@ -327,6 +334,10 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 //
 // Returns nil if [Watcher.Close] was called.
 func (w *Watcher) Remove(name string) error {
+	if debug {
+		fmt.Fprintf(os.Stderr, "FSNOTIFY_DEBUG: %s  Remove(%q)\n",
+			time.Now().Format("15:04:05.000000000"), name)
+	}
 	return w.remove(name, true)
 }
 
@@ -567,6 +578,10 @@ func (w *Watcher) readEvents() {
 			w.mu.Lock()
 			path, ok := w.paths[watchfd]
 			w.mu.Unlock()
+
+			if debug {
+				internal.Debug(path.name, &kevent)
+			}
 
 			// On macOS it seems that sometimes an event with Ident=0 is
 			// delivered, and no other flags/information beyond that, even
