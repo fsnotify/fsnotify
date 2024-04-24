@@ -198,6 +198,8 @@ func newKqueue() (kq int, closepipe [2]int, err error) {
 		unix.Close(kq)
 		return kq, closepipe, err
 	}
+	unix.CloseOnExec(closepipe[0])
+	unix.CloseOnExec(closepipe[1])
 
 	// Register changes to listen on the closepipe.
 	changes := make([]unix.Kevent_t, 1)
