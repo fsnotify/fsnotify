@@ -1,6 +1,10 @@
 //go:build solaris
 // +build solaris
 
+// FEN backend for illumos (supported) and Solaris (untested, but should work).
+//
+// See port_create(3c) etc. for docs. https://www.illumos.org/man/3C/port_create
+//
 // Note: the documentation on the Watcher type and methods is generated from
 // mkdoc.zsh
 
@@ -257,9 +261,6 @@ func (w *Watcher) Add(name string) error { return w.AddWith(name) }
 func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 	if w.isClosed() {
 		return ErrClosed
-	}
-	if w.port.PathIsWatched(name) {
-		return nil
 	}
 	if debug {
 		fmt.Fprintf(os.Stderr, "FSNOTIFY_DEBUG: %s  AddWith(%q)\n",
