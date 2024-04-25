@@ -285,10 +285,8 @@ func TestWatchWrite(t *testing.T) {
 			write  /file  # truncate
 			write  /file  # write
 
-			# Truncate is chmod on kqueue, except NetBSD where it's ignored, and
-			# on dragonfly it seems a write.
-			netbsd:
-				write  /file
+			# Truncate is chmod on kqueue, except dragonfly where it seems a
+			# write.
 			dragonfly:
 				write  /file
 				write  /file
