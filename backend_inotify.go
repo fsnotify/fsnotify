@@ -14,8 +14,10 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
+	"github.com/fsnotify/fsnotify/internal"
 	"golang.org/x/sys/unix"
 )
 
@@ -366,6 +368,10 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 	if w.isClosed() {
 		return ErrClosed
 	}
+	if debug {
+		fmt.Fprintf(os.Stderr, "FSNOTIFY_DEBUG: %s  AddWith(%q)\n",
+			time.Now().Format("15:04:05.000000000"), name)
+	}
 
 	name = filepath.Clean(name)
 	_ = getOptions(opts...)
@@ -409,6 +415,10 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 func (w *Watcher) Remove(name string) error {
 	if w.isClosed() {
 		return nil
+	}
+	if debug {
+		fmt.Fprintf(os.Stderr, "FSNOTIFY_DEBUG: %s  Remove(%q)\n",
+			time.Now().Format("15:04:05.000000000"), name)
 	}
 	return w.remove(filepath.Clean(name))
 }
@@ -523,6 +533,21 @@ func (w *Watcher) readEvents() {
 			// the "paths" map.
 			watch := w.watches.byWd(uint32(raw.Wd))
 
+			var name string
+			if watch != nil {
+				name = watch.path
+			}
+			if nameLen > 0 {
+				// Point "bytes" at the first byte of the filename
+				bytes := (*[unix.PathMax]byte)(unsafe.Pointer(&buf[offset+unix.SizeofInotifyEvent]))[:nameLen:nameLen]
+				// The filename is padded with NULL bytes. TrimRight() gets rid of those.
+				name += "/" + strings.TrimRight(string(bytes[0:nameLen]), "\000")
+			}
+
+			if debug {
+				internal.Debug(name, raw.Mask)
+			}
+
 			// inotify will automatically remove the watch on deletes; just need
 			// to clean our state here.
 			if watch != nil && mask&unix.IN_DELETE_SELF == unix.IN_DELETE_SELF {
@@ -538,17 +563,6 @@ func (w *Watcher) readEvents() {
 						return
 					}
 				}
-			}
-
-			var name string
-			if watch != nil {
-				name = watch.path
-			}
-			if nameLen > 0 {
-				// Point "bytes" at the first byte of the filename
-				bytes := (*[unix.PathMax]byte)(unsafe.Pointer(&buf[offset+unix.SizeofInotifyEvent]))[:nameLen:nameLen]
-				// The filename is padded with NULL bytes. TrimRight() gets rid of those.
-				name += "/" + strings.TrimRight(string(bytes[0:nameLen]), "\000")
 			}
 
 			event := w.newEvent(name, mask)

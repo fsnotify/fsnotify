@@ -5,14 +5,20 @@ Unreleased
 
 ### Additions
 
+- all: add `FSNOTIFY_DEBUG` to print events to stderr ([#619])
+
 ### Changes and fixes
 
 - windows: fix behaviour of `WatchList()` ([#610])
 
 - kqueue: ignore events with Ident=0 ([#590])
 
+- kqueue: set O_CLOEXEC to prevent passing file descriptors to children ([#617])
+
 [#590]: https://github.com/fsnotify/fsnotify/pull/590
 [#610]: https://github.com/fsnotify/fsnotify/pull/610
+[#617]: https://github.com/fsnotify/fsnotify/pull/617
+[#619]: https://github.com/fsnotify/fsnotify/pull/619
 
 1.7.0 - 2023-10-22
 ------------------

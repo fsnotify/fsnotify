@@ -3,15 +3,31 @@
 //
 // Currently supported systems:
 //
-//	Linux 2.6.32+    via inotify
-//	BSD, macOS       via kqueue
-//	Windows          via ReadDirectoryChangesW
-//	illumos          via FEN
+//   - Linux      via inotify
+//   - BSD, macOS via kqueue
+//   - Windows    via ReadDirectoryChangesW
+//   - illumos    via FEN
+//
+// # FSNOTIFY_DEBUG
+//
+// Set the FSNOTIFY_DEBUG environment variable to "1" to print debug messages to
+// stderr. This can be useful to track down some problems, especially in cases
+// where fsnotify is used as an indirect dependency.
+//
+// Every event will be printed as soon as there's something useful to print,
+// with as little processing from fsnotify.
+//
+// Example output:
+//
+//	FSNOTIFY_DEBUG: 11:34:23.633087586   256:IN_CREATE            → "/tmp/file-1"
+//	FSNOTIFY_DEBUG: 11:34:23.633202319     4:IN_ATTRIB            → "/tmp/file-1"
+//	FSNOTIFY_DEBUG: 11:34:28.989728764   512:IN_DELETE            → "/tmp/file-1"
 package fsnotify
 
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -121,6 +137,13 @@ type (
 		bufsize int
 	}
 )
+
+var debug = func() bool {
+	// Check for exactly "1" (rather than mere existence) so we can add
+	// options/flags in the future. I don't know if we ever want that, but it's
+	// nice to leave the option open.
+	return os.Getenv("FSNOTIFY_DEBUG") == "1"
+}()
 
 var defaultOpts = withOpts{
 	bufsize: 65536, // 64K

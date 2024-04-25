@@ -19,8 +19,10 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
+	"github.com/fsnotify/fsnotify/internal"
 	"golang.org/x/sys/windows"
 )
 
@@ -269,6 +271,10 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 	if w.isClosed() {
 		return ErrClosed
 	}
+	if debug {
+		fmt.Fprintf(os.Stderr, "FSNOTIFY_DEBUG: %s  AddWith(%q)\n",
+			time.Now().Format("15:04:05.000000000"), name)
+	}
 
 	with := getOptions(opts...)
 	if with.bufsize < 4096 {
@@ -300,6 +306,10 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 func (w *Watcher) Remove(name string) error {
 	if w.isClosed() {
 		return nil
+	}
+	if debug {
+		fmt.Fprintf(os.Stderr, "FSNOTIFY_DEBUG: %s  Remove(%q)\n",
+			time.Now().Format("15:04:05.000000000"), name)
 	}
 
 	in := &input{
@@ -732,6 +742,10 @@ func (w *Watcher) readEvents() {
 			sh.Cap = size
 			name := windows.UTF16ToString(buf)
 			fullname := filepath.Join(watch.path, name)
+
+			if debug {
+				internal.Debug(fullname, raw.Action)
+			}
 
 			var mask uint64
 			switch raw.Action {
