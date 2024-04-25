@@ -565,16 +565,24 @@ func (w *Watcher) readEvents() {
 				}
 			}
 
-			event := w.newEvent(name, mask)
+			skip := mask&unix.IN_IGNORED != 0
 
-			// Send the events that are not ignored on the events channel
-			if mask&unix.IN_IGNORED == 0 {
-				if !w.sendEvent(event) {
+			/// Skip if we're watching both this path and the parent; the parent
+			/// will already send a delete so no need to do it twice.
+			if !skip && mask&unix.IN_DELETE_SELF != 0 {
+				if _, ok := w.watches.path[filepath.Dir(watch.path)]; ok {
+					skip = true
+				}
+			}
+
+			/// Send the events that are not ignored on the events channel
+			if !skip {
+				if !w.sendEvent(w.newEvent(name, mask)) {
 					return
 				}
 			}
 
-			// Move to the next event in the buffer
+			/// Move to the next event in the buffer
 			offset += unix.SizeofInotifyEvent + nameLen
 		}
 	}

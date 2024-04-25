@@ -720,6 +720,41 @@ func TestWatchRemove(t *testing.T) {
 			write /dir2/subdir
 			write /dir2/subdir/file
 		`},
+
+		{"remove while also watching parent", func(t *testing.T, w *Watcher, tmp string) {
+			// TODO: kind of a mess on Windows; sends something along the lines
+			// of:
+			//
+			//   create    /abc
+			//   write     /abc
+			//   write     /abc/def
+			//   write     /abc/def
+			//   remove    /abc/def
+			//   write     /abc
+			//   remove    /abc
+			//   remove    /abc
+			//
+			// But sometimes there's one or two more or less.
+			if runtime.GOOS == "windows" {
+				t.Skip("flaky")
+			}
+			addWatch(t, w, tmp)
+			mkdirAll(t, tmp, "/abc/def/ghi")
+			addWatch(t, w, tmp, "/abc")
+			rmAll(t, tmp, "/abc")
+		}, `
+			create    /abc
+			remove    /abc/def
+			remove    /abc
+
+			# TODO: no remove events?
+			dragonfly:
+				create    /abc
+			# TODO: no event for /abc/def?
+			fen:
+				create    /abc
+				remove    /abc
+		`},
 	}
 
 	for _, tt := range tests {
