@@ -453,7 +453,7 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 
 		// Follow Symlinks.
 		if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
-			link, err := os.Readlink(name)
+			link, err := filepath.EvalSymlinks(name)
 			if err != nil {
 				// Return nil because Linux can add unresolvable symlinks to the
 				// watch list without problems, so maintain consistency with
