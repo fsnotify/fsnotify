@@ -1,0 +1,9 @@
+# Rename file in watched dir.
+
+echo asd >>/file
+watch /
+mv /file /renamed
+
+Output:
+	rename /file
+	create /renamed

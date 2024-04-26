@@ -1,5 +1,4 @@
 //go:build solaris
-// +build solaris
 
 // FEN backend for illumos (supported) and Solaris (untested, but should work).
 //

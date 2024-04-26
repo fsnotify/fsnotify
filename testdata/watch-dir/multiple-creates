@@ -1,0 +1,18 @@
+# Create a file, delete it, and re-create the same file again.
+
+watch /
+
+echo data >>/file
+rm /file
+
+touch /file        # Recreate the file
+echo data >>/file  # Modify
+echo data >>/file  # Modify
+
+Output:
+	create  /file
+	write   /file
+	remove  /file
+	create  /file
+	write   /file
+	write   /file

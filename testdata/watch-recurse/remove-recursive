@@ -1,0 +1,31 @@
+# Remove recursive.
+require recurse
+
+mkdir -p /dir1/subdir
+mkdir -p /dir2/subdir
+touch /dir1/subdir/file
+touch /dir2/subdir/file
+
+watch /dir1/...
+watch /dir2/...
+echo asd /dir1/subdir/file
+echo asd /dir2/subdir/file
+
+#if err := w.Remove(join(tmp, "dir1")); err != nil {
+#	t.Fatal(err)
+#}
+#if err := w.Remove(join(tmp, "dir2", "...")); err != nil {
+#	t.Fatal(err)
+#}
+#if w := w.WatchList(); len(w) != 0 {
+#	t.Errorf("WatchList not empty: %s", w)
+#}
+
+echo asd /dir1/subdir/file
+echo asd /dir2/subdir/file
+
+Output:
+	write /dir1/subdir
+	write /dir1/subdir/file
+	write /dir2/subdir
+	write /dir2/subdir/file
