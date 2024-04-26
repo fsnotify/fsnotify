@@ -160,6 +160,44 @@ func TestWatch(t *testing.T) {
 		}, `
 			write    /file
 		`},
+
+		{"watch subdir", func(t *testing.T, w *Watcher, tmp string) {
+			// This consistently works fine on my NetBSD 9.2/Go 1.17 machine,
+			// but not with NetBSD 10.0/Go 1.21 in the CI. I don't know if it's
+			// the version or something else – need to look into that.
+			//
+			// Fails with:
+			//
+			//   CREATE               "/dir"
+			//   CREATE               "/one"
+			//   WRITE                "/one"
+			//   REMOVE               "/one"
+			if runtime.GOOS == "netbsd" && isCI() {
+				t.Skip("fails in CI") // TODO
+			}
+			dir := join(tmp, "dir")
+
+			addWatch(t, w, tmp)
+			mkdir(t, dir)
+			addWatch(t, w, dir)
+
+			cat(t, "hello", tmp, "one")
+			cat(t, "hello", dir, "two")
+
+			rm(t, tmp, "one")
+			rm(t, dir, "two")
+		}, `
+			create   /dir
+
+			create   /one
+			write    /one
+
+			create   /dir/two
+			write    /dir/two
+
+			remove   /one
+			remove   /dir/two
+		`},
 	}
 
 	for _, tt := range tests {
@@ -750,10 +788,6 @@ func TestWatchRemove(t *testing.T) {
 			# TODO: no remove events?
 			dragonfly:
 				create    /abc
-			# TODO: no event for /abc/def?
-			fen:
-				create    /abc
-				remove    /abc
 		`},
 	}
 
