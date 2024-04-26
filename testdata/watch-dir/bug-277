@@ -1,17 +1,6 @@
 # https://github.com/fsnotify/fsnotify/issues/277
 require symlink
 
-# TODO: there is some strange fuckery going on if I use go test
-# -count=2; the second test run has unix.Kqueue() in newKqueue()
-# return 0, which is a very odd fd number, but the first event does
-# work (create /foo). After that we get EBADF (Bad file
-# descriptor).
-# 
-# This is *only* for this test, and *only* if we have the symlinks
-# below. kqueue(2) doesn't document returning fd 0.
-# 
-# This happens on all the BSDs, but *not* macOS.
-
 touch /file1
 touch /file2
 ln -s /file1 /link1
@@ -19,11 +8,11 @@ ln -s /file2 /link2
 
 watch /
 
-touch /foo
-rm /foo
-mkdir /apple
-mv /apple /pear
-rm -r /pear
+touch  /foo
+rm     /foo
+mkdir  /apple
+mv     /apple /pear
+rm -r  /pear
 
 Output:
 	create   /foo     # touch foo
@@ -33,11 +22,10 @@ Output:
 	create   /pear
 	remove   /pear    # rm -r pear
 
-	# TODO: the CREATE/REMOVE for /pear don't show; I'm not entirely
-	# sure why; sendDirectoryChangeEvents() doesn't pick it up. It does
-	# seem consistent though, both locally and in CI.
-	freebsd, netbsd, dragonfly:
-		create   /foo     # touch foo
-		remove   /foo     # rm foo
-		create   /apple   # mkdir apple
-		rename   /apple   # mv apple pear
+	dragonfly:
+		create   /foo
+		remove   /foo
+		create   /apple
+		rename   /apple
+		create   /pear
+		# No event for rm -r pear?
