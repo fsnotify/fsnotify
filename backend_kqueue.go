@@ -145,6 +145,7 @@ type (
 	watch struct {
 		wd       int
 		name     string
+		linkName string // In case of links; name is the target, and this is the link.
 		isDir    bool
 		dirFlags uint32
 	}
@@ -208,12 +209,12 @@ func (w *watches) addLink(path string, fd int) {
 	w.seen[path] = struct{}{}
 }
 
-func (w *watches) add(path string, fd int, isDir bool) {
+func (w *watches) add(path, linkPath string, fd int, isDir bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	w.path[path] = fd
-	w.wd[fd] = watch{wd: fd, name: path, isDir: isDir}
+	w.wd[fd] = watch{wd: fd, name: path, linkName: linkPath, isDir: isDir}
 
 	parent := filepath.Dir(path)
 	byDir, ok := w.byDir[parent]
@@ -569,6 +570,7 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 				return link, nil
 			}
 
+			info.linkName = name
 			name = link
 			fi, err = os.Lstat(name)
 			if err != nil {
@@ -600,7 +602,7 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 	}
 
 	if !alreadyWatching {
-		w.watches.add(name, info.wd, info.isDir)
+		w.watches.add(name, info.linkName, info.wd, info.isDir)
 	}
 
 	// Watch the directory if it has not been watched before, or if it was
@@ -678,7 +680,7 @@ func (w *Watcher) readEvents() {
 				continue
 			}
 
-			event := w.newEvent(path.name, mask)
+			event := w.newEvent(path.name, path.linkName, mask)
 
 			if event.Has(Rename) || event.Has(Remove) {
 				w.remove(event.Name, false)
@@ -733,8 +735,14 @@ func (w *Watcher) readEvents() {
 }
 
 // newEvent returns an platform-independent Event based on kqueue Fflags.
-func (w *Watcher) newEvent(name string, mask uint32) Event {
+func (w *Watcher) newEvent(name, linkName string, mask uint32) Event {
 	e := Event{Name: name}
+	if linkName != "" {
+		// If the user watched "/path/link" then emit events as "/path/link"
+		// rather than "/path/target".
+		e.Name = linkName
+	}
+
 	if mask&unix.NOTE_DELETE == unix.NOTE_DELETE {
 		e.Op |= Remove
 	}
