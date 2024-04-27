@@ -16,28 +16,6 @@ import (
 	"github.com/fsnotify/fsnotify/internal"
 )
 
-type testCase struct {
-	name string
-	ops  func(*testing.T, *Watcher, string)
-	want string
-}
-
-func (tt testCase) run(t *testing.T) {
-	t.Helper()
-	t.Run(tt.name, func(t *testing.T) {
-		t.Helper()
-		t.Parallel()
-		tmp := t.TempDir()
-
-		w := newCollector(t)
-		w.collect(t)
-
-		tt.ops(t, w.w, tmp)
-
-		cmpEvents(t, tmp, w.stop(t), newEvents(t, tt.want))
-	})
-}
-
 // We wait a little bit after most commands; gives the system some time to sync
 // things and makes things more consistent across platforms.
 func eventSeparator() { time.Sleep(50 * time.Millisecond) }
@@ -240,15 +218,29 @@ func mknod(t *testing.T, dev int, path ...string) {
 	}
 }
 
-// cat
-func cat(t *testing.T, data string, path ...string) {
+// echoAppend and echoTrunc
+func echoAppend(t *testing.T, data string, path ...string) { t.Helper(); echo(t, false, data, path...) }
+func echoTrunc(t *testing.T, data string, path ...string)  { t.Helper(); echo(t, true, data, path...) }
+func echo(t *testing.T, trunc bool, data string, path ...string) {
+	n := "echoAppend"
+	if trunc {
+		n = "echoTrunc"
+	}
 	t.Helper()
 	if len(path) < 1 {
-		t.Fatalf("cat: path must have at least one element: %s", path)
+		t.Fatalf("%s: path must have at least one element: %s", n, path)
 	}
 
 	err := func() error {
-		fp, err := os.OpenFile(join(path...), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		var (
+			fp  *os.File
+			err error
+		)
+		if trunc {
+			fp, err = os.Create(join(path...))
+		} else {
+			fp, err = os.OpenFile(join(path...), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		}
 		if err != nil {
 			return err
 		}
@@ -270,7 +262,7 @@ func cat(t *testing.T, data string, path ...string) {
 		return fp.Close()
 	}()
 	if err != nil {
-		t.Fatalf("cat(%q): %s", join(path...), err)
+		t.Fatalf("%s(%q): %s", n, join(path...), err)
 	}
 }
 
@@ -516,7 +508,7 @@ func newEvents(t *testing.T, s string) Events {
 
 		fields := strings.Fields(line)
 		if len(fields) < 2 {
-			if strings.ToUpper(fields[0]) == "EMPTY" {
+			if strings.ToUpper(fields[0]) == "EMPTY" || strings.ToLower(fields[0]) == "no-events" {
 				for _, g := range groups {
 					events[g] = Events{}
 				}
@@ -627,4 +619,231 @@ func recurseOnly(t *testing.T) {
 	default:
 		t.Skip("recursion not yet supported on " + runtime.GOOS)
 	}
+}
+
+func tmppath(tmp, s string) string {
+	if len(s) == 0 {
+		return ""
+	}
+	if !strings.HasPrefix(s, "./") {
+		return filepath.Join(tmp, s)
+	}
+	// Needed for creating relative links. Support that only with explicit "./"
+	// – otherwise too easy to forget leading "/" and create files outside of
+	// the tmp dir.
+	return s
+}
+
+type command struct {
+	line int
+	cmd  string
+	args []string
+}
+
+func parseScript(t *testing.T, in string) {
+	var (
+		lines = strings.Split(in, "\n")
+		cmds  = make([]command, 0, 8)
+		readW bool
+		want  string
+		tmp   = t.TempDir()
+	)
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || line[0] == '#' {
+			continue
+		}
+		if i := strings.IndexByte(line, '#'); i > -1 {
+			line = strings.TrimSpace(line[:i])
+		}
+		if line == "Output:" {
+			readW = true
+			continue
+		}
+		if readW {
+			want += line + "\n"
+			continue
+		}
+
+		cmd := command{line: i + 1, args: make([]string, 0, 4)}
+		var (
+			q   bool
+			cur = make([]rune, 0, 16)
+			app = func() {
+				if len(cur) == 0 {
+					return
+				}
+				if cmd.cmd == "" {
+					cmd.cmd = string(cur)
+				} else {
+					cmd.args = append(cmd.args, string(cur))
+				}
+				cur = cur[:0]
+			}
+		)
+		for _, c := range line {
+			switch c {
+			case ' ', '\t':
+				if q {
+					cur = append(cur, c)
+				} else {
+					app()
+				}
+			case '"', '\'': // '
+				q = !q
+			default:
+				cur = append(cur, c)
+			}
+		}
+		app()
+		cmds = append(cmds, cmd)
+	}
+
+	var (
+		do      = make([]func(), 0, len(cmds))
+		w       = newCollector(t)
+		mustArg = func(c command, n int) {
+			if len(c.args) != n {
+				t.Fatalf("line %d: %q requires exactly %d argument (have %d: %q)",
+					c.line, c.cmd, n, len(c.args), c.args)
+			}
+		}
+	)
+	for _, c := range cmds {
+		c := c
+		//fmt.Printf("line %d: %q  %q\n", c.line, c.cmd, c.args)
+		switch c.cmd {
+		case "skip", "require":
+			mustArg(c, 1)
+			switch c.args[0] {
+			case "symlink":
+				if !internal.HasPrivilegesForSymlink() {
+					t.Skipf("%s symlink: admin permissions required on Windows", c.cmd)
+				}
+			case "mkfifo":
+				if runtime.GOOS == "windows" {
+					t.Skip("No named pipes on Windows")
+				}
+			case "recurse":
+				recurseOnly(t)
+			case "mknod":
+				if runtime.GOOS == "windows" {
+					t.Skip("No device nodes on Windows")
+				}
+				if isKqueue() {
+					// Don't want to use os/user to check uid, since that pulls
+					// in cgo by default and stuff that uses fsnotify won't be
+					// statically linked by default.
+					t.Skip("needs root on BSD")
+				}
+				if isSolaris() {
+					t.Skip(`"mknod fails with "not owner"`)
+				}
+			case "windows":
+				if runtime.GOOS == "windows" {
+					t.Skip("Skipping on Windows")
+				}
+			case "netbsd":
+				if runtime.GOOS == "netbsd" {
+					t.Skip("Skipping on NetBSD")
+				}
+			default:
+				t.Fatalf("line %d: unknown %s reason: %q", c.line, c.cmd, c.args[0])
+			}
+		case "watch":
+			mustArg(c, 1)
+			do = append(do, func() { addWatch(t, w.w, tmppath(tmp, c.args[0])) })
+		case "touch":
+			mustArg(c, 1)
+			do = append(do, func() { touch(t, tmppath(tmp, c.args[0])) })
+		case "mkdir":
+			recur := false
+			if len(c.args) == 2 && c.args[0] == "-p" {
+				recur, c.args = true, c.args[1:]
+			}
+			mustArg(c, 1)
+			if recur {
+				do = append(do, func() { mkdirAll(t, tmppath(tmp, c.args[0])) })
+			} else {
+				do = append(do, func() { mkdir(t, tmppath(tmp, c.args[0])) })
+			}
+		case "ln":
+			mustArg(c, 3)
+			if c.args[0] != "-s" {
+				t.Fatalf("line %d: only ln -s is supported", c.line)
+			}
+			do = append(do, func() { symlink(t, tmppath(tmp, c.args[1]), tmppath(tmp, c.args[2])) })
+		case "mkfifo":
+			mustArg(c, 1)
+			do = append(do, func() { mkfifo(t, tmppath(tmp, c.args[0])) })
+		case "mknod":
+			mustArg(c, 2)
+			n, err := strconv.ParseInt(c.args[0], 10, 0)
+			if err != nil {
+				t.Fatalf("line %d: %s", c.line, err)
+			}
+			do = append(do, func() { mknod(t, int(n), tmppath(tmp, c.args[1])) })
+		case "mv":
+			mustArg(c, 2)
+			do = append(do, func() { mv(t, tmppath(tmp, c.args[0]), tmppath(tmp, c.args[1])) })
+		case "rm":
+			recur := false
+			if len(c.args) == 2 && c.args[0] == "-r" {
+				recur, c.args = true, c.args[1:]
+			}
+			mustArg(c, 1)
+			if recur {
+				do = append(do, func() { rmAll(t, tmppath(tmp, c.args[0])) })
+			} else {
+				do = append(do, func() { rm(t, tmppath(tmp, c.args[0])) })
+			}
+		case "chmod":
+			mustArg(c, 2)
+			n, err := strconv.ParseUint(c.args[0], 8, 32)
+			if err != nil {
+				t.Fatalf("line %d: %s", c.line, err)
+			}
+			do = append(do, func() { chmod(t, fs.FileMode(n), tmppath(tmp, c.args[1])) })
+		case "echo":
+			if len(c.args) < 2 || len(c.args) > 3 {
+				t.Fatalf("line %d: %q requires 2 or 3 arguments (have %d: %q)",
+					c.line, c.cmd, len(c.args), c.args)
+			}
+
+			var data, op, dst string
+			if len(c.args) == 2 { // echo foo >dst
+				data, op, dst = c.args[0], c.args[1][:1], c.args[1][1:]
+				if strings.HasPrefix(dst, ">") {
+					op, dst = op+dst[:1], dst[1:]
+				}
+			} else { // echo foo > dst
+				data, op, dst = c.args[0], c.args[1], c.args[2]
+			}
+
+			switch op {
+			case ">":
+				do = append(do, func() { echoTrunc(t, data, tmppath(tmp, dst)) })
+			case ">>":
+				do = append(do, func() { echoAppend(t, data, tmppath(tmp, dst)) })
+			default:
+				t.Fatalf("line %d: echo requires > (truncate) or >> (append): echo data >file", c.line)
+			}
+		case "sleep":
+			mustArg(c, 1)
+			n, err := strconv.ParseInt(strings.TrimRight(c.args[0], "ms"), 10, 0)
+			if err != nil {
+				t.Fatalf("line %d: %s", c.line, err)
+			}
+			do = append(do, func() { time.Sleep(time.Duration(n) * time.Millisecond) })
+		default:
+			t.Errorf("line %d: unknown command %q", c.line, c.cmd)
+		}
+	}
+
+	w.collect(t)
+	for _, d := range do {
+		d()
+	}
+	ev := w.stop(t)
+	cmpEvents(t, tmp, ev, newEvents(t, want))
 }

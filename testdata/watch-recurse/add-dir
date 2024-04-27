@@ -1,0 +1,19 @@
+# Add directory
+require recurse
+
+mkdir -p /one/two/three/four
+watch /...
+
+mkdir -p /one/two/new/dir
+touch /one/two/new/file
+touch /one/two/new/dir/file
+
+Output:
+	write     /one/two                # mkdir -p one/two/new/dir
+	create    /one/two/new
+	create    /one/two/new/dir
+
+	write     /one/two/new            # touch one/two/new/file
+	create    /one/two/new/file
+
+	create    /one/two/new/dir/file   # touch one/two/new/dir/file

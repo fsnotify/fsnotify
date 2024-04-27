@@ -1,5 +1,4 @@
 //go:build !windows && !darwin && !freebsd
-// +build !windows,!darwin,!freebsd
 
 package internal
 

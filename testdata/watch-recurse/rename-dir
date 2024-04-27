@@ -1,0 +1,19 @@
+# Rename nested directory
+require recurse
+
+mkdir -p /one/two/three/four
+watch /...
+
+mv /one /one-rename
+touch /one-rename/file
+touch /one-rename/two/three/file
+
+Output:
+	rename     /one                        # mv one one-rename
+	create     /one-rename
+
+	write      /one-rename                 # touch one-rename/file
+	create     /one-rename/file
+
+	write      /one-rename/two/three       # touch one-rename/two/three/file
+	create     /one-rename/two/three/file

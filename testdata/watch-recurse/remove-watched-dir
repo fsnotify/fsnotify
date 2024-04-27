@@ -1,0 +1,43 @@
+# Remove watched directory
+require recurse
+
+mkdir /watch
+touch /watch/a
+touch /watch/b
+touch /watch/c
+touch /watch/d
+touch /watch/e
+touch /watch/f
+touch /watch/g
+
+mkdir /watch/h
+mkdir /watch/h/a
+mkdir /watch/i
+mkdir /watch/i/a
+mkdir /watch/j
+mkdir /watch/j/a
+
+watch /watch/...
+rm -r /watch
+
+Output:
+	remove      /a
+	remove      /b
+	remove      /c
+	remove      /d
+	remove      /e
+	remove      /f
+	remove      /g
+	write       /h
+	remove      /h/a
+	write       /h
+	remove      /h
+	write       /i
+	remove      /i/a
+	write       /i
+	remove      /i
+	write       /j
+	remove      /j/a
+	write       /j
+	remove      /j
+	remove      /
