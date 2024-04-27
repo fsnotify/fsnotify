@@ -1,19 +1,29 @@
-# Add directory
+# Add directory to a recursively watched dir.
 require recurse
 
-mkdir -p /one/two/three/four
+mkdir -p /sub/dir
 watch /...
 
-mkdir -p /one/two/new/dir
-touch /one/two/new/file
-touch /one/two/new/dir/file
+mkdir -p /sub/dir/newdir
+touch /sub/dir/newdir/file
+rm /sub/dir/newdir/file
+
+# Re-create file.
+touch /sub/dir/newdir/file
+rm /sub/dir/newdir/file
+
+# Write to file.
+echo foo >/sub/dir/newdir/file
 
 Output:
-	write     /one/two                # mkdir -p one/two/new/dir
-	create    /one/two/new
-	create    /one/two/new/dir
+	create   /sub/dir/newdir
+	create   /sub/dir/newdir/file
+	remove   /sub/dir/newdir/file
 
-	write     /one/two/new            # touch one/two/new/file
-	create    /one/two/new/file
+	write    /sub/dir/newdir
+	create   /sub/dir/newdir/file
+	remove   /sub/dir/newdir/file
 
-	create    /one/two/new/dir/file   # touch one/two/new/dir/file
+	write    /sub/dir/newdir
+	create   /sub/dir/newdir/file
+	write    /sub/dir/newdir/file

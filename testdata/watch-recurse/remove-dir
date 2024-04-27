@@ -1,22 +1,20 @@
 # Remove nested directory
 require recurse
 
-mkdir -p one/two/three/four
+mkdir -p /sub/dir
 watch /...
 
-echo asd >/one/two/three/file.txt
-rm -r one/two
+echo asd >/sub/dir/file
+rm -r /sub
 
 Output:
-	write    /one/two/three            # echo asd >/one/two/three/file.txt
-	create   /one/two/three/file.txt
-	write    /one/two/three/file.txt
+	create   /sub/dir/file
+	write    /sub/dir/file
 
-	write    /one/two                  # rm -r one/two
-	write    /one/two/three
-	remove   /one/two/three/file.txt
-	remove   /one/two/three/four
-	write    /one/two/three
-	remove   /one/two/three
-	write    /one/two
-	remove   /one/two
+	write  /sub
+	write  /sub/dir
+	remove /sub/dir/file
+	write  /sub/dir
+	remove /sub/dir
+	write  /sub
+	remove /sub

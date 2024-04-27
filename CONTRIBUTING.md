@@ -73,6 +73,8 @@ with `nowait` to skip this:
 ### Supported commands
 
     watch path          # Watch the path, reporting events for it.
+    unwatch path        # Stop watching the path.
+    watchlist n         # Assert watchlist length.
 
     touch path
     mkdir [-p] dir

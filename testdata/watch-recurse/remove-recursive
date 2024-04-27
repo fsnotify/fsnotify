@@ -8,21 +8,16 @@ touch /dir2/subdir/file
 
 watch /dir1/...
 watch /dir2/...
-echo asd /dir1/subdir/file
-echo asd /dir2/subdir/file
+echo asd >>/dir1/subdir/file
+echo asd >>/dir2/subdir/file
 
-#if err := w.Remove(join(tmp, "dir1")); err != nil {
-#	t.Fatal(err)
-#}
-#if err := w.Remove(join(tmp, "dir2", "...")); err != nil {
-#	t.Fatal(err)
-#}
-#if w := w.WatchList(); len(w) != 0 {
-#	t.Errorf("WatchList not empty: %s", w)
-#}
+watchlist 2
+unwatch /dir1
+unwatch /dir2
+watchlist 0
 
-echo asd /dir1/subdir/file
-echo asd /dir2/subdir/file
+echo asd >>/dir1/subdir/file
+echo asd >>/dir2/subdir/file
 
 Output:
 	write /dir1/subdir
