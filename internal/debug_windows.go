@@ -29,11 +29,18 @@ func Debug(name string, mask uint32) {
 		{"FILE_ACTION_RENAMED_NEW_NAME", windows.FILE_ACTION_RENAMED_NEW_NAME},
 	}
 
-	var l []string
+	var (
+		l       []string
+		unknown = mask
+	)
 	for _, n := range names {
 		if mask&n.m == n.m {
 			l = append(l, n.n)
+			unknown ^= n.m
 		}
+	}
+	if unknown > 0 {
+		l = append(l, fmt.Sprintf("0x%x", unknown))
 	}
 	fmt.Fprintf(os.Stderr, "FSNOTIFY_DEBUG: %s  %2d:%-65s → %q\n",
 		time.Now().Format("15:04:05.000000000"), mask, strings.Join(l, " | "), name)
