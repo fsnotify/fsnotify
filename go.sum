@@ -1,2 +1,5 @@
+github.com/power-devops/ahafs v0.1.4 h1:XwbiD4LcPOYg7sSbQfAgCUm2/WZcxu1xLah3MCU2vak=
+github.com/power-devops/ahafs v0.1.4/go.mod h1:Lkmg99cqQuIEYNOenc26wcNa7QnijeCGRbu+PAyXZEM=
+golang.org/x/sys v0.0.0-20210218155724-8ebf48af031b/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.13.0 h1:Af8nKPmuFypiUBjVoU9V20FiaFXOcuZI21p0ycVYYGE=
 golang.org/x/sys v0.13.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
