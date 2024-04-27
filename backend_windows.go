@@ -194,12 +194,15 @@ func (w *Watcher) sendEvent(name string, mask uint64) bool {
 
 // Returns true if the error was sent, or false if watcher is closed.
 func (w *Watcher) sendError(err error) bool {
+	if err == nil {
+		return true
+	}
 	select {
 	case w.Errors <- err:
 		return true
 	case <-w.quit:
+		return false
 	}
-	return false
 }
 
 // Close removes all watches and closes the Events channel.

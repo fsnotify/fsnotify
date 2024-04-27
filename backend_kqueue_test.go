@@ -24,29 +24,29 @@ func TestRemoveState(t *testing.T) {
 	check := func(wantUser, wantTotal int) {
 		t.Helper()
 
-		if len(w.watches) != wantTotal {
+		if len(w.watches.path) != wantTotal {
 			var d []string
-			for k, v := range w.watches {
+			for k, v := range w.watches.path {
 				d = append(d, fmt.Sprintf("%#v = %#v", k, v))
 			}
-			t.Errorf("unexpected number of entries in w.watches (have %d, want %d):\n%v",
-				len(w.watches), wantTotal, strings.Join(d, "\n"))
+			t.Errorf("unexpected number of entries in w.watches.path (have %d, want %d):\n%v",
+				len(w.watches.path), wantTotal, strings.Join(d, "\n"))
 		}
-		if len(w.paths) != wantTotal {
+		if len(w.watches.wd) != wantTotal {
 			var d []string
-			for k, v := range w.paths {
+			for k, v := range w.watches.wd {
 				d = append(d, fmt.Sprintf("%#v = %#v", k, v))
 			}
-			t.Errorf("unexpected number of entries in w.paths (have %d, want %d):\n%v",
-				len(w.paths), wantTotal, strings.Join(d, "\n"))
+			t.Errorf("unexpected number of entries in w.watches.wd (have %d, want %d):\n%v",
+				len(w.watches.wd), wantTotal, strings.Join(d, "\n"))
 		}
-		if len(w.userWatches) != wantUser {
+		if len(w.watches.byUser) != wantUser {
 			var d []string
-			for k, v := range w.userWatches {
+			for k, v := range w.watches.byUser {
 				d = append(d, fmt.Sprintf("%#v = %#v", k, v))
 			}
-			t.Errorf("unexpected number of entries in w.userWatches (have %d, want %d):\n%v",
-				len(w.userWatches), wantUser, strings.Join(d, "\n"))
+			t.Errorf("unexpected number of entries in w.watches.byUser (have %d, want %d):\n%v",
+				len(w.watches.byUser), wantUser, strings.Join(d, "\n"))
 		}
 	}
 
@@ -66,30 +66,22 @@ func TestRemoveState(t *testing.T) {
 	// of files watches. Just make sure they're 0 after everything is removed.
 	{
 		want := 0
-		if len(w.watchesByDir) != want {
+		if len(w.watches.byDir) != want {
 			var d []string
-			for k, v := range w.watchesByDir {
+			for k, v := range w.watches.byDir {
 				d = append(d, fmt.Sprintf("%#v = %#v", k, v))
 			}
-			t.Errorf("unexpected number of entries in w.watchesByDir (have %d, want %d):\n%v",
-				len(w.watchesByDir), want, strings.Join(d, "\n"))
-		}
-		if len(w.dirFlags) != want {
-			var d []string
-			for k, v := range w.dirFlags {
-				d = append(d, fmt.Sprintf("%#v = %#v", k, v))
-			}
-			t.Errorf("unexpected number of entries in w.dirFlags (have %d, want %d):\n%v",
-				len(w.dirFlags), want, strings.Join(d, "\n"))
+			t.Errorf("unexpected number of entries in w.watches.byDir (have %d, want %d):\n%v",
+				len(w.watches.byDir), want, strings.Join(d, "\n"))
 		}
 
-		if len(w.fileExists) != want {
+		if len(w.watches.seen) != want {
 			var d []string
-			for k, v := range w.fileExists {
+			for k, v := range w.watches.seen {
 				d = append(d, fmt.Sprintf("%#v = %#v", k, v))
 			}
-			t.Errorf("unexpected number of entries in w.fileExists (have %d, want %d):\n%v",
-				len(w.fileExists), want, strings.Join(d, "\n"))
+			t.Errorf("unexpected number of entries in w.watches.seen (have %d, want %d):\n%v",
+				len(w.watches.seen), want, strings.Join(d, "\n"))
 		}
 	}
 }

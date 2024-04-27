@@ -17,11 +17,14 @@ Unreleased
 
 - inotify: don't send event for IN_DELETE_SELF when also watching the parent ([#620])
 
+- fen: allow watching subdirectories of watched directories ([#621])
+
 [#590]: https://github.com/fsnotify/fsnotify/pull/590
 [#610]: https://github.com/fsnotify/fsnotify/pull/610
 [#617]: https://github.com/fsnotify/fsnotify/pull/617
 [#619]: https://github.com/fsnotify/fsnotify/pull/619
 [#620]: https://github.com/fsnotify/fsnotify/pull/620
+[#621]: https://github.com/fsnotify/fsnotify/pull/621
 
 1.7.0 - 2023-10-22
 ------------------

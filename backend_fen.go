@@ -172,21 +172,24 @@ func NewBufferedWatcher(sz uint) (*Watcher, error) {
 // was put in the channel successfully and false if the watcher has been closed.
 func (w *Watcher) sendEvent(name string, op Op) (sent bool) {
 	select {
-	case w.Events <- Event{Name: name, Op: op}:
-		return true
 	case <-w.done:
 		return false
+	case w.Events <- Event{Name: name, Op: op}:
+		return true
 	}
 }
 
 // sendError attempts to send an error to the user, returning true if the error
 // was put in the channel successfully and false if the watcher has been closed.
 func (w *Watcher) sendError(err error) (sent bool) {
-	select {
-	case w.Errors <- err:
+	if err == nil {
 		return true
+	}
+	select {
 	case <-w.done:
 		return false
+	case w.Errors <- err:
+		return true
 	}
 }
 
@@ -391,10 +394,8 @@ func (w *Watcher) readEvents() {
 			}
 
 			err = w.handleEvent(&pevent)
-			if err != nil {
-				if !w.sendError(err) {
-					return
-				}
+			if !w.sendError(err) {
+				return
 			}
 		}
 	}
@@ -565,10 +566,8 @@ func (w *Watcher) updateDirectory(path string) error {
 			return err
 		}
 		err = w.associateFile(path, finfo, false)
-		if err != nil {
-			if !w.sendError(err) {
-				return nil
-			}
+		if !w.sendError(err) {
+			return nil
 		}
 		if !w.sendEvent(path, Create) {
 			return nil

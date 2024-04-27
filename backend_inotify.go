@@ -134,7 +134,7 @@ type Watcher struct {
 	inotifyFile *os.File
 	watches     *watches
 	done        chan struct{} // Channel for sending a "quit message" to the reader goroutine
-	closeMu     sync.Mutex
+	doneMu      sync.Mutex
 	doneResp    chan struct{} // Channel to respond to Close
 }
 
@@ -269,20 +269,23 @@ func NewBufferedWatcher(sz uint) (*Watcher, error) {
 // Returns true if the event was sent, or false if watcher is closed.
 func (w *Watcher) sendEvent(e Event) bool {
 	select {
-	case w.Events <- e:
-		return true
 	case <-w.done:
 		return false
+	case w.Events <- e:
+		return true
 	}
 }
 
 // Returns true if the error was sent, or false if watcher is closed.
 func (w *Watcher) sendError(err error) bool {
-	select {
-	case w.Errors <- err:
+	if err == nil {
 		return true
+	}
+	select {
 	case <-w.done:
 		return false
+	case w.Errors <- err:
+		return true
 	}
 }
 
@@ -297,13 +300,13 @@ func (w *Watcher) isClosed() bool {
 
 // Close removes all watches and closes the Events channel.
 func (w *Watcher) Close() error {
-	w.closeMu.Lock()
+	w.doneMu.Lock()
 	if w.isClosed() {
-		w.closeMu.Unlock()
+		w.doneMu.Unlock()
 		return nil
 	}
 	close(w.done)
-	w.closeMu.Unlock()
+	w.doneMu.Unlock()
 
 	// Causes any blocking reads to return with an error, provided the file
 	// still supports deadline operations.

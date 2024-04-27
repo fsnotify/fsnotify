@@ -126,22 +126,163 @@ type Watcher struct {
 	// Errors sends any errors.
 	Errors chan error
 
-	done         chan struct{}
-	kq           int                         // File descriptor (as returned by the kqueue() syscall).
-	closepipe    [2]int                      // Pipe used for closing.
-	mu           sync.Mutex                  // Protects access to watcher data
-	watches      map[string]int              // Watched file descriptors (key: path).
-	watchesByDir map[string]map[int]struct{} // Watched file descriptors indexed by the parent directory (key: dirname(path)).
-	userWatches  map[string]struct{}         // Watches added with Watcher.Add()
-	dirFlags     map[string]uint32           // Watched directories to fflags used in kqueue.
-	paths        map[int]pathInfo            // File descriptors to path names for processing kqueue events.
-	fileExists   map[string]struct{}         // Keep track of if we know this file exists (to stop duplicate create events).
-	isClosed     bool                        // Set to true when Close() is first called
+	kq        int    // File descriptor (as returned by the kqueue() syscall).
+	closepipe [2]int // Pipe used for closing kq.
+	watches   *watches
+	done      chan struct{}
+	doneMu    sync.Mutex
 }
 
-type pathInfo struct {
-	name  string
-	isDir bool
+type (
+	watches struct {
+		mu     sync.RWMutex
+		wd     map[int]watch               // wd → watch
+		path   map[string]int              // pathname → wd
+		byDir  map[string]map[int]struct{} // dirname(path) → wd
+		seen   map[string]struct{}         // Keep track of if we know this file exists.
+		byUser map[string]struct{}         // Watches added with Watcher.Add()
+	}
+	watch struct {
+		wd       int
+		name     string
+		isDir    bool
+		dirFlags uint32
+	}
+)
+
+func newWatches() *watches {
+	return &watches{
+		wd:     make(map[int]watch),
+		path:   make(map[string]int),
+		byDir:  make(map[string]map[int]struct{}),
+		seen:   make(map[string]struct{}),
+		byUser: make(map[string]struct{}),
+	}
+}
+
+func (w *watches) listPaths(userOnly bool) []string {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	if userOnly {
+		l := make([]string, 0, len(w.byUser))
+		for p := range w.byUser {
+			l = append(l, p)
+		}
+		return l
+	}
+
+	l := make([]string, 0, len(w.path))
+	for p := range w.path {
+		l = append(l, p)
+	}
+	return l
+}
+
+func (w *watches) watchesInDir(path string) []string {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	l := make([]string, 0, 4)
+	for fd := range w.byDir[path] {
+		info := w.wd[fd]
+		if _, ok := w.byUser[info.name]; !ok {
+			l = append(l, info.name)
+		}
+	}
+	return l
+}
+
+// Mark path as added by the user.
+func (w *watches) addUserWatch(path string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.byUser[path] = struct{}{}
+}
+
+func (w *watches) addLink(path string, fd int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.path[path] = fd
+	w.seen[path] = struct{}{}
+}
+
+func (w *watches) add(path string, fd int, isDir bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.path[path] = fd
+	w.wd[fd] = watch{wd: fd, name: path, isDir: isDir}
+
+	parent := filepath.Dir(path)
+	byDir, ok := w.byDir[parent]
+	if !ok {
+		byDir = make(map[int]struct{}, 1)
+		w.byDir[parent] = byDir
+	}
+	byDir[fd] = struct{}{}
+}
+
+func (w *watches) byWd(fd int) (watch, bool) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	info, ok := w.wd[fd]
+	return info, ok
+}
+
+func (w *watches) byPath(path string) (watch, bool) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	info, ok := w.wd[w.path[path]]
+	return info, ok
+}
+
+func (w *watches) updateDirFlags(path string, flags uint32) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	fd := w.path[path]
+	info := w.wd[fd]
+	info.dirFlags = flags
+	w.wd[fd] = info
+}
+
+func (w *watches) remove(fd int, path string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	isDir := w.wd[fd].isDir
+	delete(w.path, path)
+	delete(w.byUser, path)
+
+	parent := filepath.Dir(path)
+	delete(w.byDir[parent], fd)
+
+	if len(w.byDir[parent]) == 0 {
+		delete(w.byDir, parent)
+	}
+
+	delete(w.wd, fd)
+	delete(w.seen, path)
+	return isDir
+}
+
+func (w *watches) markSeen(path string, exists bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if exists {
+		w.seen[path] = struct{}{}
+	} else {
+		delete(w.seen, path)
+	}
+}
+
+func (w *watches) seenBefore(path string) bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	_, ok := w.seen[path]
+	return ok
 }
 
 // NewWatcher creates a new Watcher.
@@ -164,17 +305,12 @@ func NewBufferedWatcher(sz uint) (*Watcher, error) {
 	}
 
 	w := &Watcher{
-		kq:           kq,
-		closepipe:    closepipe,
-		watches:      make(map[string]int),
-		watchesByDir: make(map[string]map[int]struct{}),
-		dirFlags:     make(map[string]uint32),
-		paths:        make(map[int]pathInfo),
-		fileExists:   make(map[string]struct{}),
-		userWatches:  make(map[string]struct{}),
-		Events:       make(chan Event, sz),
-		Errors:       make(chan error),
-		done:         make(chan struct{}),
+		kq:        kq,
+		closepipe: closepipe,
+		Events:    make(chan Event, sz),
+		Errors:    make(chan error),
+		done:      make(chan struct{}),
+		watches:   newWatches(),
 	}
 
 	go w.readEvents()
@@ -221,46 +357,52 @@ func newKqueue() (kq int, closepipe [2]int, err error) {
 // Returns true if the event was sent, or false if watcher is closed.
 func (w *Watcher) sendEvent(e Event) bool {
 	select {
-	case w.Events <- e:
-		return true
 	case <-w.done:
 		return false
+	case w.Events <- e:
+		return true
 	}
 }
 
 // Returns true if the error was sent, or false if watcher is closed.
 func (w *Watcher) sendError(err error) bool {
+	if err == nil {
+		return true
+	}
 	select {
+	case <-w.done:
+		return false
 	case w.Errors <- err:
 		return true
+	}
+}
+
+func (w *Watcher) isClosed() bool {
+	select {
 	case <-w.done:
+		return true
+	default:
 		return false
 	}
 }
 
 // Close removes all watches and closes the Events channel.
 func (w *Watcher) Close() error {
-	w.mu.Lock()
-	if w.isClosed {
-		w.mu.Unlock()
+	w.doneMu.Lock()
+	if w.isClosed() {
+		w.doneMu.Unlock()
 		return nil
 	}
-	w.isClosed = true
+	close(w.done)
+	w.doneMu.Unlock()
 
-	// copy paths to remove while locked
-	pathsToRemove := make([]string, 0, len(w.watches))
-	for name := range w.watches {
-		pathsToRemove = append(pathsToRemove, name)
-	}
-	w.mu.Unlock() // Unlock before calling Remove, which also locks
+	pathsToRemove := w.watches.listPaths(false)
 	for _, name := range pathsToRemove {
 		w.Remove(name)
 	}
 
 	// Send "quit" message to the reader goroutine.
 	unix.Close(w.closepipe[1])
-	close(w.done)
-
 	return nil
 }
 
@@ -317,9 +459,7 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 
 	_ = getOptions(opts...)
 
-	w.mu.Lock()
-	w.userWatches[name] = struct{}{}
-	w.mu.Unlock()
+	w.watches.addUserWatch(name)
 	_, err := w.addWatch(name, noteAllEvents)
 	return err
 }
@@ -341,53 +481,28 @@ func (w *Watcher) Remove(name string) error {
 }
 
 func (w *Watcher) remove(name string, unwatchFiles bool) error {
-	name = filepath.Clean(name)
-	w.mu.Lock()
-	if w.isClosed {
-		w.mu.Unlock()
+	if w.isClosed() {
 		return nil
 	}
-	watchfd, ok := w.watches[name]
-	w.mu.Unlock()
+
+	name = filepath.Clean(name)
+	info, ok := w.watches.byPath(name)
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrNonExistentWatch, name)
 	}
 
-	err := w.register([]int{watchfd}, unix.EV_DELETE, 0)
+	err := w.register([]int{info.wd}, unix.EV_DELETE, 0)
 	if err != nil {
 		return err
 	}
 
-	unix.Close(watchfd)
+	unix.Close(info.wd)
 
-	w.mu.Lock()
-	isDir := w.paths[watchfd].isDir
-	delete(w.watches, name)
-	delete(w.userWatches, name)
-
-	parentName := filepath.Dir(name)
-	delete(w.watchesByDir[parentName], watchfd)
-
-	if len(w.watchesByDir[parentName]) == 0 {
-		delete(w.watchesByDir, parentName)
-	}
-
-	delete(w.paths, watchfd)
-	delete(w.dirFlags, name)
-	delete(w.fileExists, name)
-	w.mu.Unlock()
+	isDir := w.watches.remove(info.wd, name)
 
 	// Find all watched paths that are in this directory that are not external.
 	if unwatchFiles && isDir {
-		var pathsToRemove []string
-		w.mu.Lock()
-		for fd := range w.watchesByDir[name] {
-			path := w.paths[fd]
-			if _, ok := w.userWatches[path.name]; !ok {
-				pathsToRemove = append(pathsToRemove, path.name)
-			}
-		}
-		w.mu.Unlock()
+		pathsToRemove := w.watches.watchesInDir(name)
 		for _, name := range pathsToRemove {
 			// Since these are internal, not much sense in propagating error to
 			// the user, as that will just confuse them with an error about a
@@ -403,18 +518,10 @@ func (w *Watcher) remove(name string, unwatchFiles bool) error {
 //
 // Returns nil if [Watcher.Close] was called.
 func (w *Watcher) WatchList() []string {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.isClosed {
+	if w.isClosed() {
 		return nil
 	}
-
-	entries := make([]string, 0, len(w.userWatches))
-	for pathname := range w.userWatches {
-		entries = append(entries, pathname)
-	}
-
-	return entries
+	return w.watches.listPaths(true)
 }
 
 // Watch all events (except NOTE_EXTEND, NOTE_LINK, NOTE_REVOKE)
@@ -425,33 +532,25 @@ const noteAllEvents = unix.NOTE_DELETE | unix.NOTE_WRITE | unix.NOTE_ATTRIB | un
 //
 // Returns the real path to the file which was added, with symlinks resolved.
 func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
-	var isDir bool
-	name = filepath.Clean(name)
-
-	w.mu.Lock()
-	if w.isClosed {
-		w.mu.Unlock()
+	if w.isClosed() {
 		return "", ErrClosed
 	}
-	watchfd, alreadyWatching := w.watches[name]
-	// We already have a watch, but we can still override flags.
-	if alreadyWatching {
-		isDir = w.paths[watchfd].isDir
-	}
-	w.mu.Unlock()
 
+	name = filepath.Clean(name)
+
+	info, alreadyWatching := w.watches.byPath(name)
 	if !alreadyWatching {
 		fi, err := os.Lstat(name)
 		if err != nil {
 			return "", err
 		}
 
-		// Don't watch sockets or named pipes
+		// Don't watch sockets or named pipes.
 		if (fi.Mode()&os.ModeSocket == os.ModeSocket) || (fi.Mode()&os.ModeNamedPipe == os.ModeNamedPipe) {
 			return "", nil
 		}
 
-		// Follow Symlinks.
+		// Follow symlinks.
 		if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
 			link, err := os.Readlink(name)
 			if err != nil {
@@ -462,15 +561,11 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 				return "", nil
 			}
 
-			w.mu.Lock()
-			_, alreadyWatching = w.watches[link]
-			w.mu.Unlock()
-
+			_, alreadyWatching = w.watches.byPath(link)
 			if alreadyWatching {
 				// Add to watches so we don't get spurious Create events later
 				// on when we diff the directories.
-				w.watches[name] = 0
-				w.fileExists[name] = struct{}{}
+				w.watches.addLink(name, 0)
 				return link, nil
 			}
 
@@ -484,7 +579,7 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 		// Retry on EINTR; open() can return EINTR in practice on macOS.
 		// See #354, and Go issues 11180 and 39237.
 		for {
-			watchfd, err = unix.Open(name, openMode, 0)
+			info.wd, err = unix.Open(name, openMode, 0)
 			if err == nil {
 				break
 			}
@@ -495,40 +590,25 @@ func (w *Watcher) addWatch(name string, flags uint32) (string, error) {
 			return "", err
 		}
 
-		isDir = fi.IsDir()
+		info.isDir = fi.IsDir()
 	}
 
-	err := w.register([]int{watchfd}, unix.EV_ADD|unix.EV_CLEAR|unix.EV_ENABLE, flags)
+	err := w.register([]int{info.wd}, unix.EV_ADD|unix.EV_CLEAR|unix.EV_ENABLE, flags)
 	if err != nil {
-		unix.Close(watchfd)
+		unix.Close(info.wd)
 		return "", err
 	}
 
 	if !alreadyWatching {
-		w.mu.Lock()
-		parentName := filepath.Dir(name)
-		w.watches[name] = watchfd
-
-		watchesByDir, ok := w.watchesByDir[parentName]
-		if !ok {
-			watchesByDir = make(map[int]struct{}, 1)
-			w.watchesByDir[parentName] = watchesByDir
-		}
-		watchesByDir[watchfd] = struct{}{}
-		w.paths[watchfd] = pathInfo{name: name, isDir: isDir}
-		w.mu.Unlock()
+		w.watches.add(name, info.wd, info.isDir)
 	}
 
-	if isDir {
-		// Watch the directory if it has not been watched before, or if it was
-		// watched before, but perhaps only a NOTE_DELETE (watchDirectoryFiles)
-		w.mu.Lock()
-
+	// Watch the directory if it has not been watched before, or if it was
+	// watched before, but perhaps only a NOTE_DELETE (watchDirectoryFiles)
+	if info.isDir {
 		watchDir := (flags&unix.NOTE_WRITE) == unix.NOTE_WRITE &&
-			(!alreadyWatching || (w.dirFlags[name]&unix.NOTE_WRITE) != unix.NOTE_WRITE)
-		// Store flags so this watch can be updated later
-		w.dirFlags[name] = flags
-		w.mu.Unlock()
+			(!alreadyWatching || (info.dirFlags&unix.NOTE_WRITE) != unix.NOTE_WRITE)
+		w.watches.updateDirFlags(name, flags)
 
 		if watchDir {
 			if err := w.watchDirectoryFiles(name); err != nil {
@@ -550,34 +630,28 @@ func (w *Watcher) readEvents() {
 	}()
 
 	eventBuffer := make([]unix.Kevent_t, 10)
-	for closed := false; !closed; {
+	for {
 		kevents, err := w.read(eventBuffer)
 		// EINTR is okay, the syscall was interrupted before timeout expired.
 		if err != nil && err != unix.EINTR {
 			if !w.sendError(fmt.Errorf("fsnotify.readEvents: %w", err)) {
-				closed = true
+				return
 			}
-			continue
 		}
 
-		// Flush the events we received to the Events channel
 		for _, kevent := range kevents {
 			var (
-				watchfd = int(kevent.Ident)
-				mask    = uint32(kevent.Fflags)
+				wd   = int(kevent.Ident)
+				mask = uint32(kevent.Fflags)
 			)
 
 			// Shut down the loop when the pipe is closed, but only after all
 			// other events have been processed.
-			if watchfd == w.closepipe[0] {
-				closed = true
-				continue
+			if wd == w.closepipe[0] {
+				return
 			}
 
-			w.mu.Lock()
-			path, ok := w.paths[watchfd]
-			w.mu.Unlock()
-
+			path, ok := w.watches.byWd(wd)
 			if debug {
 				internal.Debug(path.name, &kevent)
 			}
@@ -608,18 +682,13 @@ func (w *Watcher) readEvents() {
 
 			if event.Has(Rename) || event.Has(Remove) {
 				w.remove(event.Name, false)
-				w.mu.Lock()
-				delete(w.fileExists, event.Name)
-				w.mu.Unlock()
+				w.watches.markSeen(event.Name, false)
 			}
 
 			if path.isDir && event.Has(Write) && !event.Has(Remove) {
-				w.sendDirectoryChangeEvents(event.Name)
-			} else {
-				if !w.sendEvent(event) {
-					closed = true
-					continue
-				}
+				w.dirChange(event.Name)
+			} else if !w.sendEvent(event) {
+				return
 			}
 
 			if event.Has(Remove) {
@@ -627,25 +696,34 @@ func (w *Watcher) readEvents() {
 				// mv f1 f2 will delete f2, then create f2.
 				if path.isDir {
 					fileDir := filepath.Clean(event.Name)
-					w.mu.Lock()
-					_, found := w.watches[fileDir]
-					w.mu.Unlock()
+					_, found := w.watches.byPath(fileDir)
 					if found {
-						err := w.sendDirectoryChangeEvents(fileDir)
-						if err != nil {
-							if !w.sendError(err) {
-								closed = true
-							}
+						// TODO: this branch is never triggered in any test.
+						// Added in d6220df (2012).
+						// isDir check added in 8611c35 (2016): https://github.com/fsnotify/fsnotify/pull/111
+						//
+						// I don't really get how this can be triggered either.
+						// And it wasn't triggered in the patch that added it,
+						// either.
+						//
+						// Original also had a comment:
+						//   make sure the directory exists before we watch for
+						//   changes. When we do a recursive watch and perform
+						//   rm -rf, the parent directory might have gone
+						//   missing, ignore the missing directory and let the
+						//   upcoming delete event remove the watch from the
+						//   parent directory.
+						err := w.dirChange(fileDir)
+						if !w.sendError(err) {
+							return
 						}
 					}
 				} else {
-					filePath := filepath.Clean(event.Name)
-					if fi, err := os.Lstat(filePath); err == nil {
-						err := w.sendFileCreatedEventIfNew(filePath, fi)
-						if err != nil {
-							if !w.sendError(err) {
-								closed = true
-							}
+					path := filepath.Clean(event.Name)
+					if fi, err := os.Lstat(path); err == nil {
+						err := w.sendCreateIfNew(path, fi)
+						if !w.sendError(err) {
+							return
 						}
 					}
 				}
@@ -679,7 +757,6 @@ func (w *Watcher) newEvent(name string, mask uint32) Event {
 
 // watchDirectoryFiles to mimic inotify when adding a watch on a directory
 func (w *Watcher) watchDirectoryFiles(dirPath string) error {
-	// Get all files
 	files, err := os.ReadDir(dirPath)
 	if err != nil {
 		return err
@@ -707,9 +784,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 			}
 		}
 
-		w.mu.Lock()
-		w.fileExists[cleanPath] = struct{}{}
-		w.mu.Unlock()
+		w.watches.markSeen(cleanPath, true)
 	}
 
 	return nil
@@ -719,7 +794,7 @@ func (w *Watcher) watchDirectoryFiles(dirPath string) error {
 //
 // This functionality is to have the BSD watcher match the inotify, which sends
 // a create event for files created in a watched directory.
-func (w *Watcher) sendDirectoryChangeEvents(dir string) error {
+func (w *Watcher) dirChange(dir string) error {
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		// Directory no longer exists: we can ignore this safely. kqueue will
@@ -727,48 +802,42 @@ func (w *Watcher) sendDirectoryChangeEvents(dir string) error {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
-		return fmt.Errorf("fsnotify.sendDirectoryChangeEvents: %w", err)
+		return fmt.Errorf("fsnotify.dirChange: %w", err)
 	}
 
 	for _, f := range files {
 		fi, err := f.Info()
 		if err != nil {
-			return fmt.Errorf("fsnotify.sendDirectoryChangeEvents: %w", err)
+			return fmt.Errorf("fsnotify.dirChange: %w", err)
 		}
 
-		err = w.sendFileCreatedEventIfNew(filepath.Join(dir, fi.Name()), fi)
+		err = w.sendCreateIfNew(filepath.Join(dir, fi.Name()), fi)
 		if err != nil {
 			// Don't need to send an error if this file isn't readable.
 			if errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM) {
 				return nil
 			}
-			return fmt.Errorf("fsnotify.sendDirectoryChangeEvents: %w", err)
+			return fmt.Errorf("fsnotify.dirChange: %w", err)
 		}
 	}
 	return nil
 }
 
-// sendFileCreatedEvent sends a create event if the file isn't already being tracked.
-func (w *Watcher) sendFileCreatedEventIfNew(filePath string, fi os.FileInfo) (err error) {
-	w.mu.Lock()
-	_, doesExist := w.fileExists[filePath]
-	w.mu.Unlock()
-	if !doesExist {
-		if !w.sendEvent(Event{Name: filePath, Op: Create}) {
-			return
+// Send a create event if the file isn't already being tracked, and start
+// watching this file.
+func (w *Watcher) sendCreateIfNew(path string, fi os.FileInfo) error {
+	if !w.watches.seenBefore(path) {
+		if !w.sendEvent(Event{Name: path, Op: Create}) {
+			return nil
 		}
 	}
 
-	// like watchDirectoryFiles (but without doing another ReadDir)
-	filePath, err = w.internalWatch(filePath, fi)
+	// Like watchDirectoryFiles, but without doing another ReadDir.
+	path, err := w.internalWatch(path, fi)
 	if err != nil {
 		return err
 	}
-
-	w.mu.Lock()
-	w.fileExists[filePath] = struct{}{}
-	w.mu.Unlock()
-
+	w.watches.markSeen(path, true)
 	return nil
 }
 
@@ -776,12 +845,8 @@ func (w *Watcher) internalWatch(name string, fi os.FileInfo) (string, error) {
 	if fi.IsDir() {
 		// mimic Linux providing delete events for subdirectories, but preserve
 		// the flags used if currently watching subdirectory
-		w.mu.Lock()
-		flags := w.dirFlags[name]
-		w.mu.Unlock()
-
-		flags |= unix.NOTE_DELETE | unix.NOTE_RENAME
-		return w.addWatch(name, flags)
+		info, _ := w.watches.byPath(name)
+		return w.addWatch(name, info.dirFlags|unix.NOTE_DELETE|unix.NOTE_RENAME)
 	}
 
 	// watch file to mimic Linux inotify
