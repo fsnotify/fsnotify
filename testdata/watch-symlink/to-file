@@ -10,7 +10,5 @@ echo hello >>/file
 Output:
 	write    /link
 
-	kqueue:   # TODO: Should use the link name.
-		write    /file
 	windows: # TODO: investigate.
 		no-events

@@ -9,6 +9,3 @@ touch /dir/file
 
 Output:
 	create    /link/file
-
-	kqueue:  # TODO: Should use the link name.
-		create /dir/file

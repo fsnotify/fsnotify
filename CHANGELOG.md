@@ -15,6 +15,8 @@ Unreleased
 
 - kqueue: set O_CLOEXEC to prevent passing file descriptors to children ([#617])
 
+- kqueue: emit events as "/path/dir/file" instead of "path/link/file" when watching a symlink ([#625])
+
 - inotify: don't send event for IN_DELETE_SELF when also watching the parent ([#620])
 
 - fen: allow watching subdirectories of watched directories ([#621])
@@ -25,6 +27,7 @@ Unreleased
 [#619]: https://github.com/fsnotify/fsnotify/pull/619
 [#620]: https://github.com/fsnotify/fsnotify/pull/620
 [#621]: https://github.com/fsnotify/fsnotify/pull/621
+[#625]: https://github.com/fsnotify/fsnotify/pull/625
 
 1.7.0 - 2023-10-22
 ------------------
