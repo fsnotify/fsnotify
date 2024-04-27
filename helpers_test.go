@@ -219,7 +219,7 @@ func mknod(t *testing.T, dev int, path ...string) {
 	}
 }
 
-// echoAppend and echoTrunc
+// echo > and echo >>
 func echoAppend(t *testing.T, data string, path ...string) { t.Helper(); echo(t, false, data, path...) }
 func echoTrunc(t *testing.T, data string, path ...string)  { t.Helper(); echo(t, true, data, path...) }
 func echo(t *testing.T, trunc bool, data string, path ...string) {
@@ -616,7 +616,9 @@ func cmpEvents(t *testing.T, tmp string, have, want Events) {
 	})
 
 	if haveSort.String() != wantSort.String() {
-		t.Error("\n" + ztest.Diff(indent(haveSort), indent(wantSort)))
+		b := new(strings.Builder)
+		b.WriteString(strings.TrimSpace(ztest.Diff(indent(haveSort), indent(wantSort))))
+		t.Errorf("\nhave:\n%s\nwant:\n%s\ndiff:\n%s", indent(have), indent(want), indent(b))
 	}
 }
 
@@ -644,7 +646,7 @@ func isSolaris() bool {
 
 func supportsRecurse(t *testing.T) {
 	switch runtime.GOOS {
-	case "windows":
+	case "windows", "linux":
 		// Run test.
 	default:
 		t.Skip("recursion not yet supported on " + runtime.GOOS)

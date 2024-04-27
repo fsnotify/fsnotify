@@ -31,13 +31,9 @@ func init() {
 
 func TestScript(t *testing.T) {
 	err := filepath.Walk("./testdata", func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
+		if err != nil || info.IsDir() {
 			return err
 		}
-		if info.IsDir() {
-			return nil
-		}
-		//t.Run(filepath.ToSlash(path), func(t *testing.T) {
 		n := strings.Split(filepath.ToSlash(path), "/")
 		t.Run(strings.Join(n[1:], "/"), func(t *testing.T) {
 			t.Parallel()
