@@ -614,8 +614,8 @@ func isSolaris() bool {
 
 func recurseOnly(t *testing.T) {
 	switch runtime.GOOS {
-	//case "windows":
-	// Run test.
+	case "windows":
+		// Run test.
 	default:
 		t.Skip("recursion not yet supported on " + runtime.GOOS)
 	}
@@ -716,6 +716,8 @@ func parseScript(t *testing.T, in string) {
 		case "skip", "require":
 			mustArg(c, 1)
 			switch c.args[0] {
+			case "always":
+				t.Skip()
 			case "symlink":
 				if !internal.HasPrivilegesForSymlink() {
 					t.Skipf("%s symlink: admin permissions required on Windows", c.cmd)
@@ -753,6 +755,21 @@ func parseScript(t *testing.T, in string) {
 		case "watch":
 			mustArg(c, 1)
 			do = append(do, func() { addWatch(t, w.w, tmppath(tmp, c.args[0])) })
+		case "unwatch":
+			mustArg(c, 1)
+			do = append(do, func() { rmWatch(t, w.w, tmppath(tmp, c.args[0])) })
+		case "watchlist":
+			mustArg(c, 1)
+			n, err := strconv.ParseInt(c.args[0], 10, 0)
+			if err != nil {
+				t.Fatalf("line %d: %s", c.line, err)
+			}
+			do = append(do, func() {
+				wl := w.w.WatchList()
+				if l := int64(len(wl)); l != n {
+					t.Errorf("line %d: watchlist has %d entries, not %d\n%q", c.line, l, n, wl)
+				}
+			})
 		case "touch":
 			mustArg(c, 1)
 			do = append(do, func() { touch(t, tmppath(tmp, c.args[0])) })

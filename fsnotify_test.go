@@ -26,6 +26,7 @@ import (
 // https://go-review.googlesource.com/c/go/+/393354/
 func init() {
 	internal.SetRlimit()
+	enableRecurse = true
 }
 
 func TestScript(t *testing.T) {

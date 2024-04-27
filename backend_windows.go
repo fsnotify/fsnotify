@@ -495,8 +495,7 @@ func (m watchMap) set(ino *inode, watch *watch) {
 
 // Must run within the I/O thread.
 func (w *Watcher) addWatch(pathname string, flags uint64, bufsize int) error {
-	//pathname, recurse := recursivePath(pathname)
-	recurse := false
+	pathname, recurse := recursivePath(pathname)
 
 	dir, err := w.getDir(pathname)
 	if err != nil {

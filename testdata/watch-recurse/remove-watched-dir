@@ -1,4 +1,4 @@
-# Remove watched directory
+# Remove watched directory.
 require recurse
 
 mkdir /watch
@@ -21,23 +21,23 @@ watch /watch/...
 rm -r /watch
 
 Output:
-	remove      /a
-	remove      /b
-	remove      /c
-	remove      /d
-	remove      /e
-	remove      /f
-	remove      /g
-	write       /h
-	remove      /h/a
-	write       /h
-	remove      /h
-	write       /i
-	remove      /i/a
-	write       /i
-	remove      /i
-	write       /j
-	remove      /j/a
-	write       /j
-	remove      /j
-	remove      /
+	remove      /watch/a
+	remove      /watch/b
+	remove      /watch/c
+	remove      /watch/d
+	remove      /watch/e
+	remove      /watch/f
+	remove      /watch/g
+	write       /watch/h
+	remove      /watch/h/a
+	write       /watch/h
+	remove      /watch/h
+	write       /watch/i
+	remove      /watch/i/a
+	write       /watch/i
+	remove      /watch/i
+	write       /watch/j
+	remove      /watch/j/a
+	write       /watch/j
+	remove      /watch/j
+	remove      /watch
