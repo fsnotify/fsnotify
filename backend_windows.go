@@ -280,6 +280,9 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 	}
 
 	with := getOptions(opts...)
+	if !w.xSupports(with.op) {
+		return fmt.Errorf("%w: %s", xErrUnsupported, with.op)
+	}
 	if with.bufsize < 4096 {
 		return fmt.Errorf("fsnotify.WithBufferSize: buffer size cannot be smaller than 4096 bytes")
 	}
@@ -840,4 +843,16 @@ func (w *Watcher) toFSnotifyFlags(action uint32) uint64 {
 		return sysFSMOVEDTO
 	}
 	return 0
+}
+
+// Supports reports if all the listed operations are supported by this platform.
+//
+// Create, Write, Remove, Rename, and Chmod are always supported. It can only
+// return false for an Op starting with Unportable.
+func (w *Watcher) xSupports(op Op) bool {
+	if op.Has(xUnportableOpen) || op.Has(xUnportableRead) ||
+		op.Has(xUnportableCloseWrite) || op.Has(xUnportableCloseRead) {
+		return false
+	}
+	return true
 }

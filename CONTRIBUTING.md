@@ -67,8 +67,9 @@ End-of-line escapes with `\` are not supported.
 
 ### Supported commands
 
-    watch path          # Watch the path, reporting events for it. Nothing is
-                        # watched by default.
+    watch path [ops]    # Watch the path, reporting events for it. Nothing is
+                        # watched by default. Optionally a list of ops can be
+                        # given, as with AddWith(path, WithOps(...)).
     unwatch path        # Stop watching the path.
     watchlist n         # Assert watchlist length.
 
@@ -87,6 +88,7 @@ End-of-line escapes with `\` are not supported.
     chmod mode path     # Octal only
     sleep time-in-ms
 
+    cat path            # Read path (does nothing with the data; just reads it).
     echo str >>path     # Append "str" to "path".
     echo str >path      # Truncate "path" and write "str".
 

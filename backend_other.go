@@ -196,3 +196,9 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error { return nil }
 //
 // Returns nil if [Watcher.Close] was called.
 func (w *Watcher) Remove(name string) error { return nil }
+
+// Supports reports if all the listed operations are supported by this platform.
+//
+// Create, Write, Remove, Rename, and Chmod are always supported. It can only
+// return false for an Op starting with Unportable.
+func (w *Watcher) xSupports(op Op) bool { return false }

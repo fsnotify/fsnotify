@@ -599,7 +599,7 @@ func TestRemove(t *testing.T) {
 	})
 
 	t.Run("remove with ... when non-recursive", func(t *testing.T) {
-		recurseOnly(t)
+		supportsRecurse(t)
 		t.Parallel()
 
 		tmp := t.TempDir()

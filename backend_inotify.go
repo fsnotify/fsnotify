@@ -397,13 +397,41 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 			time.Now().Format("15:04:05.000000000"), name)
 	}
 
+	with := getOptions(opts...)
+	if !w.xSupports(with.op) {
+		return fmt.Errorf("%w: %s", xErrUnsupported, with.op)
+	}
+
+	var flags uint32
+	if with.op.Has(Create) {
+		flags |= unix.IN_CREATE
+	}
+	if with.op.Has(Write) {
+		flags |= unix.IN_MODIFY
+	}
+	if with.op.Has(Remove) {
+		flags |= unix.IN_DELETE | unix.IN_DELETE_SELF
+	}
+	if with.op.Has(Rename) {
+		flags |= unix.IN_MOVED_TO | unix.IN_MOVED_FROM | unix.IN_MOVE_SELF
+	}
+	if with.op.Has(Chmod) {
+		flags |= unix.IN_ATTRIB
+	}
+	if with.op.Has(xUnportableOpen) {
+		flags |= unix.IN_OPEN
+	}
+	if with.op.Has(xUnportableRead) {
+		flags |= unix.IN_ACCESS
+	}
+	if with.op.Has(xUnportableCloseWrite) {
+		flags |= unix.IN_CLOSE_WRITE
+	}
+	if with.op.Has(xUnportableCloseRead) {
+		flags |= unix.IN_CLOSE_NOWRITE
+	}
+
 	name = filepath.Clean(name)
-	_ = getOptions(opts...)
-
-	var flags uint32 = unix.IN_MOVED_TO | unix.IN_MOVED_FROM |
-		unix.IN_CREATE | unix.IN_ATTRIB | unix.IN_MODIFY |
-		unix.IN_MOVE_SELF | unix.IN_DELETE | unix.IN_DELETE_SELF
-
 	return w.watches.updatePath(name, func(existing *watch) (*watch, error) {
 		if existing != nil {
 			flags |= existing.flags | unix.IN_MASK_ADD
@@ -624,6 +652,18 @@ func (w *Watcher) newEvent(name string, mask, cookie uint32) Event {
 	if mask&unix.IN_MODIFY == unix.IN_MODIFY {
 		e.Op |= Write
 	}
+	if mask&unix.IN_OPEN == unix.IN_OPEN {
+		e.Op |= xUnportableOpen
+	}
+	if mask&unix.IN_ACCESS == unix.IN_ACCESS {
+		e.Op |= xUnportableRead
+	}
+	if mask&unix.IN_CLOSE_WRITE == unix.IN_CLOSE_WRITE {
+		e.Op |= xUnportableCloseWrite
+	}
+	if mask&unix.IN_CLOSE_NOWRITE == unix.IN_CLOSE_NOWRITE {
+		e.Op |= xUnportableCloseRead
+	}
 	if mask&unix.IN_MOVE_SELF == unix.IN_MOVE_SELF || mask&unix.IN_MOVED_FROM == unix.IN_MOVED_FROM {
 		e.Op |= Rename
 	}
@@ -654,4 +694,12 @@ func (w *Watcher) newEvent(name string, mask, cookie uint32) Event {
 		}
 	}
 	return e
+}
+
+// Supports reports if all the listed operations are supported by this platform.
+//
+// Create, Write, Remove, Rename, and Chmod are always supported. It can only
+// return false for an Op starting with Unportable.
+func (w *Watcher) xSupports(op Op) bool {
+	return true // Supports everything.
 }

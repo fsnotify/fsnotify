@@ -86,6 +86,31 @@ const (
 	// get triggered very frequently by some software. For example, Spotlight
 	// indexing on macOS, anti-virus software, backup software, etc.
 	Chmod
+
+	// File descriptor was opened.
+	//
+	// Only works on Linux and FreeBSD.
+	xUnportableOpen
+
+	// File was read from.
+	//
+	// Only works on Linux and FreeBSD.
+	xUnportableRead
+
+	// File opened for writing was closed.
+	//
+	// Only works on Linux and FreeBSD.
+	//
+	// The advantage of using this over Write is that it's more reliable than
+	// waiting for Write events to stop. It's also faster (if you're not
+	// listening to Write events): copying a file of a few GB can easily
+	// generate tens of thousands of Write events in a short span of time.
+	xUnportableCloseWrite
+
+	// File opened for reading was closed.
+	//
+	// Only works on Linux and FreeBSD.
+	xUnportableCloseRead
 )
 
 var (
@@ -105,6 +130,10 @@ var (
 	//  - windows:      The buffer size is too small; WithBufferSize() can be used to increase it.
 	//  - kqueue, fen:  Not used.
 	ErrEventOverflow = errors.New("fsnotify: queue or buffer overflow")
+
+	// ErrUnsupported is returned by AddWith() when WithOps() specified an
+	// Unportable event that's not supported on this platform.
+	xErrUnsupported = errors.New("fsnotify: not supported with this backend")
 )
 
 func (o Op) String() string {
@@ -117,6 +146,18 @@ func (o Op) String() string {
 	}
 	if o.Has(Write) {
 		b.WriteString("|WRITE")
+	}
+	if o.Has(xUnportableOpen) {
+		b.WriteString("|OPEN")
+	}
+	if o.Has(xUnportableRead) {
+		b.WriteString("|READ")
+	}
+	if o.Has(xUnportableCloseWrite) {
+		b.WriteString("|CLOSE_WRITE")
+	}
+	if o.Has(xUnportableCloseRead) {
+		b.WriteString("|CLOSE_READ")
 	}
 	if o.Has(Rename) {
 		b.WriteString("|RENAME")
@@ -148,6 +189,7 @@ type (
 	addOpt   func(opt *withOpts)
 	withOpts struct {
 		bufsize int
+		op      Op
 	}
 )
 
@@ -160,6 +202,7 @@ var debug = func() bool {
 
 var defaultOpts = withOpts{
 	bufsize: 65536, // 64K
+	op:      Create | Write | Remove | Rename | Chmod,
 }
 
 func getOptions(opts ...addOpt) withOpts {
@@ -182,6 +225,24 @@ func getOptions(opts ...addOpt) withOpts {
 // [ReadDirectoryChangesW]: https://learn.microsoft.com/en-gb/windows/win32/api/winbase/nf-winbase-readdirectorychangesw
 func WithBufferSize(bytes int) addOpt {
 	return func(opt *withOpts) { opt.bufsize = bytes }
+}
+
+// WithOps sets which operations to listen for. The default is [Create],
+// [Write], [Remove], [Rename], and [Chmod].
+//
+// Excluding operations you're not interested in can save quite a bit of CPU
+// time; in some use cases there may be hundreds of thousands of useless Write
+// or Chmod operations per second.
+//
+// This can also be used to add unportable operations not supported by all
+// platforms; unportable operations all start with "Unportable":
+// [UnportableOpen], [UnportableRead], [UnportableCloseWrite], and
+// [UnportableCloseRead].
+//
+// AddWith returns an error when using an unportable operation that's not
+// supported. Use [Watcher.Support] to check for support.
+func withOps(op Op) addOpt {
+	return func(opt *withOpts) { opt.op = op }
 }
 
 var enableRecurse = false

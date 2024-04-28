@@ -131,9 +131,9 @@ type Watcher struct {
 
 	mu      sync.Mutex
 	port    *unix.EventPort
-	done    chan struct{}       // Channel for sending a "quit message" to the reader goroutine
-	dirs    map[string]struct{} // Explicitly watched directories
-	watches map[string]struct{} // Explicitly watched non-directories
+	done    chan struct{} // Channel for sending a "quit message" to the reader goroutine
+	dirs    map[string]Op // Explicitly watched directories
+	watches map[string]Op // Explicitly watched non-directories
 }
 
 // NewWatcher creates a new Watcher.
@@ -153,8 +153,8 @@ func NewBufferedWatcher(sz uint) (*Watcher, error) {
 	w := &Watcher{
 		Events:  make(chan Event, sz),
 		Errors:  make(chan error),
-		dirs:    make(map[string]struct{}),
-		watches: make(map[string]struct{}),
+		dirs:    make(map[string]Op),
+		watches: make(map[string]Op),
 		done:    make(chan struct{}),
 	}
 
@@ -269,7 +269,10 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 			time.Now().Format("15:04:05.000000000"), name)
 	}
 
-	_ = getOptions(opts...)
+	with := getOptions(opts...)
+	if !w.xSupports(with.op) {
+		return fmt.Errorf("%w: %s", xErrUnsupported, with.op)
+	}
 
 	// Currently we resolve symlinks that were explicitly requested to be
 	// watched. Otherwise we would use LStat here.
@@ -286,7 +289,7 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 		}
 
 		w.mu.Lock()
-		w.dirs[name] = struct{}{}
+		w.dirs[name] = with.op
 		w.mu.Unlock()
 		return nil
 	}
@@ -297,7 +300,7 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 	}
 
 	w.mu.Lock()
-	w.watches[name] = struct{}{}
+	w.watches[name] = with.op
 	w.mu.Unlock()
 	return nil
 }
@@ -594,20 +597,24 @@ func (w *Watcher) associateFile(path string, stat os.FileInfo, follow bool) erro
 		// cleared up that discrepancy. The most likely cause is that the event
 		// has fired but we haven't processed it yet.
 		err := w.port.DissociatePath(path)
-		if err != nil && err != unix.ENOENT {
+		if err != nil && !errors.Is(err, unix.ENOENT) {
 			return err
 		}
 	}
-	// FILE_NOFOLLOW means we watch symlinks themselves rather than their
-	// targets.
-	events := unix.FILE_MODIFIED | unix.FILE_ATTRIB | unix.FILE_NOFOLLOW
-	if follow {
-		// We *DO* follow symlinks for explicitly watched entries.
-		events = unix.FILE_MODIFIED | unix.FILE_ATTRIB
+
+	var events int
+	if !follow {
+		// Watch symlinks themselves rather than their targets unless this entry
+		// is explicitly watched.
+		events |= unix.FILE_NOFOLLOW
 	}
-	return w.port.AssociatePath(path, stat,
-		events,
-		stat.Mode())
+	if true { // TODO: implement withOps()
+		events |= unix.FILE_MODIFIED
+	}
+	if true {
+		events |= unix.FILE_ATTRIB
+	}
+	return w.port.AssociatePath(path, stat, events, stat.Mode())
 }
 
 func (w *Watcher) dissociateFile(path string, stat os.FileInfo, unused bool) error {
@@ -638,4 +645,16 @@ func (w *Watcher) WatchList() []string {
 	}
 
 	return entries
+}
+
+// Supports reports if all the listed operations are supported by this platform.
+//
+// Create, Write, Remove, Rename, and Chmod are always supported. It can only
+// return false for an Op starting with Unportable.
+func (w *Watcher) xSupports(op Op) bool {
+	if op.Has(xUnportableOpen) || op.Has(xUnportableRead) ||
+		op.Has(xUnportableCloseWrite) || op.Has(xUnportableCloseRead) {
+		return false
+	}
+	return true
 }
