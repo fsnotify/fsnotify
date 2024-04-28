@@ -10,7 +10,6 @@ watch /dir
 mv /unwatch/file /dir/rename
 
 Output:
-	# TODO: this should really be RENAME.
 	remove /dir/rename
 	create /dir/rename
 

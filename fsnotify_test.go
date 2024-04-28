@@ -621,15 +621,15 @@ func TestEventString(t *testing.T) {
 		want string
 	}{
 		{Event{}, `[no events]   ""`},
-		{Event{"/file", 0}, `[no events]   "/file"`},
+		{Event{Name: "/file", Op: 0}, `[no events]   "/file"`},
 
-		{Event{"/file", Chmod | Create},
+		{Event{Name: "/file", Op: Chmod | Create},
 			`CREATE|CHMOD  "/file"`},
-		{Event{"/file", Rename},
+		{Event{Name: "/file", Op: Rename},
 			`RENAME        "/file"`},
-		{Event{"/file", Remove},
+		{Event{Name: "/file", Op: Remove},
 			`REMOVE        "/file"`},
-		{Event{"/file", Write | Chmod},
+		{Event{Name: "/file", Op: Write | Chmod},
 			`WRITE|CHMOD   "/file"`},
 	}
 

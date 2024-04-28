@@ -2,8 +2,8 @@
 
 echo asd >>/file
 watch /
-mv /file /renamed
+mv /file /rename
 
 Output:
 	rename /file
-	create /renamed
+	create /rename ← /file
