@@ -66,7 +66,7 @@ const (
 	// example "remove to trash" is often a rename).
 	Remove
 
-	// The path was renamed to something else; any watched on it will be
+	// The path was renamed to something else; any watches on it will be
 	// removed.
 	Rename
 
