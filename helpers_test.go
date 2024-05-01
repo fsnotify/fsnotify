@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify/internal"
+	"github.com/fsnotify/fsnotify/internal/ztest"
 )
 
 // We wait a little bit after most commands; gives the system some time to sync
@@ -615,8 +616,7 @@ func cmpEvents(t *testing.T, tmp string, have, want Events) {
 	})
 
 	if haveSort.String() != wantSort.String() {
-		//t.Error("\n" + ztest.Diff(indent(haveSort), indent(wantSort)))
-		t.Errorf("\nhave:\n%s\nwant:\n%s", indent(have), indent(want))
+		t.Error("\n" + ztest.Diff(indent(haveSort), indent(wantSort)))
 	}
 }
 
