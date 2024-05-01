@@ -41,3 +41,19 @@ Output:
 	write       /watch/j
 	remove      /watch/j
 	remove      /watch
+
+	linux:  # Same as Windows, but without those stupid dir writes Windows sends.
+		remove      /watch/a
+		remove      /watch/b
+		remove      /watch/c
+		remove      /watch/d
+		remove      /watch/e
+		remove      /watch/f
+		remove      /watch/g
+		remove      /watch/h/a
+		remove      /watch/h
+		remove      /watch/i/a
+		remove      /watch/i
+		remove      /watch/j/a
+		remove      /watch/j
+		remove      /watch
