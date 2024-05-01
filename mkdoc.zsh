@@ -167,6 +167,14 @@ watchlist=$(<<EOF
 EOF
 )
 
+supports=$(<<EOF
+// Supports reports if all the listed operations are supported by this platform.
+//
+// Create, Write, Remove, Rename, and Chmod are always supported. It can only
+// return false for an Op starting with Unportable.
+EOF
+)
+
 events=$(<<EOF
 	// Events sends the filesystem change events.
 	//
@@ -249,5 +257,6 @@ set-cmt '^func (w \*Watcher) AddWith('      $addwith
 set-cmt '^func (w \*Watcher) Remove('       $remove
 set-cmt '^func (w \*Watcher) Close('        $close
 set-cmt '^func (w \*Watcher) WatchList('    $watchlist
+set-cmt '^func (w \*Watcher) Supports('     $supports
 set-cmt '^[[:space:]]*Events *chan Event$'  $events
 set-cmt '^[[:space:]]*Errors *chan error$'  $errors

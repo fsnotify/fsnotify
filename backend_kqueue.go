@@ -458,7 +458,10 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 			time.Now().Format("15:04:05.000000000"), name)
 	}
 
-	_ = getOptions(opts...)
+	with := getOptions(opts...)
+	if !w.xSupports(with.op) {
+		return fmt.Errorf("%w: %s", xErrUnsupported, with.op)
+	}
 
 	w.watches.addUserWatch(name)
 	_, err := w.addWatch(name, noteAllEvents)
@@ -885,4 +888,19 @@ func (w *Watcher) read(events []unix.Kevent_t) ([]unix.Kevent_t, error) {
 		return nil, err
 	}
 	return events[0:n], nil
+}
+
+// Supports reports if all the listed operations are supported by this platform.
+//
+// Create, Write, Remove, Rename, and Chmod are always supported. It can only
+// return false for an Op starting with Unportable.
+func (w *Watcher) xSupports(op Op) bool {
+	if runtime.GOOS == "freebsd" {
+		//return true // Supports everything.
+	}
+	if op.Has(xUnportableOpen) || op.Has(xUnportableRead) ||
+		op.Has(xUnportableCloseWrite) || op.Has(xUnportableCloseRead) {
+		return false
+	}
+	return true
 }

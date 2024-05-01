@@ -331,6 +331,21 @@ func rmAll(t *testing.T, path ...string) {
 	}
 }
 
+// cat
+func cat(t *testing.T, path ...string) {
+	t.Helper()
+	if len(path) < 1 {
+		t.Fatalf("cat: path must have at least one element: %s", path)
+	}
+	_, err := os.ReadFile(join(path...))
+	if err != nil {
+		t.Fatalf("cat(%q): %s", join(path...), err)
+	}
+	if shouldWait(path...) {
+		eventSeparator()
+	}
+}
+
 // chmod
 func chmod(t *testing.T, mode fs.FileMode, path ...string) {
 	t.Helper()
@@ -539,6 +554,14 @@ func newEvents(t *testing.T, s string) Events {
 				op |= Rename
 			case "CHMOD":
 				op |= Chmod
+			case "OPEN":
+				op |= xUnportableOpen
+			case "READ":
+				op |= xUnportableRead
+			case "CLOSE_WRITE":
+				op |= xUnportableCloseWrite
+			case "CLOSE_READ":
+				op |= xUnportableCloseRead
 			default:
 				t.Fatalf("newEvents: line %d has unknown event %q: %s", no+1, ee, line)
 			}
@@ -603,11 +626,6 @@ func indent(s fmt.Stringer) string {
 
 var join = filepath.Join
 
-func isCI() bool {
-	_, ok := os.LookupEnv("CI")
-	return ok
-}
-
 func isKqueue() bool {
 	switch runtime.GOOS {
 	case "darwin", "freebsd", "openbsd", "netbsd", "dragonfly":
@@ -624,12 +642,21 @@ func isSolaris() bool {
 	return false
 }
 
-func recurseOnly(t *testing.T) {
+func supportsRecurse(t *testing.T) {
 	switch runtime.GOOS {
 	case "windows":
 		// Run test.
 	default:
 		t.Skip("recursion not yet supported on " + runtime.GOOS)
+	}
+}
+
+func supportsFilter(t *testing.T) {
+	switch runtime.GOOS {
+	case "linux":
+		// Run test.
+	default:
+		t.Skip("withOps() not yet supported on " + runtime.GOOS)
 	}
 }
 
@@ -738,6 +765,26 @@ loop:
 		case "skip", "require":
 			mustArg(c, 1)
 			switch c.args[0] {
+			case "op_all":
+				if runtime.GOOS != "linux" {
+					t.Skip("No op_all on this platform")
+				}
+			case "op_open":
+				if runtime.GOOS != "linux" {
+					t.Skip("No Open on this platform")
+				}
+			case "op_read":
+				if runtime.GOOS != "linux" {
+					t.Skip("No Read on this platform")
+				}
+			case "op_close_write":
+				if runtime.GOOS != "linux" {
+					t.Skip("No CloseWrite on this platform")
+				}
+			case "op_close_read":
+				if runtime.GOOS != "linux" {
+					t.Skip("No CloseRead on this platform")
+				}
 			case "always":
 				t.Skip()
 			case "symlink":
@@ -762,7 +809,9 @@ loop:
 					t.Skip(`"mknod fails with "not owner"`)
 				}
 			case "recurse":
-				recurseOnly(t)
+				supportsRecurse(t)
+			case "filter":
+				supportsFilter(t)
 			case "windows":
 				if runtime.GOOS == "windows" {
 					t.Skip("Skipping on Windows")
@@ -770,6 +819,10 @@ loop:
 			case "netbsd":
 				if runtime.GOOS == "netbsd" {
 					t.Skip("Skipping on NetBSD")
+				}
+			case "openbsd":
+				if runtime.GOOS == "openbsd" {
+					t.Skip("Skipping on OpenBSD")
 				}
 			default:
 				t.Fatalf("line %d: unknown %s reason: %q", c.line, c.cmd, c.args[0])
@@ -791,8 +844,49 @@ loop:
 			mustArg(c, 0)
 			break loop
 		case "watch":
-			mustArg(c, 1)
-			do = append(do, func() { addWatch(t, w.w, tmppath(tmp, c.args[0])) })
+			if len(c.args) < 1 {
+				t.Fatalf("line %d: %q requires at least %d arguments (have %d: %q)",
+					c.line, c.cmd, 1, len(c.args), c.args)
+			}
+			if len(c.args) == 1 {
+				do = append(do, func() { addWatch(t, w.w, tmppath(tmp, c.args[0])) })
+				continue
+			}
+			var op Op
+			for _, o := range c.args[1:] {
+				switch strings.ToLower(o) {
+				default:
+					t.Fatalf("line %d: unknown: %q", c.line+1, o)
+				case "default":
+					op |= Create | Write | Remove | Rename | Chmod
+				case "create":
+					op |= Create
+				case "write":
+					op |= Write
+				case "remove":
+					op |= Remove
+				case "rename":
+					op |= Rename
+				case "chmod":
+					op |= Chmod
+				case "open":
+					op |= xUnportableOpen
+				case "read":
+					op |= xUnportableRead
+				case "close_write":
+					op |= xUnportableCloseWrite
+				case "close_read":
+					op |= xUnportableCloseRead
+				}
+
+			}
+			do = append(do, func() {
+				p := tmppath(tmp, c.args[0])
+				err := w.w.AddWith(p, withOps(op))
+				if err != nil {
+					t.Fatalf("line %d: addWatch(%q): %s", c.line+1, p, err)
+				}
+			})
 		case "unwatch":
 			mustArg(c, 1)
 			do = append(do, func() { rmWatch(t, w.w, tmppath(tmp, c.args[0])) })
@@ -859,6 +953,9 @@ loop:
 				t.Fatalf("line %d: %s", c.line, err)
 			}
 			do = append(do, func() { chmod(t, fs.FileMode(n), tmppath(tmp, c.args[1])) })
+		case "cat":
+			mustArg(c, 1)
+			do = append(do, func() { cat(t, tmppath(tmp, c.args[0])) })
 		case "echo":
 			if len(c.args) < 2 || len(c.args) > 3 {
 				t.Fatalf("line %d: %q requires 2 or 3 arguments (have %d: %q)",
