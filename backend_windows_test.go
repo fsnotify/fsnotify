@@ -26,13 +26,13 @@ func TestRemoveState(t *testing.T) {
 
 	check := func(want int) {
 		t.Helper()
-		if len(w.watches) != want {
+		if len(w.b.(*readDirChangesW).watches) != want {
 			var d []string
-			for k, v := range w.watches {
+			for k, v := range w.b.(*readDirChangesW).watches {
 				d = append(d, fmt.Sprintf("%#v = %#v", k, v))
 			}
 			t.Errorf("unexpected number of entries in w.watches (have %d, want %d):\n%v",
-				len(w.watches), want, strings.Join(d, "\n"))
+				len(w.b.(*readDirChangesW).watches), want, strings.Join(d, "\n"))
 		}
 	}
 
@@ -61,7 +61,7 @@ func TestWindowsRemWatch(t *testing.T) {
 	if err := w.Remove(tmp); err != nil {
 		t.Fatalf("Could not remove the watch: %v\n", err)
 	}
-	if err := w.remWatch(tmp); err == nil {
+	if err := w.b.(*readDirChangesW).remWatch(tmp); err == nil {
 		t.Fatal("Should be fail with closed handle\n")
 	}
 }
