@@ -136,6 +136,24 @@ type Watcher struct {
 	done        chan struct{} // Channel for sending a "quit message" to the reader goroutine
 	doneMu      sync.Mutex
 	doneResp    chan struct{} // Channel to respond to Close
+
+	// Store rename cookies in an array, with the index wrapping to 0. Almost
+	// all of the time what we get is a MOVED_FROM to set the cookie and the
+	// next event inotify sends will be MOVED_TO to read it. However, this is
+	// not guaranteed – as described in inotify(7) – and we may get other events
+	// between the two MOVED_* events (including other MOVED_* ones).
+	//
+	// A second issue is that moving a file outside the watched directory will
+	// trigger a MOVED_FROM to set the cookie, but we never see the MOVED_TO to
+	// read and delete it. So just storing it in a map would slowly leak memory.
+	//
+	// Doing it like this gives us a simple fast LRU-cache that won't allocate.
+	// Ten items should be more than enough for our purpose, and a loop over
+	// such a short array is faster than a map access anyway (not that it hugely
+	// matters since we're talking about hundreds of ns at the most, but still).
+	cookies     [10]koekje
+	cookieIndex uint8
+	cookiesMu   sync.Mutex
 }
 
 type (
@@ -148,6 +166,10 @@ type (
 		wd    uint32 // Watch descriptor (as returned by the inotify_add_watch() syscall)
 		flags uint32 // inotify flags of this watch (see inotify(7) for the list of valid flags)
 		path  string // Watch path.
+	}
+	koekje struct {
+		cookie uint32
+		path   string
 	}
 )
 
@@ -547,7 +569,7 @@ func (w *Watcher) readEvents() {
 			}
 
 			if debug {
-				internal.Debug(name, raw.Mask)
+				internal.Debug(name, raw.Mask, raw.Cookie)
 			}
 
 			// inotify will automatically remove the watch on deletes; just need
@@ -579,7 +601,7 @@ func (w *Watcher) readEvents() {
 
 			/// Send the events that are not ignored on the events channel
 			if !skip {
-				if !w.sendEvent(w.newEvent(name, mask)) {
+				if !w.sendEvent(w.newEvent(name, mask, raw.Cookie)) {
 					return
 				}
 			}
@@ -591,7 +613,7 @@ func (w *Watcher) readEvents() {
 }
 
 // newEvent returns an platform-independent Event based on an inotify mask.
-func (w *Watcher) newEvent(name string, mask uint32) Event {
+func (w *Watcher) newEvent(name string, mask, cookie uint32) Event {
 	e := Event{Name: name}
 	if mask&unix.IN_CREATE == unix.IN_CREATE || mask&unix.IN_MOVED_TO == unix.IN_MOVED_TO {
 		e.Op |= Create
@@ -607,6 +629,29 @@ func (w *Watcher) newEvent(name string, mask uint32) Event {
 	}
 	if mask&unix.IN_ATTRIB == unix.IN_ATTRIB {
 		e.Op |= Chmod
+	}
+
+	if cookie != 0 {
+		if mask&unix.IN_MOVED_FROM == unix.IN_MOVED_FROM {
+			w.cookiesMu.Lock()
+			w.cookies[w.cookieIndex] = koekje{cookie: cookie, path: e.Name}
+			w.cookieIndex++
+			if w.cookieIndex > 9 {
+				w.cookieIndex = 0
+			}
+			w.cookiesMu.Unlock()
+		} else if mask&unix.IN_MOVED_TO == unix.IN_MOVED_TO {
+			w.cookiesMu.Lock()
+			var prev string
+			for _, c := range w.cookies {
+				if c.cookie == cookie {
+					prev = c.path
+					break
+				}
+			}
+			w.cookiesMu.Unlock()
+			e.renamedFrom = prev
+		}
 	}
 	return e
 }

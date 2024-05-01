@@ -46,6 +46,16 @@ type Event struct {
 	// This is a bitmask and some systems may send multiple operations at once.
 	// Use the Event.Has() method instead of comparing with ==.
 	Op Op
+
+	// Create events will have this set to the old path if it's a rename. This
+	// only works when both the source and destination are watched. It's not
+	// reliable when watching individual files, only directories.
+	//
+	// For example "mv /tmp/file /tmp/rename" will emit:
+	//
+	//   Event{Op: Rename, Name: "/tmp/file"}
+	//   Event{Op: Create, Name: "/tmp/rename", RenamedFrom: "/tmp/file"}
+	renamedFrom string
 }
 
 // Op describes a set of file operations.
@@ -128,6 +138,9 @@ func (e Event) Has(op Op) bool { return e.Op.Has(op) }
 
 // String returns a string representation of the event with their path.
 func (e Event) String() string {
+	if e.renamedFrom != "" {
+		return fmt.Sprintf("%-13s %q ← %q", e.Op.String(), e.Name, e.renamedFrom)
+	}
 	return fmt.Sprintf("%-13s %q", e.Op.String(), e.Name)
 }
 

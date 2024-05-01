@@ -10,7 +10,7 @@ touch /sub-rename/dir/file
 
 Output:
 	rename     /sub                  # mv /sub /sub-rename
-	create     /sub-rename
+	create     /sub-rename ← /sub
 
 	write      /sub-rename           # touch /sub-rename/file
 	create     /sub-rename/file

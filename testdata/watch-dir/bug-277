@@ -15,12 +15,12 @@ mv     /apple /pear
 rm -r  /pear
 
 Output:
-	create   /foo     # touch foo
-	remove   /foo     # rm foo
-	create   /apple   # mkdir apple
-	rename   /apple   # mv apple pear
-	create   /pear
-	remove   /pear    # rm -r pear
+	create   /foo     # touch /foo
+	remove   /foo     # rm /foo
+	create   /apple   # mkdir /apple
+	rename   /apple   # mv /apple /pear
+	create   /pear ← /apple
+	remove   /pear    # rm -r /pear
 
 	dragonfly:
 		create   /foo

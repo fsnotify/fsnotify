@@ -440,7 +440,11 @@ func (e Events) String() string {
 		if i > 0 {
 			b.WriteString("\n")
 		}
-		fmt.Fprintf(b, "%-20s %q", ee.Op.String(), filepath.ToSlash(ee.Name))
+		if ee.renamedFrom != "" {
+			fmt.Fprintf(b, "%-8s %s ← %s", ee.Op.String(), filepath.ToSlash(ee.Name), filepath.ToSlash(ee.renamedFrom))
+		} else {
+			fmt.Fprintf(b, "%-8s %s", ee.Op.String(), filepath.ToSlash(ee.Name))
+		}
 	}
 	return b.String()
 }
@@ -451,6 +455,11 @@ func (e Events) TrimPrefix(prefix string) Events {
 			e[i].Name = "/"
 		} else {
 			e[i].Name = strings.TrimPrefix(e[i].Name, prefix)
+		}
+		if e[i].renamedFrom == prefix {
+			e[i].renamedFrom = "/"
+		} else {
+			e[i].renamedFrom = strings.TrimPrefix(e[i].renamedFrom, prefix)
 		}
 	}
 	return e
@@ -507,44 +516,47 @@ func newEvents(t *testing.T, s string) Events {
 		}
 
 		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			if strings.ToUpper(fields[0]) == "EMPTY" || strings.ToLower(fields[0]) == "no-events" {
+		if len(fields) != 2 && len(fields) != 4 {
+			if strings.ToLower(fields[0]) == "empty" || strings.ToLower(fields[0]) == "no-events" {
 				for _, g := range groups {
 					events[g] = Events{}
 				}
 				continue
 			}
-
-			t.Fatalf("newEvents: line %d has less than 2 fields: %s", no, line)
+			t.Fatalf("newEvents: line %d: needs 2 or 4 fields: %s", no+1, line)
 		}
 
-		path := strings.Trim(fields[len(fields)-1], `"`)
-
 		var op Op
-		for _, e := range fields[:len(fields)-1] {
-			if e == "|" {
-				continue
+		for _, ee := range strings.Split(fields[0], "|") {
+			switch strings.ToUpper(ee) {
+			case "CREATE":
+				op |= Create
+			case "WRITE":
+				op |= Write
+			case "REMOVE":
+				op |= Remove
+			case "RENAME":
+				op |= Rename
+			case "CHMOD":
+				op |= Chmod
+			default:
+				t.Fatalf("newEvents: line %d has unknown event %q: %s", no+1, ee, line)
 			}
-			for _, ee := range strings.Split(e, "|") {
-				switch strings.ToUpper(ee) {
-				case "CREATE":
-					op |= Create
-				case "WRITE":
-					op |= Write
-				case "REMOVE":
-					op |= Remove
-				case "RENAME":
-					op |= Rename
-				case "CHMOD":
-					op |= Chmod
-				default:
-					t.Fatalf("newEvents: line %d has unknown event %q: %s", no, ee, line)
-				}
+		}
+
+		var from string
+		if len(fields) > 2 {
+			if fields[2] != "←" {
+				t.Fatalf("newEvents: line %d: invalid format: %s", no+1, line)
 			}
+			from = strings.Trim(fields[3], `"`)
+		}
+		if !supportsRename() {
+			from = ""
 		}
 
 		for _, g := range groups {
-			events[g] = append(events[g], Event{Name: path, Op: op})
+			events[g] = append(events[g], Event{Name: strings.Trim(fields[1], `"`), renamedFrom: from, Op: op})
 		}
 	}
 
@@ -618,6 +630,15 @@ func recurseOnly(t *testing.T) {
 		// Run test.
 	default:
 		t.Skip("recursion not yet supported on " + runtime.GOOS)
+	}
+}
+
+func supportsRename() bool {
+	switch runtime.GOOS {
+	case "linux", "windows":
+		return true
+	default:
+		return false
 	}
 }
 

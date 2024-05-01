@@ -178,12 +178,13 @@ func (w *Watcher) isClosed() bool {
 	return w.closed
 }
 
-func (w *Watcher) sendEvent(name string, mask uint64) bool {
+func (w *Watcher) sendEvent(name, renamedFrom string, mask uint64) bool {
 	if mask == 0 {
 		return false
 	}
 
 	event := w.newEvent(name, uint32(mask))
+	event.renamedFrom = renamedFrom
 	select {
 	case ch := <-w.quit:
 		w.quit <- ch
@@ -275,7 +276,7 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 	}
 	if debug {
 		fmt.Fprintf(os.Stderr, "FSNOTIFY_DEBUG: %s  AddWith(%q)\n",
-			time.Now().Format("15:04:05.000000000"), name)
+			time.Now().Format("15:04:05.000000000"), filepath.ToSlash(name))
 	}
 
 	with := getOptions(opts...)
@@ -311,7 +312,7 @@ func (w *Watcher) Remove(name string) error {
 	}
 	if debug {
 		fmt.Fprintf(os.Stderr, "FSNOTIFY_DEBUG: %s  Remove(%q)\n",
-			time.Now().Format("15:04:05.000000000"), name)
+			time.Now().Format("15:04:05.000000000"), filepath.ToSlash(name))
 	}
 
 	in := &input{
@@ -577,11 +578,11 @@ func (w *Watcher) remWatch(pathname string) error {
 		return fmt.Errorf("%w: %s", ErrNonExistentWatch, pathname)
 	}
 	if pathname == dir {
-		w.sendEvent(watch.path, watch.mask&sysFSIGNORED)
+		w.sendEvent(watch.path, "", watch.mask&sysFSIGNORED)
 		watch.mask = 0
 	} else {
 		name := filepath.Base(pathname)
-		w.sendEvent(filepath.Join(watch.path, name), watch.names[name]&sysFSIGNORED)
+		w.sendEvent(filepath.Join(watch.path, name), "", watch.names[name]&sysFSIGNORED)
 		delete(watch.names, name)
 	}
 
@@ -592,13 +593,13 @@ func (w *Watcher) remWatch(pathname string) error {
 func (w *Watcher) deleteWatch(watch *watch) {
 	for name, mask := range watch.names {
 		if mask&provisional == 0 {
-			w.sendEvent(filepath.Join(watch.path, name), mask&sysFSIGNORED)
+			w.sendEvent(filepath.Join(watch.path, name), "", mask&sysFSIGNORED)
 		}
 		delete(watch.names, name)
 	}
 	if watch.mask != 0 {
 		if watch.mask&provisional == 0 {
-			w.sendEvent(watch.path, watch.mask&sysFSIGNORED)
+			w.sendEvent(watch.path, "", watch.mask&sysFSIGNORED)
 		}
 		watch.mask = 0
 	}
@@ -635,7 +636,7 @@ func (w *Watcher) startRead(watch *watch) error {
 		err := os.NewSyscallError("ReadDirectoryChanges", rdErr)
 		if rdErr == windows.ERROR_ACCESS_DENIED && watch.mask&provisional == 0 {
 			// Watched directory was probably removed
-			w.sendEvent(watch.path, watch.mask&sysFSDELETESELF)
+			w.sendEvent(watch.path, "", watch.mask&sysFSDELETESELF)
 			err = nil
 		}
 		w.deleteWatch(watch)
@@ -711,7 +712,7 @@ func (w *Watcher) readEvents() {
 			}
 		case windows.ERROR_ACCESS_DENIED:
 			// Watched directory was probably removed
-			w.sendEvent(watch.path, watch.mask&sysFSDELETESELF)
+			w.sendEvent(watch.path, "", watch.mask&sysFSDELETESELF)
 			w.deleteWatch(watch)
 			w.startRead(watch)
 			continue
@@ -776,21 +777,22 @@ func (w *Watcher) readEvents() {
 				}
 			}
 
-			sendNameEvent := func() {
-				w.sendEvent(fullname, watch.names[name]&mask)
-			}
 			if raw.Action != windows.FILE_ACTION_RENAMED_NEW_NAME {
-				sendNameEvent()
+				w.sendEvent(fullname, "", watch.names[name]&mask)
 			}
 			if raw.Action == windows.FILE_ACTION_REMOVED {
-				w.sendEvent(fullname, watch.names[name]&sysFSIGNORED)
+				w.sendEvent(fullname, "", watch.names[name]&sysFSIGNORED)
 				delete(watch.names, name)
 			}
 
-			w.sendEvent(fullname, watch.mask&w.toFSnotifyFlags(raw.Action))
+			if watch.rename != "" && raw.Action == windows.FILE_ACTION_RENAMED_NEW_NAME {
+				w.sendEvent(fullname, filepath.Join(watch.path, watch.rename), watch.mask&w.toFSnotifyFlags(raw.Action))
+			} else {
+				w.sendEvent(fullname, "", watch.mask&w.toFSnotifyFlags(raw.Action))
+			}
+
 			if raw.Action == windows.FILE_ACTION_RENAMED_NEW_NAME {
-				fullname = filepath.Join(watch.path, watch.rename)
-				sendNameEvent()
+				w.sendEvent(filepath.Join(watch.path, watch.rename), "", watch.names[name]&mask)
 			}
 
 			// Move to the next event in the buffer
@@ -802,8 +804,7 @@ func (w *Watcher) readEvents() {
 			// Error!
 			if offset >= n {
 				//lint:ignore ST1005 Windows should be capitalized
-				w.sendError(errors.New(
-					"Windows system assumed buffer larger than it is, events have likely been missed"))
+				w.sendError(errors.New("Windows system assumed buffer larger than it is, events have likely been missed"))
 				break
 			}
 		}
