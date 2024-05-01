@@ -67,7 +67,8 @@ End-of-line escapes with `\` are not supported.
 
 ### Supported commands
 
-    watch path          # Watch the path, reporting events for it.
+    watch path          # Watch the path, reporting events for it. Nothing is
+                        # watched by default.
     unwatch path        # Stop watching the path.
     watchlist n         # Assert watchlist length.
 
@@ -121,16 +122,16 @@ ignored.
 
 Platform-specific tests can be added after GOOS; for example:
 
-watch /
-touch /file
+    watch /
+    touch /file
 
-Output:
-    # Tested if nothing else matches
-    create    /file
+    Output:
+        # Tested if nothing else matches
+        create    /file
 
-    # Windows-specific test.
-    windows:
-        write  /file
+        # Windows-specific test.
+        windows:
+            write  /file
 
 You can specify multiple platforms with a comma (e.g. "windows, linux:").
 "kqueue" is a shortcut for all kqueue systems (BSD, macOS).
