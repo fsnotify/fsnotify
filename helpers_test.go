@@ -730,6 +730,7 @@ func parseScript(t *testing.T, in string) {
 			}
 		}
 	)
+loop:
 	for _, c := range cmds {
 		c := c
 		//fmt.Printf("line %d: %q  %q\n", c.line, c.cmd, c.args)
@@ -747,8 +748,6 @@ func parseScript(t *testing.T, in string) {
 				if runtime.GOOS == "windows" {
 					t.Skip("No named pipes on Windows")
 				}
-			case "recurse":
-				recurseOnly(t)
 			case "mknod":
 				if runtime.GOOS == "windows" {
 					t.Skip("No device nodes on Windows")
@@ -762,6 +761,8 @@ func parseScript(t *testing.T, in string) {
 				if isSolaris() {
 					t.Skip(`"mknod fails with "not owner"`)
 				}
+			case "recurse":
+				recurseOnly(t)
 			case "windows":
 				if runtime.GOOS == "windows" {
 					t.Skip("Skipping on Windows")
@@ -773,6 +774,22 @@ func parseScript(t *testing.T, in string) {
 			default:
 				t.Fatalf("line %d: unknown %s reason: %q", c.line, c.cmd, c.args[0])
 			}
+		//case "state":
+		//	mustArg(c, 0)
+		//	do = append(do, func() { eventSeparator(); fmt.Fprintln(os.Stderr); w.w.state(); fmt.Fprintln(os.Stderr) })
+		case "debug":
+			mustArg(c, 1)
+			switch c.args[0] {
+			case "1", "on", "true", "yes":
+				do = append(do, func() { debug = true })
+			case "0", "off", "false", "no":
+				do = append(do, func() { debug = false })
+			default:
+				t.Fatalf("line %d: unknown debug: %q", c.line, c.args[0])
+			}
+		case "stop":
+			mustArg(c, 0)
+			break loop
 		case "watch":
 			mustArg(c, 1)
 			do = append(do, func() { addWatch(t, w.w, tmppath(tmp, c.args[0])) })

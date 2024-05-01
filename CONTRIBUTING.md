@@ -34,7 +34,7 @@ For example:
 
     # Create a new empty file with some data.
     watch /
-    echo data /file
+    echo data >/file
 
     Output:
         create  /file
@@ -61,20 +61,20 @@ Arguments can be quoted with `"` or `'`; there are no escapes and they're
 functionally identical right now, but this may change in the future, so best to
 assume shell-like rules.
 
-    touch "$tmp/file with spaces"
+    touch "/file with spaces"
 
 End-of-line escapes with `\` are not supported.
-
-A command will sleep for 50ms after the desired operation; prefix the command
-with `nowait` to skip this:
-
-    nowait touch $tmp/file
 
 ### Supported commands
 
     watch path          # Watch the path, reporting events for it.
     unwatch path        # Stop watching the path.
     watchlist n         # Assert watchlist length.
+
+    stop                # Stop running the script; for debugging.
+    debug [yes/no]      # Enable/disable FSNOTIFY_DEBUG (tests are run in
+                          parallel by default, so -parallel=1 is probably a good
+                          idea).
 
     touch path
     mkdir [-p] dir
@@ -89,11 +89,11 @@ with `nowait` to skip this:
     echo str >>path     # Append "str" to "path".
     echo str >path      # Truncate "path" and write "str".
 
-
-    require reason      # Skip the test if "reason" is true; both "skip" and
+    require reason      # Skip the test if "reason" is true; "skip" and
     skip reason         # "require" behave identical; it supports both for
                         # readability. Possible reasons are:
                         #
+                        #   always    Always skip this test.
                         #   symlink   Symlinks are supported (requires admin
                         #             permissions on Windows).
                         #   mkfifo    Platform doesn't support FIFO named sockets.
@@ -115,9 +115,25 @@ The format of that is:
     system2:
         event  path
 
-It's a list of events relative to $tmp. After a `system:` line exceptions can be
-added for a specific system.
+Every event is one line, and any whitespace between the event and path are
+ignored. The path can optionally be surrounded in ". Anything after a "#" is
+ignored.
 
+Platform-specific tests can be added after GOOS; for example:
+
+watch /
+touch /file
+
+Output:
+    # Tested if nothing else matches
+    create    /file
+
+    # Windows-specific test.
+    windows:
+        write  /file
+
+You can specify multiple platforms with a comma (e.g. "windows, linux:").
+"kqueue" is a shortcut for all kqueue systems (BSD, macOS).
 
 
 [goon]: https://github.com/arp242/goon
