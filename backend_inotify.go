@@ -403,6 +403,9 @@ func (w *Watcher) AddWith(name string, opts ...addOpt) error {
 	}
 
 	var flags uint32
+	if with.noFollow {
+		flags |= unix.IN_DONT_FOLLOW
+	}
 	if with.op.Has(Create) {
 		flags |= unix.IN_CREATE
 	}

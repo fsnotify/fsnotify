@@ -188,8 +188,9 @@ func (e Event) String() string {
 type (
 	addOpt   func(opt *withOpts)
 	withOpts struct {
-		bufsize int
-		op      Op
+		bufsize  int
+		op       Op
+		noFollow bool
 	}
 )
 
@@ -208,7 +209,9 @@ var defaultOpts = withOpts{
 func getOptions(opts ...addOpt) withOpts {
 	with := defaultOpts
 	for _, o := range opts {
-		o(&with)
+		if o != nil {
+			o(&with)
+		}
 	}
 	return with
 }
@@ -243,6 +246,12 @@ func WithBufferSize(bytes int) addOpt {
 // supported. Use [Watcher.Support] to check for support.
 func withOps(op Op) addOpt {
 	return func(opt *withOpts) { opt.op = op }
+}
+
+// WithNoFollow disables following symlinks, so the symlinks themselves are
+// watched.
+func withNoFollow() addOpt {
+	return func(opt *withOpts) { opt.noFollow = true }
 }
 
 var enableRecurse = false

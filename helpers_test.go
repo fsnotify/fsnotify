@@ -669,6 +669,15 @@ func supportsRename() bool {
 	}
 }
 
+func supportsNofollow(t *testing.T) {
+	switch runtime.GOOS {
+	case "linux":
+		// Run test.
+	default:
+		t.Skip("withNoFollow() not yet supported on " + runtime.GOOS)
+	}
+}
+
 func tmppath(tmp, s string) string {
 	if len(s) == 0 {
 		return ""
@@ -812,6 +821,8 @@ loop:
 				supportsRecurse(t)
 			case "filter":
 				supportsFilter(t)
+			case "nofollow":
+				supportsNofollow(t)
 			case "windows":
 				if runtime.GOOS == "windows" {
 					t.Skip("Skipping on Windows")
@@ -852,6 +863,16 @@ loop:
 				do = append(do, func() { addWatch(t, w.w, tmppath(tmp, c.args[0])) })
 				continue
 			}
+
+			var follow addOpt
+			for i := range c.args {
+				if c.args[i] == "nofollow" || c.args[i] == "no-follow" {
+					c.args = append(c.args[:i], c.args[i+1:]...)
+					follow = withNoFollow()
+					break
+				}
+			}
+
 			var op Op
 			for _, o := range c.args[1:] {
 				switch strings.ToLower(o) {
@@ -878,11 +899,10 @@ loop:
 				case "close_read":
 					op |= xUnportableCloseRead
 				}
-
 			}
 			do = append(do, func() {
 				p := tmppath(tmp, c.args[0])
-				err := w.w.AddWith(p, withOps(op))
+				err := w.w.AddWith(p, withOps(op), follow)
 				if err != nil {
 					t.Fatalf("line %d: addWatch(%q): %s", c.line+1, p, err)
 				}
