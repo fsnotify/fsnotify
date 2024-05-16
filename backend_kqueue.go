@@ -303,9 +303,12 @@ func (w *kqueue) AddWith(name string, opts ...addOpt) error {
 		return fmt.Errorf("%w: %s", xErrUnsupported, with.op)
 	}
 
-	w.watches.addUserWatch(name)
 	_, err := w.addWatch(name, noteAllEvents)
-	return err
+	if err != nil {
+		return err
+	}
+	w.watches.addUserWatch(name)
+	return nil
 }
 
 func (w *kqueue) Remove(name string) error {
