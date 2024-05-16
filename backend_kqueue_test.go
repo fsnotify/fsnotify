@@ -53,6 +53,12 @@ func TestRemoveState(t *testing.T) {
 
 	check(2, 3)
 
+	// Shouldn't change internal state.
+	if err := w.Add("/path-doesnt-exist"); err == nil {
+		t.Fatal(err)
+	}
+	check(2, 3)
+
 	if err := w.Remove(file); err != nil {
 		t.Fatal(err)
 	}
