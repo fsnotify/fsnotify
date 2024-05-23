@@ -8,3 +8,6 @@
 
 /test/kqueue
 /test/a.out
+
+# ignore ide files from idea
+.idea/
