@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/power-devops/ahafs"
@@ -145,7 +144,6 @@ func NewWatcher() (*Watcher, error) {
 		Errors:  make(chan error),
 		watches: make(map[string]*watch),
 	}
-	go w.readEvents()
 	return w, nil
 }
 
@@ -190,18 +188,24 @@ func (w *Watcher) Close() error {
 // Instead, watch the parent directory and use Event.Name to filter out files
 // you're not interested in. There is an example of this in [cmd/fsnotify/file.go].
 func (w *Watcher) Add(name string) error {
-	name = filepath.Clean(name)
+	// fmt.Println("rquest to add watch:", name)
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	return w.add(name)
+}
+
+func (w *Watcher) add(name string) error {
+	name = filepath.Clean(name)
 	wa := w.watches[name]
 	if wa != nil {
 		return fmt.Errorf("Object %s is already monitored", name)
 	}
-	wa, err := newWatch(name)
+	wa, err := w.newWatch(name)
 	if err != nil {
 		return err
 	}
 	w.watches[name] = wa
+	go wa.readEvents(w)
 	return nil
 }
 
@@ -234,23 +238,24 @@ func (w *Watcher) WatchList() []string {
 
 // readEvents reads events from ahafs, converts the received events into Event
 // objects and sends them via the Events channel
-func (w *Watcher) readEvents() {
+func (w *watch) readEvents(wa *Watcher) {
 	c := make(chan Event, 1)
-	for _, wa := range w.watches {
-		go wa.GetEvents(c)
-	}
+
+	go w.GetEvents(c, wa)
+
 	for {
 		select {
 		case ahaevt, ok := <-c:
+			// fmt.Println(ahaevt)
 			if !ok {
 				continue
 			}
-			w.Events <- ahaevt
+			wa.Events <- ahaevt
 		}
 	}
 }
 
-func newWatch(name string) (*watch, error) {
+func (wa *Watcher) newWatch(name string) (*watch, error) {
 	w := &watch{path: name}
 	// fmt.Println("Adding a new watcher for:", name)
 	s, err := os.Stat(name)
@@ -269,18 +274,25 @@ func newWatch(name string) (*watch, error) {
 		} else {
 			w.attrevt = am
 		}
-		// fmt.Println("Adding directory monitor for:", filepath.Dir(name))
-		if pm, err := ahafs.NewDirMonitor(filepath.Dir(name)); err != nil {
-			return nil, err
-		} else {
-			w.pathevt = pm
-		}
 	case err == nil && s.IsDir():
 		// fmt.Println("We should monitor an existing directory")
 		// fmt.Println("Adding directory monitor for:", name)
 		if pm, err := ahafs.NewDirMonitor(name); err != nil {
 			return nil, err
 		} else {
+			filepath.Walk(name, func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					// fmt.Println(err)
+					return err
+				}
+
+				if !info.IsDir() {
+					wa.add(path)
+				}
+
+				// fmt.Printf("dir: %v: name: %s\n", info.IsDir(), path)
+				return nil
+			})
 			w.pathevt = pm
 		}
 	case err != nil:
@@ -289,6 +301,17 @@ func newWatch(name string) (*watch, error) {
 		if pm, err := ahafs.NewDirMonitor(filepath.Dir(name)); err != nil {
 			return nil, err
 		} else {
+			filepath.Walk(name, func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					// fmt.Println(err)
+					return err
+				}
+				if !info.IsDir() {
+					wa.add(path)
+				}
+				// fmt.Printf("dir: %v: name: %s\n", info.IsDir(), path)
+				return nil
+			})
 			w.pathevt = pm
 		}
 	}
@@ -296,7 +319,7 @@ func newWatch(name string) (*watch, error) {
 }
 
 // GetEvents returns the newest events from the specific watcher
-func (w *watch) GetEvents(c chan<- Event) {
+func (w *watch) GetEvents(c chan<- Event, wa *Watcher) {
 	filecAlive := false
 	pathcAlive := false
 	attrcAlive := false
@@ -343,8 +366,12 @@ func (w *watch) GetEvents(c chan<- Event) {
 				w.fileevt.Close()
 				continue
 			}
-			select {
-			case c <- Event{Name: w.path, Op: Write}:
+			switch e.RC {
+			case ahafs.ModFileWrite:
+				select {
+				case c <- Event{Name: w.path, Op: Write}:
+				default:
+				}
 			default:
 			}
 		case e, ok = <-w.pathc:
@@ -360,48 +387,26 @@ func (w *watch) GetEvents(c chan<- Event) {
 				w.pathevt.Close()
 				continue
 			}
+			var path string
+			if e.Info != "" {
+				path = fmt.Sprintf("%s%s%s", w.path, string(os.PathSeparator), e.Info)
+			} else {
+				path = w.path
+			}
 			switch e.RC {
 			case ahafs.ModDirCreate:
 				// a file is created
 				// fmt.Println("File created")
-				if w.fileevt == nil {
-					if _, err := os.Stat(w.path); err == nil {
-						if fm, err := ahafs.NewFileMonitor(w.path); err != nil {
-							fmt.Println("Can't create file monitor:", err)
-							continue
-						} else {
-							w.fileevt = fm
-							filecAlive = true
-							go w.fileevt.Watch(w.filec)
-						}
-					}
-				}
-				if w.attrevt == nil {
-					if _, err := os.Stat(w.path); err == nil {
-						if am, err := ahafs.NewFileAttrMonitor(w.path); err != nil {
-							fmt.Println("Can't create attribute monitor:", err)
-							continue
-						} else {
-							w.attrevt = am
-							attrcAlive = true
-							go w.attrevt.Watch(w.attrc)
-						}
-					}
-				}
+				wa.Add(path)
 				select {
-				case c <- Event{Name: w.path, Op: Create}:
+				case c <- Event{Name: path, Op: Create}:
 				default:
 				}
 			case ahafs.ModDirRemove:
 				// a file is removed
 				// fmt.Println("File removed")
-				if strings.Split(e.Info, "\n")[0] == w.path {
-					// the file is removed, no events more from filec and attrc
-					filecAlive = false
-					attrcAlive = false
-				}
 				select {
-				case c <- Event{Name: w.path, Op: Remove}:
+				case c <- Event{Name: path, Op: Remove}:
 				default:
 				}
 			}
@@ -419,27 +424,11 @@ func (w *watch) GetEvents(c chan<- Event) {
 				continue
 			}
 			switch e.RC {
-			case ahafs.ModFileAttrRemove:
+			case ahafs.ModFileAttrSetmode:
 				select {
-				case c <- Event{Name: w.path, Op: Remove}:
+				case c <- Event{Name: w.path, Op: Chmod}:
 				default:
 				}
-				// file is removed, no events anymore from filec & attrc
-				filecAlive = false
-				attrcAlive = false
-				w.attrevt.Close()
-				w.fileevt.Close()
-				continue
-			case ahafs.ModFileAttrRename:
-				select {
-				case c <- Event{Name: w.path, Op: Rename}:
-				default:
-				}
-				continue
-			}
-			select {
-			case c <- Event{Name: w.path, Op: Chmod}:
-			default:
 			}
 		}
 	}

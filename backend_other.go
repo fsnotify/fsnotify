@@ -1,4 +1,4 @@
-//go:build appengine || (!darwin && !dragonfly && !freebsd && !openbsd && !linux && !netbsd && !solaris && !windows)
+//go:build appengine || (!darwin && !dragonfly && !freebsd && !openbsd && !linux && !netbsd && !solaris && !windows && !aix)
 
 // Note: the documentation on the Watcher type and methods is generated from
 // mkdoc.zsh
