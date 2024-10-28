@@ -1,7 +1,7 @@
 Thank you for your interest in contributing to fsnotify! We try to review and
 merge PRs in a reasonable timeframe, but please be aware that:
 
-- To avoid "wasted" work, please discus changes on the issue tracker first. You
+- To avoid "wasted" work, please discuss changes on the issue tracker first. You
   can just send PRs, but they may end up being rejected for one reason or the
   other.
 

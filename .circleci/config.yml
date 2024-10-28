@@ -7,7 +7,7 @@ jobs:
   # linux/arm64
   linux-arm64:
     machine:
-      image: ubuntu-2204:2022.07.1
+      image: ubuntu-2204:2024.05.1
     resource_class: arm.medium
     working_directory: ~/repo
     steps:
