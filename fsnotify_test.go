@@ -821,3 +821,22 @@ func BenchmarkAddRemove(b *testing.B) {
 		do(b, w)
 	})
 }
+
+// Would panic on inotify: https://github.com/fsnotify/fsnotify/issues/616
+func TestRemoveRace(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	w := newCollector(t, tmp)
+	w.collect(t)
+
+	dir := join(tmp, "/dir")
+	for i := 0; i < 100; i++ {
+		go os.MkdirAll(dir, 0o0755)
+		go os.RemoveAll(dir)
+		go w.w.Add(dir)
+		go w.w.Remove(dir)
+	}
+	time.Sleep(100 * time.Millisecond)
+	w.stop(t)
+}

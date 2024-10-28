@@ -91,7 +91,11 @@ func (w *watches) add(ww *watch) {
 func (w *watches) remove(wd uint32) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	delete(w.path, w.wd[wd].path)
+	watch := w.wd[wd] // Could have had Remove() called. See #616.
+	if watch == nil {
+		return
+	}
+	delete(w.path, watch.path)
 	delete(w.wd, wd)
 }
 
@@ -469,20 +473,26 @@ func (w *inotify) readEvents() {
 				}
 			}
 
-			// If the event happened to the watched directory or the watched file, the kernel
-			// doesn't append the filename to the event, but we would like to always fill the
-			// the "Name" field with a valid filename. We retrieve the path of the watch from
-			// the "paths" map.
+			/// If the event happened to the watched directory or the watched
+			/// file, the kernel doesn't append the filename to the event, but
+			/// we would like to always fill the the "Name" field with a valid
+			/// filename. We retrieve the path of the watch from the "paths"
+			/// map.
 			watch := w.watches.byWd(uint32(raw.Wd))
-
-			var name string
-			if watch != nil {
-				name = watch.path
+			/// Can be nil if Remove() was called in another goroutine for this
+			/// path inbetween reading the events from the kernel and reading
+			/// the internal state. Not much we can do about it, so just skip.
+			/// See #616.
+			if watch == nil {
+				next()
+				continue
 			}
+
+			name := watch.path
 			if nameLen > 0 {
-				// Point "bytes" at the first byte of the filename
+				/// Point "bytes" at the first byte of the filename
 				bytes := (*[unix.PathMax]byte)(unsafe.Pointer(&buf[offset+unix.SizeofInotifyEvent]))[:nameLen:nameLen]
-				// The filename is padded with NULL bytes. TrimRight() gets rid of those.
+				/// The filename is padded with NULL bytes. TrimRight() gets rid of those.
 				name += "/" + strings.TrimRight(string(bytes[0:nameLen]), "\000")
 			}
 
@@ -497,14 +507,14 @@ func (w *inotify) readEvents() {
 
 			// inotify will automatically remove the watch on deletes; just need
 			// to clean our state here.
-			if watch != nil && mask&unix.IN_DELETE_SELF == unix.IN_DELETE_SELF {
+			if mask&unix.IN_DELETE_SELF == unix.IN_DELETE_SELF {
 				w.watches.remove(watch.wd)
 			}
 
 			// We can't really update the state when a watched path is moved;
 			// only IN_MOVE_SELF is sent and not IN_MOVED_{FROM,TO}. So remove
 			// the watch.
-			if watch != nil && mask&unix.IN_MOVE_SELF == unix.IN_MOVE_SELF {
+			if mask&unix.IN_MOVE_SELF == unix.IN_MOVE_SELF {
 				if watch.recurse {
 					next() // Do nothing
 					continue
@@ -529,7 +539,7 @@ func (w *inotify) readEvents() {
 
 			ev := w.newEvent(name, mask, raw.Cookie)
 			// Need to update watch path for recurse.
-			if watch != nil && watch.recurse {
+			if watch.recurse {
 				isDir := mask&unix.IN_ISDIR == unix.IN_ISDIR
 				/// New directory created: set up watch on it.
 				if isDir && ev.Has(Create) {
