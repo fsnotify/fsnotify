@@ -123,6 +123,11 @@ settings* until we have a native FSEvents implementation (see [#11]).
 [#11]: https://github.com/fsnotify/fsnotify/issues/11
 [#15]: https://github.com/fsnotify/fsnotify/issues/15
 
+### How can I wait for all writes to finish?
+You can use `UnportableCloseWrite` on platforms that support it, and use a small
+timeout as a fallback on platforms that don't. There is an example of this in
+`cmd/fsnotify/finishwrite.go`.
+
 ### Watching a file doesn't work well
 Watching individual files (rather than directories) is generally not recommended
 as many programs (especially editors) update files atomically: it will write to

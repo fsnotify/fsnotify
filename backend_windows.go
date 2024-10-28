@@ -118,8 +118,8 @@ func (w *readDirChangesW) AddWith(name string, opts ...addOpt) error {
 	}
 
 	with := getOptions(opts...)
-	if !w.xSupports(with.op) {
-		return fmt.Errorf("%w: %s", xErrUnsupported, with.op)
+	if !w.Supports(with.op) {
+		return fmt.Errorf("%w: %s", ErrUnsupported, with.op)
 	}
 	if with.bufsize < 4096 {
 		return fmt.Errorf("fsnotify.WithBufferSize: buffer size cannot be smaller than 4096 bytes")
@@ -671,9 +671,9 @@ func (w *readDirChangesW) toFSnotifyFlags(action uint32) uint64 {
 	return 0
 }
 
-func (w *readDirChangesW) xSupports(op Op) bool {
-	if op.Has(xUnportableOpen) || op.Has(xUnportableRead) ||
-		op.Has(xUnportableCloseWrite) || op.Has(xUnportableCloseRead) {
+func (w *readDirChangesW) Supports(op Op) bool {
+	if op.Has(UnportableOpen) || op.Has(UnportableRead) ||
+		op.Has(UnportableCloseWrite) || op.Has(UnportableCloseRead) {
 		return false
 	}
 	return true

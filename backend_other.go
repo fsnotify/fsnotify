@@ -19,4 +19,4 @@ func (w *other) WatchList() []string                       { return nil }
 func (w *other) Add(name string) error                     { return nil }
 func (w *other) AddWith(name string, opts ...addOpt) error { return nil }
 func (w *other) Remove(name string) error                  { return nil }
-func (w *other) xSupports(op Op) bool                      { return false }
+func (w *other) Supports(op Op) bool                       { return false }
