@@ -15,7 +15,6 @@ Platform support:
 | ReadDirectoryChangesW | Windows    | Supported                                                                 |
 | FEN                   | illumos    | Supported                                                                 |
 | fanotify              | Linux 5.9+ | [Not yet](https://github.com/fsnotify/fsnotify/issues/114)                |
-| AHAFS                 | AIX        | [aix branch]; experimental due to lack of maintainer and test environment |
 | FSEvents              | macOS      | [Needs support in x/sys/unix][fsevents]                                   |
 | USN Journals          | Windows    | [Needs support in x/sys/windows][usn]                                     |
 | Polling               | *All*      | [Not yet](https://github.com/fsnotify/fsnotify/issues/9)                  |
@@ -25,7 +24,6 @@ untested.
 
 [fsevents]:   https://github.com/fsnotify/fsnotify/issues/11#issuecomment-1279133120
 [usn]:        https://github.com/fsnotify/fsnotify/issues/53#issuecomment-1279829847
-[aix branch]: https://github.com/fsnotify/fsnotify/issues/353#issuecomment-1284590129
 
 Usage
 -----
@@ -124,6 +122,11 @@ settings* until we have a native FSEvents implementation (see [#11]).
 
 [#11]: https://github.com/fsnotify/fsnotify/issues/11
 [#15]: https://github.com/fsnotify/fsnotify/issues/15
+
+### How can I wait for all writes to finish?
+You can use `UnportableCloseWrite` on platforms that support it, and use a small
+timeout as a fallback on platforms that don't. There is an example of this in
+`cmd/fsnotify/finishwrite.go`.
 
 ### Watching a file doesn't work well
 Watching individual files (rather than directories) is generally not recommended

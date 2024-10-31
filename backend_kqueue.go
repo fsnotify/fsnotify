@@ -299,8 +299,8 @@ func (w *kqueue) AddWith(name string, opts ...addOpt) error {
 	}
 
 	with := getOptions(opts...)
-	if !w.xSupports(with.op) {
-		return fmt.Errorf("%w: %s", xErrUnsupported, with.op)
+	if !w.Supports(with.op) {
+		return fmt.Errorf("%w: %s", ErrUnsupported, with.op)
 	}
 
 	_, err := w.addWatch(name, noteAllEvents)
@@ -721,12 +721,14 @@ func (w *kqueue) read(events []unix.Kevent_t) ([]unix.Kevent_t, error) {
 	return events[0:n], nil
 }
 
-func (w *kqueue) xSupports(op Op) bool {
-	if runtime.GOOS == "freebsd" {
-		//return true // Supports everything.
-	}
-	if op.Has(xUnportableOpen) || op.Has(xUnportableRead) ||
-		op.Has(xUnportableCloseWrite) || op.Has(xUnportableCloseRead) {
+func (w *kqueue) Supports(op Op) bool {
+	// TODO: implement
+	//if runtime.GOOS == "freebsd" {
+	//	return true // Supports everything.
+	//}
+
+	if op.Has(UnportableOpen) || op.Has(UnportableRead) ||
+		op.Has(UnportableCloseWrite) || op.Has(UnportableCloseRead) {
 		return false
 	}
 	return true

@@ -16,9 +16,9 @@ https://github.com/fsnotify/fsnotify
 
 Commands:
 
-    watch [paths]  Watch the paths for changes and print the events.
-    file  [file]   Watch a single file for changes.
-    dedup [paths]  Watch the paths for changes, suppressing duplicate events.
+    watch        [paths]  Watch the paths for changes and print the events.
+    file         [file]   Watch a single file for changes.
+    finish-write [paths]  Watch the paths and print when writing is finished.
 `[1:]
 
 func exit(format string, a ...interface{}) {
@@ -59,7 +59,7 @@ func main() {
 		watch(args...)
 	case "file":
 		file(args...)
-	case "dedup":
-		dedup(args...)
+	case "finishwrite", "finish-write", "finish_write":
+		finishWrite(args...)
 	}
 }
