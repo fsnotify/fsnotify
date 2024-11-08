@@ -531,7 +531,11 @@ func (w *inotify) readEvents() {
 			/// Skip if we're watching both this path and the parent; the parent
 			/// will already send a delete so no need to do it twice.
 			if mask&unix.IN_DELETE_SELF != 0 {
-				if _, ok := w.watches.path[filepath.Dir(watch.path)]; ok {
+				w.watches.mu.RLock()
+				_, ok := w.watches.path[filepath.Dir(watch.path)]
+				w.watches.mu.RUnlock()
+
+				if ok {
 					next()
 					continue
 				}
