@@ -385,7 +385,14 @@ func (o Op) String() string {
 func (o Op) Has(h Op) bool { return o&h != 0 }
 
 // Has reports if this event has the given operation.
-func (e Event) Has(op Op) bool { return e.Op.Has(op) }
+func (e Event) Has(op ...Op) bool { 
+	for _, h := range op {
+		if e.Op.Has(h) {
+			return true
+		}
+	}
+	return false
+}
 
 // String returns a string representation of the event with their path.
 func (e Event) String() string {
