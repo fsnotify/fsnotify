@@ -139,3 +139,67 @@ func TestInotifyDeleteOpenFile(t *testing.T) {
 	e = w.stop(t)
 	cmpEvents(t, tmp, e, newEvents(t, `remove /file`))
 }
+
+func TestInDeleteSelfRace(t *testing.T) {
+	t.Parallel()
+
+	var (
+		wg    sync.WaitGroup
+		stop  = make(chan struct{})
+		tries = 25
+	)
+
+	tmp := t.TempDir()
+	touch(t, tmp, "other", noWait)
+
+	w := newCollector(t, tmp)
+	touch(t, tmp, "target", noWait)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				addWatch(t, w.w, tmp, "other")
+			}
+		}
+	}()
+
+	for {
+		select {
+		case err, ok := <-w.w.Errors:
+			if !ok {
+				return
+			}
+
+			t.Error(err)
+
+		case ev, ok := <-w.w.Events:
+			if !ok {
+				return
+			}
+
+			if ev.Has(Create) {
+				rm(t, tmp, "target", noWait)
+			}
+
+			if ev.Has(Remove) {
+				touch(t, tmp, "target", noWait)
+				addWatch(t, w.w, tmp, "target")
+				tries--
+			}
+
+			if tries == 0 {
+				close(stop)
+				wg.Wait()
+
+				if err := w.w.Close(); err != nil {
+					t.Error(err)
+				}
+			}
+		}
+	}
+}
