@@ -35,11 +35,9 @@ type readDirChangesW struct {
 	closed  bool       // Set to true when Close() is first called
 }
 
-func newBackend(ev chan Event, errs chan error) (backend, error) {
-	return newBufferedBackend(50, ev, errs)
-}
+var defaultBufferSize = 50
 
-func newBufferedBackend(sz uint, ev chan Event, errs chan error) (backend, error) {
+func newBackend(ev chan Event, errs chan error) (backend, error) {
 	port, err := windows.CreateIoCompletionPort(windows.InvalidHandle, 0, 0, 0)
 	if err != nil {
 		return nil, os.NewSyscallError("CreateIoCompletionPort", err)

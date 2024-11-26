@@ -1102,3 +1102,33 @@ func TestRace(t *testing.T) {
 		w.stop(t)
 	})
 }
+
+func TestNewWatcher(t *testing.T) {
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defaultSz := 0
+	if runtime.GOOS == "windows" {
+		defaultSz = 50
+	}
+	if c := cap(w.Events); c != defaultSz {
+		t.Errorf("cap of NewWatcher() is not %d but %d", defaultSz, c)
+	}
+
+	w, err = NewBufferedWatcher(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := cap(w.Events); c != 0 {
+		t.Errorf("cap of NewWatcher() is not %d but %d", 0, c)
+	}
+
+	w, err = NewBufferedWatcher(42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := cap(w.Events); c != 42 {
+		t.Errorf("cap of NewWatcher() is not %d but %d", 42, c)
+	}
+}

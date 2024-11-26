@@ -30,11 +30,9 @@ type fen struct {
 	watches map[string]Op // Explicitly watched non-directories
 }
 
-func newBackend(ev chan Event, errs chan error) (backend, error) {
-	return newBufferedBackend(0, ev, errs)
-}
+var defaultBufferSize = 0
 
-func newBufferedBackend(sz uint, ev chan Event, errs chan error) (backend, error) {
+func newBackend(ev chan Event, errs chan error) (backend, error) {
 	w := &fen{
 		Events:  ev,
 		Errors:  errs,
