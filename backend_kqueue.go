@@ -183,11 +183,9 @@ func (w *watches) seenBefore(path string) bool {
 	return ok
 }
 
-func newBackend(ev chan Event, errs chan error) (backend, error) {
-	return newBufferedBackend(0, ev, errs)
-}
+var defaultBufferSize = 0
 
-func newBufferedBackend(sz uint, ev chan Event, errs chan error) (backend, error) {
+func newBackend(ev chan Event, errs chan error) (backend, error) {
 	kq, closepipe, err := newKqueue()
 	if err != nil {
 		return nil, err

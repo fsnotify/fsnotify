@@ -170,11 +170,9 @@ func (w *watches) updatePath(path string, f func(*watch) (*watch, error)) error 
 	return nil
 }
 
-func newBackend(ev chan Event, errs chan error) (backend, error) {
-	return newBufferedBackend(0, ev, errs)
-}
+var defaultBufferSize = 0
 
-func newBufferedBackend(sz uint, ev chan Event, errs chan error) (backend, error) {
+func newBackend(ev chan Event, errs chan error) (backend, error) {
 	// Need to set nonblocking mode for SetDeadline to work, otherwise blocking
 	// I/O operations won't terminate on close.
 	fd, errno := unix.InotifyInit1(unix.IN_CLOEXEC | unix.IN_NONBLOCK)
