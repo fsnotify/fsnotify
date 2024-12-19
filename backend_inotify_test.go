@@ -139,3 +139,29 @@ func TestInotifyDeleteOpenFile(t *testing.T) {
 	e = w.stop(t)
 	cmpEvents(t, tmp, e, newEvents(t, `remove /file`))
 }
+
+func TestInotifyRemoveSymbolicLink(t *testing.T) {
+	tmp := t.TempDir()
+	lnk := tmp + "_link"
+	os.Symlink(tmp, lnk)
+
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("NewWatcher failed: %v", err)
+	}
+	if err := w.Add(tmp); err != nil {
+		t.Fatalf("Add %s failed: %v", tmp, err)
+	}
+	if err := w.Add(lnk); err != nil {
+		t.Fatalf("Add %s failed: %v", lnk, err)
+	}
+	if err := w.Remove(lnk); err != nil {
+		t.Fatalf("Remove %s failed: %v", lnk, err)
+	}
+	if err := w.Remove(tmp); err != nil {
+		t.Fatalf("Remove %s failed: %v", tmp, err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("Close watcher failed: %v", err)
+	}
+}

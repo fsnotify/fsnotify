@@ -109,7 +109,10 @@ func (w *watches) removePath(path string) ([]uint32, error) {
 		return nil, fmt.Errorf("%w: %s", ErrNonExistentWatch, path)
 	}
 
-	watch := w.wd[wd]
+	watch, ok := w.wd[wd]
+	if !ok {
+		return []uint32{}, nil // when wd links to a nil watch, do nothing for the wd.
+	}
 	if recurse && !watch.recurse {
 		return nil, fmt.Errorf("can't use /... with non-recursive watch %q", path)
 	}
