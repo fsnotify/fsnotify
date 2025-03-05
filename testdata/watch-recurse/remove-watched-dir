@@ -28,21 +28,15 @@ Output:
 	remove      /watch/e
 	remove      /watch/f
 	remove      /watch/g
-	write       /watch/h
 	remove      /watch/h/a
-	write       /watch/h
 	remove      /watch/h
-	write       /watch/i
 	remove      /watch/i/a
-	write       /watch/i
 	remove      /watch/i
-	write       /watch/j
 	remove      /watch/j/a
-	write       /watch/j
 	remove      /watch/j
 	remove      /watch
 
-	linux:  # Same as Windows, but without those stupid dir writes Windows sends.
+	windows:  # Has additional dir writes
 		remove      /watch/a
 		remove      /watch/b
 		remove      /watch/c
@@ -50,10 +44,16 @@ Output:
 		remove      /watch/e
 		remove      /watch/f
 		remove      /watch/g
+		write       /watch/h
 		remove      /watch/h/a
+		write       /watch/h
 		remove      /watch/h
+		write       /watch/i
 		remove      /watch/i/a
+		write       /watch/i
 		remove      /watch/i
+		write       /watch/j
 		remove      /watch/j/a
+		write       /watch/j
 		remove      /watch/j
 		remove      /watch

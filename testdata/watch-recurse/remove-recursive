@@ -19,11 +19,11 @@ echo asd >>/dir1/subdir/file
 echo asd >>/dir2/subdir/file
 
 Output:
-	write /dir1/subdir
 	write /dir1/subdir/file
-	write /dir2/subdir
 	write /dir2/subdir/file
 
-	linux:  # Same as Windows, but without those stupid dir writes Windows sends.
+	windows:  # Has additional dir writes
+		write /dir1/subdir
 		write /dir1/subdir/file
+		write /dir2/subdir
 		write /dir2/subdir/file

@@ -27,8 +27,8 @@ func TestRemoveState(t *testing.T) {
 
 	check := func(want int) {
 		t.Helper()
-		if w.b.(*inotify).watches.len() != want {
-			t.Error(w.b.(*inotify).watches)
+		if w.b.(*recursive).b.(*inotify).watches.len() != want {
+			t.Error(w.b.(*recursive).b.(*inotify).watches)
 		}
 	}
 

@@ -18,7 +18,7 @@ func TestRemoveState(t *testing.T) {
 	touch(t, file)
 
 	w := newWatcher(t, tmp)
-	kq := w.b.(*kqueue)
+	kq := w.b.(*recursive).b.(*kqueue)
 	addWatch(t, w, tmp)
 	addWatch(t, w, file)
 
