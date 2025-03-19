@@ -645,12 +645,7 @@ func isSolaris() bool {
 }
 
 func supportsRecurse(t *testing.T) {
-	switch runtime.GOOS {
-	case "windows", "linux":
-		// Run test.
-	default:
-		t.Skip("recursion not yet supported on " + runtime.GOOS)
-	}
+	// Run test.
 }
 
 func supportsFilter(t *testing.T) {

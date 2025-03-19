@@ -11,18 +11,18 @@ Output:
 	create   /sub/dir/file
 	write    /sub/dir/file
 
-	write  /sub
-	write  /sub/dir
 	remove /sub/dir/file
-	write  /sub/dir
 	remove /sub/dir
-	write  /sub
 	remove /sub
 
-	linux:  # Same as Windows, but without those stupid dir writes Windows sends.
+	windows:  # Has additional dir writes
 		create   /sub/dir/file
 		write    /sub/dir/file
 
+		write  /sub
+		write  /sub/dir
 		remove /sub/dir/file
+		write  /sub/dir
 		remove /sub/dir
+		write  /sub
 		remove /sub

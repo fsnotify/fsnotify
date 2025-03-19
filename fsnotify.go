@@ -250,7 +250,7 @@ var (
 // NewWatcher creates a new Watcher.
 func NewWatcher() (*Watcher, error) {
 	ev, errs := make(chan Event), make(chan error)
-	b, err := newBackend(ev, errs)
+	b, err := newRecursiveBackend(ev, errs)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +267,7 @@ func NewWatcher() (*Watcher, error) {
 // buffers instead of adding a large userspace buffer.
 func NewBufferedWatcher(sz uint) (*Watcher, error) {
 	ev, errs := make(chan Event), make(chan error)
-	b, err := newBufferedBackend(sz, ev, errs)
+	b, err := newRecursiveBufferedBackend(sz, ev, errs)
 	if err != nil {
 		return nil, err
 	}
@@ -410,6 +410,7 @@ type (
 		op         Op
 		noFollow   bool
 		sendCreate bool
+		recurse    bool
 	}
 )
 

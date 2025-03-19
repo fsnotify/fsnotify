@@ -99,6 +99,13 @@ func (w *watches) remove(wd uint32) {
 	delete(w.wd, wd)
 }
 
+func (w *watches) existsPath(path string) bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	_, ok := w.path[path]
+	return ok
+}
+
 func (w *watches) removePath(path string) ([]uint32, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -530,8 +537,8 @@ func (w *inotify) readEvents() {
 
 			/// Skip if we're watching both this path and the parent; the parent
 			/// will already send a delete so no need to do it twice.
-			if mask&unix.IN_DELETE_SELF != 0 {
-				if _, ok := w.watches.path[filepath.Dir(watch.path)]; ok {
+			if mask&unix.IN_DELETE_SELF != 0 || mask&unix.IN_MOVE_SELF != 0 {
+				if w.watches.existsPath(filepath.Dir(watch.path)) {
 					next()
 					continue
 				}
