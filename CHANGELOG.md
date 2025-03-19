@@ -1,5 +1,14 @@
 # Changelog
 
+Unreleased
+----------
+
+### Changes and fixes
+
+- inotify: fix potential data races on IN_DELETE_SELF event ([#653])
+
+[#653]: https://github.com/fsnotify/fsnotify/pull/653
+
 1.8.0 2023-10-31
 ----------------
 
