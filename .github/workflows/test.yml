@@ -10,14 +10,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ['ubuntu-20.04', 'ubuntu-latest']
-        go: ['1.17', '1.23']
+        os: ['ubuntu-20.04', 'ubuntu-latest', 'ubuntu-24.04-arm']
+        go: ['1.17', '1.24']
     runs-on: '${{ matrix.os }}'
     steps:
       - uses: 'actions/checkout@v4'
       - uses: 'actions/setup-go@v5'
-        with:
-          go-version: '${{ matrix.go }}'
+        with: {go-version: '${{ matrix.go }}'}
       - name: test
         run: |
           FSNOTIFY_BUFFER=4096 go test -parallel 1 -race    ./...
@@ -29,13 +28,12 @@ jobs:
       fail-fast: false
       matrix:
         os: ['windows-latest']
-        go: ['1.17', '1.23']
+        go: ['1.17', '1.24']
     runs-on: '${{ matrix.os }}'
     steps:
       - uses: 'actions/checkout@v4'
       - uses: 'actions/setup-go@v5'
-        with:
-          go-version: '${{ matrix.go }}'
+        with: {go-version: '${{ matrix.go }}'}
       - name: test
         run: |
           go test -parallel 1 -race    ./...
@@ -60,22 +58,18 @@ jobs:
   #                              go-12 test -parallel 1    ./...
   #         FSNOTIFY_DEBUG=1     go-12 test -parallel 1 -v ./...
 
-  # Test only the latest Go version on macOS; we use the macOS builders for BSD
-  # and illumos, and GitHub doesn't allow many of them to run concurrently. If
-  # it works on Windows and Linux with Go 1.17, then it probably does on macOS
-  # too.
   macos:
-    name: test
+    name: 'test'
     strategy:
       fail-fast: false
       matrix:
-        os: ['macos-12', 'macos-latest']
+        os: ['macos-13', 'macos-latest']
+        go: ['1.17', '1.24']
     runs-on: '${{ matrix.os }}'
     steps:
       - uses: 'actions/checkout@v4'
       - uses: 'actions/setup-go@v5'
-        with:
-          go-version: '1.23'
+        with: {go-version: '${{ matrix.go }}'}
       - name: test
         run: |
           FSNOTIFY_BUFFER=4096 go test -parallel 1 -race    ./...
