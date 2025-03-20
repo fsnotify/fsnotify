@@ -432,7 +432,7 @@ func (w *eventCollector) collect(t *testing.T) {
 					w.done <- struct{}{}
 					return
 				}
-				t.Error(e)
+				t.Errorf("eventCollector: unexpected error on Errors chan: %s", e)
 				w.done <- struct{}{}
 				return
 			case e, ok := <-w.w.Events:
