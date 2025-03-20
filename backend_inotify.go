@@ -88,15 +88,15 @@ func (w *watches) add(ww *watch) {
 	w.path[ww.path] = ww.wd
 }
 
-func (w *watches) remove(wd uint32) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	watch := w.wd[wd] // Could have had Remove() called. See #616.
-	if watch == nil {
+func (w *watches) remove(watch *watch) {
+	if watch == nil { // Could have had Remove() called. See #616.
 		return
 	}
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	delete(w.path, watch.path)
-	delete(w.wd, wd)
+	delete(w.wd, watch.wd)
 }
 
 func (w *watches) removePath(path string) ([]uint32, error) {
@@ -508,7 +508,7 @@ func (w *inotify) readEvents() {
 			// inotify will automatically remove the watch on deletes; just need
 			// to clean our state here.
 			if mask&unix.IN_DELETE_SELF == unix.IN_DELETE_SELF {
-				w.watches.remove(watch.wd)
+				w.watches.remove(watch)
 			}
 
 			// We can't really update the state when a watched path is moved;
@@ -531,7 +531,10 @@ func (w *inotify) readEvents() {
 			/// Skip if we're watching both this path and the parent; the parent
 			/// will already send a delete so no need to do it twice.
 			if mask&unix.IN_DELETE_SELF != 0 {
-				if _, ok := w.watches.path[filepath.Dir(watch.path)]; ok {
+				w.watches.mu.RLock()
+				_, ok := w.watches.path[filepath.Dir(watch.path)]
+				w.watches.mu.RUnlock()
+				if ok {
 					next()
 					continue
 				}
