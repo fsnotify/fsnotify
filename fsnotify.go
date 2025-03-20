@@ -266,7 +266,7 @@ func NewWatcher() (*Watcher, error) {
 // cases, and whenever possible you will be better off increasing the kernel
 // buffers instead of adding a large userspace buffer.
 func NewBufferedWatcher(sz uint) (*Watcher, error) {
-	ev, errs := make(chan Event), make(chan error)
+	ev, errs := make(chan Event, sz), make(chan error)
 	b, err := newBufferedBackend(sz, ev, errs)
 	if err != nil {
 		return nil, err
