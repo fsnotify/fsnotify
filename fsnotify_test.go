@@ -892,16 +892,6 @@ func TestRace(t *testing.T) {
 			t.Skip("hangs on windows")
 		}
 
-		// TODO: consistently fails with:
-		//
-		//   === RUN   TestRace/remove_self
-		//       helpers_test.go:435: no such file or directory
-		//   --- FAIL: TestRace (0.54s)
-		//       --- FAIL: TestRace/remove_self (0.54s)
-		if runtime.GOOS == "illumos" || runtime.GOOS == "solaris" {
-			t.Skip("fails")
-		}
-
 		tmp := t.TempDir()
 		w := newCollector(t, tmp)
 		w.collect(t)
