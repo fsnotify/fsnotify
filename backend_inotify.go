@@ -262,8 +262,8 @@ func (w *inotify) AddWith(path string, opts ...addOpt) error {
 	}
 
 	with := getOptions(opts...)
-	if !w.xSupports(with.op) {
-		return fmt.Errorf("%w: %s", xErrUnsupported, with.op)
+	if !w.Supports(with.op) {
+		return fmt.Errorf("%w: %s", ErrUnsupported, with.op)
 	}
 
 	path, recurse := recursivePath(path)
@@ -316,16 +316,16 @@ func (w *inotify) add(path string, with withOpts, recurse bool) error {
 	if with.op.Has(Chmod) {
 		flags |= unix.IN_ATTRIB
 	}
-	if with.op.Has(xUnportableOpen) {
+	if with.op.Has(UnportableOpen) {
 		flags |= unix.IN_OPEN
 	}
-	if with.op.Has(xUnportableRead) {
+	if with.op.Has(UnportableRead) {
 		flags |= unix.IN_ACCESS
 	}
-	if with.op.Has(xUnportableCloseWrite) {
+	if with.op.Has(UnportableCloseWrite) {
 		flags |= unix.IN_CLOSE_WRITE
 	}
-	if with.op.Has(xUnportableCloseRead) {
+	if with.op.Has(UnportableCloseRead) {
 		flags |= unix.IN_CLOSE_NOWRITE
 	}
 	return w.register(path, flags, recurse)
@@ -602,16 +602,16 @@ func (w *inotify) newEvent(name string, mask, cookie uint32) Event {
 		e.Op |= Write
 	}
 	if mask&unix.IN_OPEN == unix.IN_OPEN {
-		e.Op |= xUnportableOpen
+		e.Op |= UnportableOpen
 	}
 	if mask&unix.IN_ACCESS == unix.IN_ACCESS {
-		e.Op |= xUnportableRead
+		e.Op |= UnportableRead
 	}
 	if mask&unix.IN_CLOSE_WRITE == unix.IN_CLOSE_WRITE {
-		e.Op |= xUnportableCloseWrite
+		e.Op |= UnportableCloseWrite
 	}
 	if mask&unix.IN_CLOSE_NOWRITE == unix.IN_CLOSE_NOWRITE {
-		e.Op |= xUnportableCloseRead
+		e.Op |= UnportableCloseRead
 	}
 	if mask&unix.IN_MOVE_SELF == unix.IN_MOVE_SELF || mask&unix.IN_MOVED_FROM == unix.IN_MOVED_FROM {
 		e.Op |= Rename
@@ -645,7 +645,7 @@ func (w *inotify) newEvent(name string, mask, cookie uint32) Event {
 	return e
 }
 
-func (w *inotify) xSupports(op Op) bool {
+func (w *inotify) Supports(op Op) bool {
 	return true // Supports everything.
 }
 
