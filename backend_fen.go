@@ -9,6 +9,7 @@ package fsnotify
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -209,7 +210,7 @@ func (w *fen) readEvents() {
 				return
 			}
 			// There was an error not caused by calling w.Close()
-			if !w.sendError(err) {
+			if !w.sendError(fmt.Errorf("port.Get: %w", err)) {
 				return
 			}
 		}
@@ -376,17 +377,27 @@ func (w *fen) handleEvent(event *unix.PortEvent) error {
 	if stat != nil {
 		// If we get here, it means we've hit an event above that requires us to
 		// continue watching the file or directory
-		return w.associateFile(path, stat, isWatched)
+		err := w.associateFile(path, stat, isWatched)
+		if errors.Is(err, fs.ErrNotExist) {
+			// Path may have been removed since the stat.
+			err = nil
+		}
+		return err
 	}
 	return nil
 }
 
+// The directory was modified, so we must find unwatched entities and watch
+// them. If something was removed from the directory, nothing will happen, as
+// everything else should still be watched.
 func (w *fen) updateDirectory(path string) error {
-	// The directory was modified, so we must find unwatched entities and watch
-	// them. If something was removed from the directory, nothing will happen,
-	// as everything else should still be watched.
 	files, err := os.ReadDir(path)
 	if err != nil {
+		// Directory no longer exists: probably just deleted since we got the
+		// event.
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
 		return err
 	}
 
@@ -401,6 +412,11 @@ func (w *fen) updateDirectory(path string) error {
 			return err
 		}
 		err = w.associateFile(path, finfo, false)
+		if errors.Is(err, fs.ErrNotExist) {
+			// File may have disappeared between getting the dir listing and
+			// adding the port: that's okay to ignore.
+			continue
+		}
 		if !w.sendError(err) {
 			return nil
 		}
@@ -430,7 +446,7 @@ func (w *fen) associateFile(path string, stat os.FileInfo, follow bool) error {
 		// has fired but we haven't processed it yet.
 		err := w.port.DissociatePath(path)
 		if err != nil && !errors.Is(err, unix.ENOENT) {
-			return err
+			return fmt.Errorf("port.DissociatePath(%q): %w", path, err)
 		}
 	}
 
@@ -446,14 +462,22 @@ func (w *fen) associateFile(path string, stat os.FileInfo, follow bool) error {
 	if true {
 		events |= unix.FILE_ATTRIB
 	}
-	return w.port.AssociatePath(path, stat, events, stat.Mode())
+	err := w.port.AssociatePath(path, stat, events, stat.Mode())
+	if err != nil {
+		return fmt.Errorf("port.AssociatePath(%q): %w", path, err)
+	}
+	return nil
 }
 
 func (w *fen) dissociateFile(path string, stat os.FileInfo, unused bool) error {
 	if !w.port.PathIsWatched(path) {
 		return nil
 	}
-	return w.port.DissociatePath(path)
+	err := w.port.DissociatePath(path)
+	if err != nil {
+		return fmt.Errorf("port.DissociatePath(%q): %w", path, err)
+	}
+	return nil
 }
 
 func (w *fen) WatchList() []string {
