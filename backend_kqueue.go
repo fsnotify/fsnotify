@@ -132,14 +132,18 @@ func (w *watches) byPath(path string) (watch, bool) {
 	return info, ok
 }
 
-func (w *watches) updateDirFlags(path string, flags uint32) {
+func (w *watches) updateDirFlags(path string, flags uint32) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	fd := w.path[path]
+	fd, ok := w.path[path]
+	if !ok { // Already deleted: don't re-set it here.
+		return false
+	}
 	info := w.wd[fd]
 	info.dirFlags = flags
 	w.wd[fd] = info
+	return true
 }
 
 func (w *watches) remove(fd int, path string) bool {
@@ -210,7 +214,7 @@ func newBufferedBackend(sz uint, ev chan Event, errs chan error) (backend, error
 // all.
 func newKqueue() (kq int, closepipe [2]int, err error) {
 	kq, err = unix.Kqueue()
-	if kq == -1 {
+	if err != nil {
 		return kq, closepipe, err
 	}
 
@@ -422,7 +426,6 @@ func (w *kqueue) addWatch(name string, flags uint32) (string, error) {
 			if errors.Is(err, unix.EINTR) {
 				continue
 			}
-
 			return "", err
 		}
 
@@ -444,7 +447,9 @@ func (w *kqueue) addWatch(name string, flags uint32) (string, error) {
 	if info.isDir {
 		watchDir := (flags&unix.NOTE_WRITE) == unix.NOTE_WRITE &&
 			(!alreadyWatching || (info.dirFlags&unix.NOTE_WRITE) != unix.NOTE_WRITE)
-		w.watches.updateDirFlags(name, flags)
+		if !w.watches.updateDirFlags(name, flags) {
+			return "", nil
+		}
 
 		if watchDir {
 			if err := w.watchDirectoryFiles(name); err != nil {
@@ -644,19 +649,22 @@ func (w *kqueue) dirChange(dir string) error {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
-		return fmt.Errorf("fsnotify.dirChange: %w", err)
+		return fmt.Errorf("fsnotify.dirChange %q: %w", dir, err)
 	}
 
 	for _, f := range files {
 		fi, err := f.Info()
 		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
 			return fmt.Errorf("fsnotify.dirChange: %w", err)
 		}
 
 		err = w.sendCreateIfNew(filepath.Join(dir, fi.Name()), fi)
 		if err != nil {
 			// Don't need to send an error if this file isn't readable.
-			if errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM) {
+			if errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM) || errors.Is(err, os.ErrNotExist) {
 				return nil
 			}
 			return fmt.Errorf("fsnotify.dirChange: %w", err)
