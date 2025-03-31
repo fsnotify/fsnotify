@@ -342,6 +342,10 @@ func (w *inotify) register(path string, flags uint32, recurse bool) error {
 			return nil, err
 		}
 
+		if e, ok := w.watches.wd[uint32(wd)]; ok {
+			return e, nil
+		}
+
 		if existing == nil {
 			return &watch{
 				wd:      uint32(wd),
