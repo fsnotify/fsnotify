@@ -502,7 +502,8 @@ func (w *inotify) readEvents() {
 				internal.Debug(name, raw.Mask, raw.Cookie)
 			}
 
-			if mask&unix.IN_IGNORED != 0 { //&& event.Op != 0
+			if mask&unix.IN_IGNORED != 0 || mask&unix.IN_UNMOUNT != 0 {
+				w.watches.remove(watch)
 				next()
 				continue
 			}
