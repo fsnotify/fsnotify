@@ -13,6 +13,7 @@ jobs:
         os: ['ubuntu-20.04', 'ubuntu-latest', 'ubuntu-24.04-arm']
         go: ['1.17', '1.24']
     runs-on: '${{ matrix.os }}'
+    timeout-minutes: 10
     steps:
       - uses: 'actions/checkout@v4'
       - uses: 'actions/setup-go@v5'
@@ -30,6 +31,7 @@ jobs:
         os: ['windows-latest']
         go: ['1.17', '1.24']
     runs-on: '${{ matrix.os }}'
+    timeout-minutes: 10
     steps:
       - uses: 'actions/checkout@v4'
       - uses: 'actions/setup-go@v5'
@@ -49,6 +51,7 @@ jobs:
   # gcc:
   #   runs-on: 'ubuntu-22.04'
   #   name:    'test (ubuntu-22.04, gccgo 12.1)'
+  #   timeout-minutes: 10
   #   steps:
   #     - uses: 'actions/checkout@v4'
   #     - name: test
@@ -66,6 +69,7 @@ jobs:
         os: ['macos-13', 'macos-latest']
         go: ['1.17', '1.24']
     runs-on: '${{ matrix.os }}'
+    timeout-minutes: 10
     steps:
       - uses: 'actions/checkout@v4'
       - uses: 'actions/setup-go@v5'
@@ -85,7 +89,8 @@ jobs:
   #       enough.
   openbsd:
     runs-on: 'ubuntu-latest'
-    name: 'test (openbsd, 1.17)'
+    name:    'test (openbsd, 1.17)'
+    timeout-minutes: 10
     steps:
       - uses: 'actions/checkout@v4'
       - name: 'test (openbsd, 1.17)'
@@ -102,7 +107,8 @@ jobs:
   # NetBSD
   netbsd:
     runs-on: 'ubuntu-latest'
-    name: 'test (netbsd, 1.21)'
+    name:    'test (netbsd, 1.21)'
+    timeout-minutes: 10
     steps:
       - uses: 'actions/checkout@v4'
       - name: 'test (netbsd, 1.21)'
@@ -120,7 +126,8 @@ jobs:
   # DragonFlyBSD
   dragonflybsd:
     runs-on: 'ubuntu-latest'
-    name: 'test (dragonflybsd, 1.20)'
+    name:    'test (dragonflybsd, 1.20)'
+    timeout-minutes: 10
     steps:
       - uses: 'actions/checkout@v4'
       - name: 'test (dragonflybsd, 1.20)'
@@ -138,7 +145,8 @@ jobs:
   # illumos
   illumos:
     runs-on: 'ubuntu-latest'
-    name: 'test (illumos, 1.22)'
+    name:    'test (illumos, 1.22)'
+    timeout-minutes: 10
     steps:
     - uses: 'actions/checkout@v4'
     - name: 'test (illumos, 1.22)'
@@ -161,6 +169,7 @@ jobs:
   # solaris:
   #   runs-on: 'ubuntu-latest'
   #   name: 'test (solaris, 1.17)'
+  #   timeout-minutes: 10
   #   steps:
   #   - uses: 'actions/checkout@v4'
   #   - name: 'test (solaris, 1.17)'
