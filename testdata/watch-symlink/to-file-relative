@@ -10,7 +10,5 @@ echo hello >>/file
 Output:
 	write    /link
 
-	kqueue:  # TODO: broken
-		no-events
 	windows:  # TODO: investigate.
 		no-events
