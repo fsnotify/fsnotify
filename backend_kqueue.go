@@ -16,14 +16,13 @@ import (
 )
 
 type kqueue struct {
+	shared
 	Events chan Event
 	Errors chan error
 
 	kq        int    // File descriptor (as returned by the kqueue() syscall).
 	closepipe [2]int // Pipe used for closing kq.
 	watches   *watches
-	done      chan struct{}
-	doneMu    sync.Mutex
 }
 
 type (
@@ -192,11 +191,11 @@ func newBackend(ev chan Event, errs chan error) (backend, error) {
 	}
 
 	w := &kqueue{
+		shared:    newShared(ev, errs),
 		Events:    ev,
 		Errors:    errs,
 		kq:        kq,
 		closepipe: closepipe,
-		done:      make(chan struct{}),
 		watches:   newWatches(),
 	}
 
@@ -241,54 +240,17 @@ func newKqueue() (kq int, closepipe [2]int, err error) {
 	return kq, closepipe, nil
 }
 
-// Returns true if the event was sent, or false if watcher is closed.
-func (w *kqueue) sendEvent(e Event) bool {
-	select {
-	case <-w.done:
-		return false
-	case w.Events <- e:
-		return true
-	}
-}
-
-// Returns true if the error was sent, or false if watcher is closed.
-func (w *kqueue) sendError(err error) bool {
-	if err == nil {
-		return true
-	}
-	select {
-	case <-w.done:
-		return false
-	case w.Errors <- err:
-		return true
-	}
-}
-
-func (w *kqueue) isClosed() bool {
-	select {
-	case <-w.done:
-		return true
-	default:
-		return false
-	}
-}
-
 func (w *kqueue) Close() error {
-	w.doneMu.Lock()
-	if w.isClosed() {
-		w.doneMu.Unlock()
+	if w.shared.close() {
 		return nil
 	}
-	close(w.done)
-	w.doneMu.Unlock()
 
 	pathsToRemove := w.watches.listPaths(false)
 	for _, name := range pathsToRemove {
 		w.Remove(name)
 	}
 
-	// Send "quit" message to the reader goroutine.
-	unix.Close(w.closepipe[1])
+	unix.Close(w.closepipe[1]) // Send "quit" message to readEvents
 	return nil
 }
 
