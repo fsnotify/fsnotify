@@ -47,19 +47,18 @@ jobs:
           go test -parallel 1 -race -v ./...
 
   # Test gccgo
-  # Needs gccgo 13, which should be available in Ubuntu 24.04.
-  # gcc:
-  #   runs-on: 'ubuntu-22.04'
-  #   name:    'test (ubuntu-22.04, gccgo 12.1)'
-  #   timeout-minutes: 10
-  #   steps:
-  #     - uses: 'actions/checkout@v4'
-  #     - name: test
-  #       run: |
-  #         sudo apt-get -y install gccgo-12
-  #         FSNOTIFY_BUFFER=4096 go-12 test -parallel 1    ./...
-  #                              go-12 test -parallel 1    ./...
-  #         FSNOTIFY_DEBUG=1     go-12 test -parallel 1 -v ./...
+  gcc:
+    runs-on: 'ubuntu-24.04'
+    name:    'test (ubuntu-24.04, gccgo 13.2)'
+    timeout-minutes: 10
+    steps:
+      - uses: 'actions/checkout@v4'
+      - name: test
+        run: |
+          sudo apt-get -y install gccgo-13
+          FSNOTIFY_BUFFER=4096 go-13 test -parallel 1    ./...
+                               go-13 test -parallel 1    ./...
+          FSNOTIFY_DEBUG=1     go-13 test -parallel 1 -v ./...
 
   macos:
     name: 'test'
