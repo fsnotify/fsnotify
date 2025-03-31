@@ -450,7 +450,11 @@ func (w *kqueue) addWatch(name string, flags uint32, listDir bool) (string, erro
 		}
 
 		if watchDir {
-			if err := w.watchDirectoryFiles(name); err != nil {
+			d := name
+			if info.linkName != "" {
+				d = info.linkName
+			}
+			if err := w.watchDirectoryFiles(d); err != nil {
 				return "", err
 			}
 		}

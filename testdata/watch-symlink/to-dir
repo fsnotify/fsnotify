@@ -2,9 +2,10 @@
 require symlink
 
 mkdir /dir
+touch /dir/existing
 ln -s /dir /link
-watch /link
 
+watch /link
 touch /dir/file
 
 Output:
