@@ -16,7 +16,7 @@ import (
 )
 
 type kqueue struct {
-	shared
+	*shared
 	Events chan Event
 	Errors chan error
 

@@ -20,7 +20,7 @@ import (
 )
 
 type fen struct {
-	shared
+	*shared
 	Events chan Event
 	Errors chan error
 

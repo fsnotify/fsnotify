@@ -6,11 +6,11 @@ type shared struct {
 	Events chan Event
 	Errors chan error
 	done   chan struct{}
-	doneMu sync.Mutex
+	mu     sync.Mutex
 }
 
-func newShared(ev chan Event, errs chan error) shared {
-	return shared{
+func newShared(ev chan Event, errs chan error) *shared {
+	return &shared{
 		Events: ev,
 		Errors: errs,
 		done:   make(chan struct{}),
@@ -19,6 +19,9 @@ func newShared(ev chan Event, errs chan error) shared {
 
 // Returns true if the event was sent, or false if watcher is closed.
 func (w *shared) sendEvent(e Event) bool {
+	if e.Op == 0 {
+		return true
+	}
 	select {
 	case <-w.done:
 		return false
@@ -51,8 +54,8 @@ func (w *shared) isClosed() bool {
 
 // Mark as closed; returns true if it was already closed.
 func (w *shared) close() bool {
-	w.doneMu.Lock()
-	defer w.doneMu.Unlock()
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if w.isClosed() {
 		return true
 	}
