@@ -909,6 +909,8 @@ loop:
 					t.Fatalf("line %d: addWatch(%q): %s", c.line+1, p, err)
 				}
 			})
+		case "print":
+			do = append(do, func() { fmt.Println(strings.Join(c.args, " ")) })
 		case "unwatch":
 			mustArg(c, 1)
 			do = append(do, func() { rmWatch(t, w.w, tmppath(tmp, c.args[0])) })
