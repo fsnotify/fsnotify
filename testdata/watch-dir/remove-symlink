@@ -1,4 +1,5 @@
 # Remove a symlink.
+require symlink
 
 touch /file
 ln -s /file /link

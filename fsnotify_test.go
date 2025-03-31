@@ -422,11 +422,10 @@ func TestAdd(t *testing.T) {
 	})
 
 	t.Run("permission denied", func(t *testing.T) {
+		t.Parallel()
 		if runtime.GOOS == "windows" {
 			t.Skip("chmod doesn't work on Windows") // TODO: see if we can make a file unreadable
 		}
-
-		t.Parallel()
 
 		tmp := t.TempDir()
 		dir := join(tmp, "dir-unreadable")
@@ -451,7 +450,8 @@ func TestAdd(t *testing.T) {
 		}
 	})
 
-	t.Run("add same path twice", func(t *testing.T) {
+	// The second Add() should be a no-op
+	t.Run("add same dir twice", func(t *testing.T) {
 		tmp := t.TempDir()
 		w := newCollector(t)
 		if err := w.w.Add(tmp); err != nil {
@@ -468,6 +468,98 @@ func TestAdd(t *testing.T) {
 		cmpEvents(t, tmp, w.events(t), newEvents(t, `
 			create /file
 			remove /file
+		`))
+	})
+	t.Run("add same dir twice through symlink", func(t *testing.T) {
+		t.Parallel()
+		if isSolaris() {
+			t.Skip("broken: links are resolved and added twice") // TODO: should fix
+		}
+		if !internal.HasPrivilegesForSymlink() {
+			t.Skip("admin permissions required on Windows")
+		}
+
+		tmp := t.TempDir()
+		mkdir(t, tmp, "dir")
+		symlink(t, join(tmp, "dir"), tmp, "link")
+		w := newCollector(t)
+		if err := w.w.Add(join(tmp, "dir")); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.w.Add(join(tmp, "link")); err != nil {
+			t.Fatal(err)
+		}
+
+		w.collect(t)
+		touch(t, tmp, "dir/file")
+		rm(t, tmp, "dir/file")
+
+		cmpEvents(t, tmp, w.events(t), newEvents(t, `
+			create /dir/file
+			remove /dir/file
+		`))
+	})
+
+	t.Run("add same file twice", func(t *testing.T) {
+		t.Parallel()
+		tmp := t.TempDir()
+		touch(t, tmp, "file")
+
+		w := newCollector(t)
+		if err := w.w.Add(join(tmp, "file")); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.w.Add(join(tmp, "file")); err != nil {
+			t.Fatal(err)
+		}
+
+		w.collect(t)
+		echoAppend(t, "aaa", tmp, "file")
+		rm(t, tmp, "file")
+
+		cmpEvents(t, tmp, w.events(t), newEvents(t, `
+			write /file
+			remove /file
+
+			linux:
+				write /file
+				chmod /file
+				remove /file
+		`))
+	})
+	t.Run("add same file twice through symlink", func(t *testing.T) {
+		t.Parallel()
+		if isSolaris() {
+			t.Skip("broken: links are resolved and added twice") // TODO: should fix
+		}
+		if !internal.HasPrivilegesForSymlink() {
+			t.Skip("admin permissions required on Windows")
+		}
+
+		tmp := t.TempDir()
+		touch(t, tmp, "file")
+		symlink(t, join(tmp, "file"), tmp, "link")
+
+		w := newCollector(t)
+		if err := w.w.Add(join(tmp, "file")); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.w.Add(join(tmp, "link")); err != nil {
+			t.Fatal(err)
+		}
+
+		w.collect(t)
+		echoAppend(t, "aaa", tmp, "file")
+		rm(t, tmp, "file")
+
+		cmpEvents(t, tmp, w.events(t), newEvents(t, `
+			write /file
+			remove /file
+
+			linux:
+				write /file
+				chmod /file
+				remove /file
 		`))
 	})
 }
@@ -520,6 +612,97 @@ func TestRemove(t *testing.T) {
 		}
 	})
 
+	t.Run("remove same dir twice through symlink", func(t *testing.T) {
+		t.Parallel()
+		if isSolaris() {
+			t.Skip("broken: links are resolved and added twice") // TODO: should fix
+		}
+		if !internal.HasPrivilegesForSymlink() {
+			t.Skip("admin permissions required on Windows")
+		}
+
+		tmp := t.TempDir()
+		mkdir(t, tmp, "dir")
+		symlink(t, join(tmp, "dir"), tmp, "link")
+
+		w := newWatcher(t)
+		defer w.Close()
+
+		addWatch(t, w, tmp, "dir")
+		addWatch(t, w, tmp, "link")
+
+		if err := w.Remove(join(tmp, "dir")); err != nil {
+			t.Fatal(err)
+		}
+		err := w.Remove(join(tmp, "link"))
+		if err == nil {
+			t.Fatal("no error")
+		}
+		if !errors.Is(err, ErrNonExistentWatch) {
+			t.Fatalf("wrong error: %T", err)
+		}
+	})
+
+	t.Run("remove same file twice", func(t *testing.T) {
+		t.Parallel()
+
+		tmp := t.TempDir()
+		touch(t, tmp, "file")
+
+		w := newWatcher(t)
+		defer w.Close()
+
+		addWatch(t, w, tmp, "file")
+
+		if err := w.Remove(join(tmp, "file")); err != nil {
+			t.Fatal(err)
+		}
+		err := w.Remove(join(tmp, "file"))
+		if err == nil {
+			t.Fatal("no error")
+		}
+		if !errors.Is(err, ErrNonExistentWatch) {
+			t.Fatalf("wrong error: %T", err)
+		}
+	})
+
+	t.Run("remove same file twice through symlink", func(t *testing.T) {
+		t.Parallel()
+		if isSolaris() {
+			t.Skip("broken: links are resolved and added twice") // TODO: should fix
+		}
+		if !internal.HasPrivilegesForSymlink() {
+			t.Skip("admin permissions required on Windows")
+		}
+		if runtime.GOOS == "windows" {
+			// TODO: I'm not sure if this is due to a problem in our code, or
+			// just a limitation of Windows, but very few people are using links
+			// in Windows and even fewer links to files, so whatever.
+			t.Skip("fails on Windows")
+		}
+
+		tmp := t.TempDir()
+		touch(t, tmp, "file")
+		symlink(t, join(tmp, "file"), tmp, "link")
+
+		w := newWatcher(t)
+		defer w.Close()
+
+		addWatch(t, w, tmp, "file")
+		addWatch(t, w, tmp, "link")
+
+		if err := w.Remove(join(tmp, "file")); err != nil {
+			t.Fatal(err)
+		}
+		err := w.Remove(join(tmp, "link"))
+		if err == nil {
+			t.Fatal("no error")
+		}
+		if !errors.Is(err, ErrNonExistentWatch) {
+			t.Fatalf("wrong error: %T", err)
+		}
+	})
+
 	// Make sure that concurrent calls to Remove() don't race.
 	t.Run("no race", func(t *testing.T) {
 		t.Parallel()
@@ -550,7 +733,7 @@ func TestRemove(t *testing.T) {
 	// Make sure file handles are correctly released.
 	//
 	// regression test for #42 see https://gist.github.com/timshannon/603f92824c5294269797
-	t.Run("", func(t *testing.T) {
+	t.Run("release file handles", func(t *testing.T) {
 		w := newWatcher(t)
 		defer w.Close()
 
