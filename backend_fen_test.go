@@ -18,6 +18,7 @@ func TestRemoveState(t *testing.T) {
 	touch(t, file)
 
 	w := newWatcher(t, tmp)
+	defer w.Close()
 	addWatch(t, w, tmp)
 	addWatch(t, w, file)
 

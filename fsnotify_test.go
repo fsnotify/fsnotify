@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify/internal"
+	"github.com/fsnotify/fsnotify/internal/goleak"
 )
 
 // Set soft open file limit to the maximum; on e.g. OpenBSD it's 512/1024.
@@ -27,6 +28,10 @@ import (
 func init() {
 	internal.SetRlimit()
 	enableRecurse = true
+}
+
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 }
 
 func TestScript(t *testing.T) {
@@ -362,10 +367,7 @@ func TestClose(t *testing.T) {
 		w.collect(t)
 		touch(t, tmp, "qwe")
 		touch(t, tmp, "asd")
-
-		if err := w.w.Close(); err != nil {
-			t.Fatal(err)
-		}
+		w.stop(t)
 
 		chanClosed(t, w.w)
 	})
@@ -399,6 +401,7 @@ func TestAdd(t *testing.T) {
 		tmp := t.TempDir()
 
 		w := newWatcher(t)
+		defer w.Close()
 		err := w.Add(join(tmp, "non-existent"))
 		if err == nil {
 			t.Fatal("err is nil")
@@ -465,7 +468,7 @@ func TestAdd(t *testing.T) {
 		touch(t, tmp, "file")
 		rm(t, tmp, "file")
 
-		cmpEvents(t, tmp, w.events(t), newEvents(t, `
+		cmpEvents(t, tmp, w.stop(t), newEvents(t, `
 			create /file
 			remove /file
 		`))
@@ -494,7 +497,7 @@ func TestAdd(t *testing.T) {
 		touch(t, tmp, "dir/file")
 		rm(t, tmp, "dir/file")
 
-		cmpEvents(t, tmp, w.events(t), newEvents(t, `
+		cmpEvents(t, tmp, w.stop(t), newEvents(t, `
 			create /dir/file
 			remove /dir/file
 		`))
@@ -517,7 +520,7 @@ func TestAdd(t *testing.T) {
 		echoAppend(t, "aaa", tmp, "file")
 		rm(t, tmp, "file")
 
-		cmpEvents(t, tmp, w.events(t), newEvents(t, `
+		cmpEvents(t, tmp, w.stop(t), newEvents(t, `
 			write /file
 			remove /file
 
@@ -552,7 +555,7 @@ func TestAdd(t *testing.T) {
 		echoAppend(t, "aaa", tmp, "file")
 		rm(t, tmp, "file")
 
-		cmpEvents(t, tmp, w.events(t), newEvents(t, `
+		cmpEvents(t, tmp, w.stop(t), newEvents(t, `
 			write /file
 			remove /file
 
@@ -814,6 +817,7 @@ func TestRemove(t *testing.T) {
 
 		tmp := t.TempDir()
 		w := newWatcher(t)
+		defer w.Close()
 		addWatch(t, w, tmp)
 
 		if err := w.Remove(join(tmp, "...")); err == nil {
@@ -1146,6 +1150,7 @@ func TestNewWatcher(t *testing.T) {
 	if c := cap(w.Events); c != defaultSz {
 		t.Errorf("cap of NewWatcher() is not %d but %d", defaultSz, c)
 	}
+	w.Close()
 
 	w, err = NewBufferedWatcher(0)
 	if err != nil {
@@ -1154,6 +1159,7 @@ func TestNewWatcher(t *testing.T) {
 	if c := cap(w.Events); c != 0 {
 		t.Errorf("cap of NewWatcher() is not %d but %d", 0, c)
 	}
+	w.Close()
 
 	w, err = NewBufferedWatcher(42)
 	if err != nil {
@@ -1162,4 +1168,5 @@ func TestNewWatcher(t *testing.T) {
 	if c := cap(w.Events); c != 42 {
 		t.Errorf("cap of NewWatcher() is not %d but %d", 42, c)
 	}
+	w.Close()
 }
