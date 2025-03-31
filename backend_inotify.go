@@ -19,6 +19,7 @@ import (
 )
 
 type inotify struct {
+	shared
 	Events chan Event
 	Errors chan error
 
@@ -27,8 +28,6 @@ type inotify struct {
 	fd          int
 	inotifyFile *os.File
 	watches     *watches
-	done        chan struct{} // Channel for sending a "quit message" to the reader goroutine
-	doneMu      sync.Mutex
 	doneResp    chan struct{} // Channel to respond to Close
 
 	// Store rename cookies in an array, with the index wrapping to 0. Almost
@@ -181,12 +180,12 @@ func newBackend(ev chan Event, errs chan error) (backend, error) {
 	}
 
 	w := &inotify{
+		shared:      newShared(ev, errs),
 		Events:      ev,
 		Errors:      errs,
 		fd:          fd,
 		inotifyFile: os.NewFile(uintptr(fd), ""),
 		watches:     newWatches(),
-		done:        make(chan struct{}),
 		doneResp:    make(chan struct{}),
 	}
 
@@ -194,46 +193,10 @@ func newBackend(ev chan Event, errs chan error) (backend, error) {
 	return w, nil
 }
 
-// Returns true if the event was sent, or false if watcher is closed.
-func (w *inotify) sendEvent(e Event) bool {
-	select {
-	case <-w.done:
-		return false
-	case w.Events <- e:
-		return true
-	}
-}
-
-// Returns true if the error was sent, or false if watcher is closed.
-func (w *inotify) sendError(err error) bool {
-	if err == nil {
-		return true
-	}
-	select {
-	case <-w.done:
-		return false
-	case w.Errors <- err:
-		return true
-	}
-}
-
-func (w *inotify) isClosed() bool {
-	select {
-	case <-w.done:
-		return true
-	default:
-		return false
-	}
-}
-
 func (w *inotify) Close() error {
-	w.doneMu.Lock()
-	if w.isClosed() {
-		w.doneMu.Unlock()
+	if w.shared.close() {
 		return nil
 	}
-	close(w.done)
-	w.doneMu.Unlock()
 
 	// Causes any blocking reads to return with an error, provided the file
 	// still supports deadline operations.
@@ -242,9 +205,7 @@ func (w *inotify) Close() error {
 		return err
 	}
 
-	// Wait for goroutine to close
-	<-w.doneResp
-
+	<-w.doneResp // Wait for readEvents() to finish.
 	return nil
 }
 

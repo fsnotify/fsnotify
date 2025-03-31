@@ -20,12 +20,12 @@ import (
 )
 
 type fen struct {
+	shared
 	Events chan Event
 	Errors chan error
 
 	mu      sync.Mutex
 	port    *unix.EventPort
-	done    chan struct{} // Channel for sending a "quit message" to the reader goroutine
 	dirs    map[string]Op // Explicitly watched directories
 	watches map[string]Op // Explicitly watched non-directories
 }
@@ -34,11 +34,11 @@ var defaultBufferSize = 0
 
 func newBackend(ev chan Event, errs chan error) (backend, error) {
 	w := &fen{
+		shared:  newShared(ev, errs),
 		Events:  ev,
 		Errors:  errs,
 		dirs:    make(map[string]Op),
 		watches: make(map[string]Op),
-		done:    make(chan struct{}),
 	}
 
 	var err error
@@ -51,49 +51,10 @@ func newBackend(ev chan Event, errs chan error) (backend, error) {
 	return w, nil
 }
 
-// sendEvent attempts to send an event to the user, returning true if the event
-// was put in the channel successfully and false if the watcher has been closed.
-func (w *fen) sendEvent(name string, op Op) (sent bool) {
-	select {
-	case <-w.done:
-		return false
-	case w.Events <- Event{Name: name, Op: op}:
-		return true
-	}
-}
-
-// sendError attempts to send an error to the user, returning true if the error
-// was put in the channel successfully and false if the watcher has been closed.
-func (w *fen) sendError(err error) (sent bool) {
-	if err == nil {
-		return true
-	}
-	select {
-	case <-w.done:
-		return false
-	case w.Errors <- err:
-		return true
-	}
-}
-
-func (w *fen) isClosed() bool {
-	select {
-	case <-w.done:
-		return true
-	default:
-		return false
-	}
-}
-
 func (w *fen) Close() error {
-	// Take the lock used by associateFile to prevent lingering events from
-	// being processed after the close
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.isClosed() {
+	if w.shared.close() {
 		return nil
 	}
-	close(w.done)
 	return w.port.Close()
 }
 
@@ -276,13 +237,13 @@ func (w *fen) handleEvent(event *unix.PortEvent) error {
 	isWatched := watchedDir || watchedPath
 
 	if events&unix.FILE_DELETE != 0 {
-		if !w.sendEvent(path, Remove) {
+		if !w.sendEvent(Event{Name: path, Op: Remove}) {
 			return nil
 		}
 		reRegister = false
 	}
 	if events&unix.FILE_RENAME_FROM != 0 {
-		if !w.sendEvent(path, Rename) {
+		if !w.sendEvent(Event{Name: path, Op: Rename}) {
 			return nil
 		}
 		// Don't keep watching the new file name
@@ -296,7 +257,7 @@ func (w *fen) handleEvent(event *unix.PortEvent) error {
 
 		// inotify reports a Remove event in this case, so we simulate this
 		// here.
-		if !w.sendEvent(path, Remove) {
+		if !w.sendEvent(Event{Name: path, Op: Remove}) {
 			return nil
 		}
 		// Don't keep watching the file that was removed
@@ -330,7 +291,7 @@ func (w *fen) handleEvent(event *unix.PortEvent) error {
 		// get here, the sudirectory is already gone. Clearly we were watching
 		// this path but now it is gone. Let's tell the user that it was
 		// removed.
-		if !w.sendEvent(path, Remove) {
+		if !w.sendEvent(Event{Name: path, Op: Remove}) {
 			return nil
 		}
 		// Suppress extra write events on removed directories; they are not
@@ -345,7 +306,7 @@ func (w *fen) handleEvent(event *unix.PortEvent) error {
 		if err != nil {
 			// The symlink still exists, but the target is gone. Report the
 			// Remove similar to above.
-			if !w.sendEvent(path, Remove) {
+			if !w.sendEvent(Event{Name: path, Op: Remove}) {
 				return nil
 			}
 			// Don't return the error
@@ -358,7 +319,7 @@ func (w *fen) handleEvent(event *unix.PortEvent) error {
 				return err
 			}
 		} else {
-			if !w.sendEvent(path, Write) {
+			if !w.sendEvent(Event{Name: path, Op: Write}) {
 				return nil
 			}
 		}
@@ -366,7 +327,7 @@ func (w *fen) handleEvent(event *unix.PortEvent) error {
 	if events&unix.FILE_ATTRIB != 0 && stat != nil {
 		// Only send Chmod if perms changed
 		if stat.Mode().Perm() != fmode.Perm() {
-			if !w.sendEvent(path, Chmod) {
+			if !w.sendEvent(Event{Name: path, Op: Chmod}) {
 				return nil
 			}
 		}
@@ -418,7 +379,7 @@ func (w *fen) updateDirectory(path string) error {
 		if !w.sendError(err) {
 			return nil
 		}
-		if !w.sendEvent(path, Create) {
+		if !w.sendEvent(Event{Name: path, Op: Create}) {
 			return nil
 		}
 	}
