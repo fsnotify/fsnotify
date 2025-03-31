@@ -305,7 +305,7 @@ func (w *kqueue) AddWith(name string, opts ...addOpt) error {
 		return fmt.Errorf("%w: %s", xErrUnsupported, with.op)
 	}
 
-	_, err := w.addWatch(name, noteAllEvents)
+	_, err := w.addWatch(name, noteAllEvents, false)
 	if err != nil {
 		return err
 	}
@@ -368,7 +368,7 @@ const noteAllEvents = unix.NOTE_DELETE | unix.NOTE_WRITE | unix.NOTE_ATTRIB | un
 // described in kevent(2).
 //
 // Returns the real path to the file which was added, with symlinks resolved.
-func (w *kqueue) addWatch(name string, flags uint32) (string, error) {
+func (w *kqueue) addWatch(name string, flags uint32, listDir bool) (string, error) {
 	if w.isClosed() {
 		return "", ErrClosed
 	}
@@ -387,15 +387,15 @@ func (w *kqueue) addWatch(name string, flags uint32) (string, error) {
 			return "", nil
 		}
 
-		// Follow symlinks.
-		if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
+		// Follow symlinks, but only for paths added with Add(), and not paths
+		// we're adding from internalWatch from a listdir.
+		if !listDir && fi.Mode()&os.ModeSymlink == os.ModeSymlink {
 			link, err := os.Readlink(name)
 			if err != nil {
-				// Return nil because Linux can add unresolvable symlinks to the
-				// watch list without problems, so maintain consistency with
-				// that. There will be no file events for broken symlinks.
-				// TODO: more specific check; returns os.PathError; ENOENT?
-				return "", nil
+				return "", err
+			}
+			if !filepath.IsAbs(link) {
+				link = filepath.Join(filepath.Dir(name), link)
 			}
 
 			_, alreadyWatching = w.watches.byPath(link)
@@ -410,7 +410,7 @@ func (w *kqueue) addWatch(name string, flags uint32) (string, error) {
 			name = link
 			fi, err = os.Lstat(name)
 			if err != nil {
-				return "", nil
+				return "", err
 			}
 		}
 
@@ -694,11 +694,11 @@ func (w *kqueue) internalWatch(name string, fi os.FileInfo) (string, error) {
 		// mimic Linux providing delete events for subdirectories, but preserve
 		// the flags used if currently watching subdirectory
 		info, _ := w.watches.byPath(name)
-		return w.addWatch(name, info.dirFlags|unix.NOTE_DELETE|unix.NOTE_RENAME)
+		return w.addWatch(name, info.dirFlags|unix.NOTE_DELETE|unix.NOTE_RENAME, true)
 	}
 
-	// watch file to mimic Linux inotify
-	return w.addWatch(name, noteAllEvents)
+	// Watch file to mimic Linux inotify.
+	return w.addWatch(name, noteAllEvents, true)
 }
 
 // Register events with the queue.
