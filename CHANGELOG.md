@@ -1,6 +1,38 @@
 # Changelog
 
-1.8.0 2023-10-31
+Unreleased
+----------
+
+### Changes and fixes
+
+- Make BufferedWatcher buffered again ([#657])
+
+- inotify: fix race when adding/removing watches while a watched path is being
+  deleted ([#678], [#686])
+
+- illumos: don't send error if changed file is deleted while processing the
+  event ([#678])
+
+- inotify: don't send empty event if a watched path is unmounted ([#655])
+
+- kqueue: fix watching relative symlinks ([#681])
+
+- inotify: don't register duplicate watches when watching both a symlink and its
+  target; previously that would get "half-added" and removing the second would
+  panic ([#679])
+
+- kqueue: correctly mark pre-existing entries when watching a link to a dir on
+  kqueue ([#682])
+
+[#657]: https://github.com/fsnotify/fsnotify/pull/657
+[#678]: https://github.com/fsnotify/fsnotify/pull/678
+[#686]: https://github.com/fsnotify/fsnotify/pull/686
+[#655]: https://github.com/fsnotify/fsnotify/pull/655
+[#681]: https://github.com/fsnotify/fsnotify/pull/681
+[#679]: https://github.com/fsnotify/fsnotify/pull/679
+[#682]: https://github.com/fsnotify/fsnotify/pull/682
+
+1.8.0 2024-10-31
 ----------------
 
 ### Additions
