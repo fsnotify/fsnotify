@@ -338,7 +338,8 @@ func (w *Watcher) Close() error { return w.b.Close() }
 // WatchList returns all paths explicitly added with [Watcher.Add] (and are not
 // yet removed).
 //
-// Returns nil if [Watcher.Close] was called.
+// The order is undefined, and may differ per call. Returns nil if
+// [Watcher.Close] was called.
 func (w *Watcher) WatchList() []string { return w.b.WatchList() }
 
 // Supports reports if all the listed operations are supported by this platform.
