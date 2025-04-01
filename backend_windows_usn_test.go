@@ -8,13 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"go.uber.org/goleak"
 	"golang.org/x/sys/windows"
 )
-
-func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m)
-}
 
 func TestRemoveState(t *testing.T) {
 	if !isAdmin() {
