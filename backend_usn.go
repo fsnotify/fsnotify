@@ -130,14 +130,13 @@ type FileEvent struct {
 
 // usnBackend represents a USN change journal watcher
 type usnBackend struct {
+	*shared
 	Events chan Event
 	Errors chan error
 
 	paths   map[string]bool
 	volumes map[string]volumeInfo
-	quit    chan struct{}
 	wg      sync.WaitGroup
-	mu      sync.Mutex
 
 	closed bool
 }
@@ -152,15 +151,12 @@ type volumeInfo struct {
 }
 
 func newBackend(ev chan Event, errs chan error) (backend, error) {
-	return newBufferedBackend(50, ev, errs)
-}
-func newBufferedBackend(sz uint, ev chan Event, errs chan error) (backend, error) {
 	u := &usnBackend{
+		shared:  newShared(ev, errs),
 		Events:  ev,
 		Errors:  errs,
 		paths:   make(map[string]bool),
 		volumes: make(map[string]volumeInfo),
-		quit:    make(chan struct{}),
 	}
 	return u, nil
 }
@@ -352,7 +348,7 @@ func (u *usnBackend) monitorVolume(volumePath string) {
 
 	for {
 		select {
-		case <-u.quit:
+		case <-u.done:
 			return
 		default:
 			// Continue monitoring
@@ -383,7 +379,8 @@ func (u *usnBackend) monitorVolume(volumePath string) {
 		if err != nil {
 			numErrors++
 			if !errors.Is(err, windows.ERROR_HANDLE_EOF) {
-				u.sendError(os.NewSyscallError("DeviceIoControl(FSCTL_READ_USN_JOURNAL)", fmt.Errorf("error reading USN journal(%s): %w", volumePath, err)))
+				u.sendError(os.NewSyscallError("DeviceIoControl(FSCTL_READ_USN_JOURNAL)",
+					fmt.Errorf("error reading USN journal(%s): %w", volumePath, err)))
 			}
 			// TODO: make this configurable?
 			if numErrors > 5 {
@@ -472,7 +469,7 @@ func (u *usnBackend) processRecords(volumePath string, buffer []byte) {
 					fmt.Fprintf(os.Stderr, "FSNOTIFY_DEBUG: %s  %s → %q\n",
 						time.Now().Format("15:04:05.000000000"), op, fullPath)
 				}
-				u.sendEvent(fullPath, op)
+				u.sendEvent(Event{Name: fullPath, Op: op})
 				break
 			}
 		}
@@ -480,31 +477,6 @@ func (u *usnBackend) processRecords(volumePath string, buffer []byte) {
 
 		// Move to next record
 		offset += uint32(record.RecordLength)
-	}
-}
-
-func (u *usnBackend) sendEvent(name string, op Op) bool {
-	if op == 0 {
-		return false
-	}
-
-	select {
-	case <-u.quit:
-		return false
-	case u.Events <- Event{Name: name, Op: op}:
-		return true
-	}
-}
-
-func (u *usnBackend) sendError(err error) bool {
-	if err == nil {
-		return true
-	}
-	select {
-	case u.Errors <- err:
-		return true
-	case <-u.quit:
-		return false
 	}
 }
 
@@ -540,26 +512,12 @@ func (u *usnBackend) WatchList() []string {
 	return l
 }
 
-func (u *usnBackend) isClosed() bool {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-	return u.closed
-}
-
 func (u *usnBackend) Close() error {
-	if u.isClosed() {
+	if w.shared.close() {
 		return nil
 	}
 
-	u.mu.Lock()
-	u.closed = true
-	u.mu.Unlock()
-
-	// Signal all goroutines to stop
-	close(u.quit)
-
-	// Wait for all goroutines to finish
-	u.wg.Wait()
+	u.wg.Wait() // Wait for all goroutines to finish
 
 	u.mu.Lock()
 	defer u.mu.Unlock()
