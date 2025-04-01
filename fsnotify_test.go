@@ -442,10 +442,10 @@ func TestAdd(t *testing.T) {
 		if err == nil {
 			t.Fatal("error is nil")
 		}
-		if !errors.Is(err, internal.UnixEACCES) {
+		if !errors.Is(err, internal.ErrUnixEACCES) {
 			t.Errorf("not unix.EACCESS: %T %#[1]v", err)
 		}
-		if !errors.Is(err, internal.SyscallEACCES) {
+		if !errors.Is(err, internal.ErrSyscallEACCES) {
 			t.Errorf("not syscall.EACCESS: %T %#[1]v", err)
 		}
 	})

@@ -244,6 +244,7 @@ var (
 
 	// ErrUnsupported is returned by AddWith() when WithOps() specified an
 	// Unportable event that's not supported on this platform.
+	//lint:ignore ST1012 not relevant
 	xErrUnsupported = errors.New("fsnotify: not supported with this backend")
 )
 

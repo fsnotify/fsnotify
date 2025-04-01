@@ -10,7 +10,7 @@ import (
 
 func TestRemoveState(t *testing.T) {
 	// TODO: the Windows backend is too confusing; needs some serious attention.
-	return
+	t.Skip("broken test")
 
 	var (
 		tmp  = t.TempDir()

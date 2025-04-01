@@ -694,9 +694,9 @@ func (w *kqueue) read(events []unix.Kevent_t) ([]unix.Kevent_t, error) {
 }
 
 func (w *kqueue) xSupports(op Op) bool {
-	if runtime.GOOS == "freebsd" {
-		//return true // Supports everything.
-	}
+	//if runtime.GOOS == "freebsd" {
+	//	return true // Supports everything.
+	//}
 	if op.Has(xUnportableOpen) || op.Has(xUnportableRead) ||
 		op.Has(xUnportableCloseWrite) || op.Has(xUnportableCloseRead) {
 		return false
