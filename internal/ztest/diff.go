@@ -1,7 +1,3 @@
-// Copy of https://github.com/arp242/zstd/tree/master/ztest – vendored here so
-// we don't add a dependency for just one file used in tests. DiffXML was
-// removed as it depends on zgo.at/zstd/zxml.
-
 // This code is based on https://github.com/pmezard/go-difflib
 //
 // Copyright (c) 2013, Patrick Mezard
@@ -32,6 +28,10 @@
 // NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+// Package ztest is a copy of https://github.com/arp242/zstd/tree/master/ztest –
+// vendored here so we don't add a dependency for just one file used in tests.
+//
+// DiffXML was removed as it depends on zgo.at/zstd/zxml.
 package ztest
 
 import (

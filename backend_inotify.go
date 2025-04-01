@@ -100,7 +100,7 @@ func (w *watches) removePath(path string) ([]uint32, error) {
 	wds := make([]uint32, 0, 8)
 	wds = append(wds, wd)
 	for p, rwd := range w.path {
-		if filepath.HasPrefix(p, path) {
+		if strings.HasPrefix(p, path) {
 			delete(w.path, p)
 			delete(w.wd, rwd)
 			wds = append(wds, rwd)
