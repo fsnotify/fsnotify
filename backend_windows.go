@@ -1,4 +1,4 @@
-//go:build windows
+//go:build windows && !usn
 
 // Windows backend based on ReadDirectoryChangesW()
 //
