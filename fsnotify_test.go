@@ -562,6 +562,37 @@ func TestAdd(t *testing.T) {
 				remove /file
 		`))
 	})
+
+	t.Run("not reading events", func(t *testing.T) {
+		t.Parallel()
+
+		w := newWatcher(t)
+		defer w.Close()
+
+		tmp := t.TempDir()
+		mkdir(t, tmp, "/dir1")
+		mkdir(t, tmp, "/dir2")
+		addWatch(t, w, tmp, "/dir1")
+		addWatch(t, w, tmp, "/dir2")
+
+		{
+			have, want := w.WatchList(), []string{join(tmp, "/dir1"), join(tmp, "/dir2")}
+			sort.Strings(have)
+			if !reflect.DeepEqual(have, want) {
+				t.Errorf("\nhave: %s\nwant: %s", have, want)
+			}
+		}
+		if err := w.Remove(join(tmp, "/dir1")); err != nil {
+			t.Fatal(err)
+		}
+		{
+			have, want := w.WatchList(), []string{join(tmp, "/dir2")}
+			sort.Strings(have)
+			if !reflect.DeepEqual(have, want) {
+				t.Errorf("\nhave: %s\nwant: %s", have, want)
+			}
+		}
+	})
 }
 
 func TestRemove(t *testing.T) {
