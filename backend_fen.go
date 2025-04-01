@@ -70,8 +70,8 @@ func (w *fen) AddWith(name string, opts ...addOpt) error {
 	}
 
 	with := getOptions(opts...)
-	if !w.xSupports(with.op) {
-		return fmt.Errorf("%w: %s", xErrUnsupported, with.op)
+	if !w.Supports(with.op) {
+		return fmt.Errorf("%w: %s", ErrUnsupported, with.op)
 	}
 
 	// Currently we resolve symlinks that were explicitly requested to be
@@ -415,7 +415,7 @@ func (w *fen) associateFile(path string, stat os.FileInfo, follow bool) error {
 		// is explicitly watched.
 		events |= unix.FILE_NOFOLLOW
 	}
-	if true { // TODO: implement withOps()
+	if true { // TODO: implement WithOps()
 		events |= unix.FILE_MODIFIED
 	}
 	if true {
@@ -458,9 +458,9 @@ func (w *fen) WatchList() []string {
 	return entries
 }
 
-func (w *fen) xSupports(op Op) bool {
-	if op.Has(xUnportableOpen) || op.Has(xUnportableRead) ||
-		op.Has(xUnportableCloseWrite) || op.Has(xUnportableCloseRead) {
+func (w *fen) Supports(op Op) bool {
+	if op.Has(UnportableOpen) || op.Has(UnportableRead) ||
+		op.Has(UnportableCloseWrite) || op.Has(UnportableCloseRead) {
 		return false
 	}
 	return true
