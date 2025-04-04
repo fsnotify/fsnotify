@@ -1,7 +1,10 @@
-//go:build freebsd || openbsd || netbsd || dragonfly
+//go:build openbsd || netbsd || dragonfly
 
 package fsnotify
 
 import "golang.org/x/sys/unix"
 
-const openMode = unix.O_NONBLOCK | unix.O_RDONLY | unix.O_CLOEXEC
+const (
+	openMode     = unix.O_NONBLOCK | unix.O_RDONLY | unix.O_CLOEXEC
+	openNofollow = 0
+)

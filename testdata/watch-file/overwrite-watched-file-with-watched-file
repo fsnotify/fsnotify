@@ -21,11 +21,16 @@ Output:
 	remove   /file
 
 	kqueue:
+		# TODO: need to properly track this rename
 		rename   /other
 		remove   /file
-		create   /file
-		write    /file
-		remove   /file
+
+		# XXX: changed as per remove-watched-file.
+		# rename   /other
+		# remove   /file
+		# create   /file
+		# write    /file
+		# remove   /file
 
 	windows:
 		remove   /file

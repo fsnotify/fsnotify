@@ -7,5 +7,5 @@ chmod 700 /file
 Output:
 	chmod /file
 
-	windows:
+	windows:  # No chmod on Windows
 		no-events
