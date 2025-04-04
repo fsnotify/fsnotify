@@ -13,14 +13,14 @@ echo data >>/link
 touch /dir/file
 
 # Rename
-mv /file /rename
+mv /file   /rename
 mv /rename /file
-mv /dir /rename
+mv /dir    /rename
 mv /rename /dir
-mv /link /rename
+mv /link   /rename
 mv /rename /link
 
-# Chmod
+## Chmod
 chmod 644 /file
 chmod 644 /link
 chmod 755 /dir

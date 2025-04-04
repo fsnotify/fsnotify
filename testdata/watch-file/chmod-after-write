@@ -13,5 +13,5 @@ Output:
 	write  /file
 	chmod  /file
 
-	windows:
+	windows:  # No chmod on Windows
 		write /file
