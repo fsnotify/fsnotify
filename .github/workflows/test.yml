@@ -11,7 +11,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ['ubuntu-20.04', 'ubuntu-latest', 'ubuntu-24.04-arm']
-        go: ['1.17', '1.24']
+        go: ['1.19', '1.24']
     runs-on: '${{ matrix.os }}'
     timeout-minutes: 10
     steps:
@@ -20,6 +20,7 @@ jobs:
         with: {go-version: '${{ matrix.go }}'}
       - name: test
         run: |
+          go version
           FSNOTIFY_BUFFER=4096 go test -parallel 1 -race    ./...
                                go test -parallel 1 -race    ./...
           FSNOTIFY_DEBUG=1     go test -parallel 1 -race -v ./...
@@ -29,7 +30,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ['windows-latest']
-        go: ['1.17', '1.24']
+        go: ['1.19', '1.24']
     runs-on: '${{ matrix.os }}'
     timeout-minutes: 10
     steps:
@@ -38,6 +39,7 @@ jobs:
         with: {go-version: '${{ matrix.go }}'}
       - name: test
         run: |
+          go version
           go test -parallel 1 -race    ./...
 
           $Env:FSNOTIFY_BUFFER = 4096
@@ -56,6 +58,7 @@ jobs:
       - name: test
         run: |
           sudo apt-get -y install gccgo-13
+          go-13 version
           FSNOTIFY_BUFFER=4096 go-13 test -parallel 1    ./...
                                go-13 test -parallel 1    ./...
           FSNOTIFY_DEBUG=1     go-13 test -parallel 1 -v ./...
@@ -66,7 +69,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ['macos-13', 'macos-latest']
-        go: ['1.17', '1.24']
+        go: ['1.19', '1.24']
     runs-on: '${{ matrix.os }}'
     timeout-minutes: 10
     steps:
@@ -75,6 +78,7 @@ jobs:
         with: {go-version: '${{ matrix.go }}'}
       - name: test
         run: |
+          go version
           FSNOTIFY_BUFFER=4096 go test -parallel 1 -race    ./...
                                go test -parallel 1 -race    ./...
           FSNOTIFY_DEBUG=1     go test -parallel 1 -race -v ./...
@@ -88,17 +92,18 @@ jobs:
   #       enough.
   openbsd:
     runs-on: 'ubuntu-latest'
-    name:    'test (openbsd, 1.17)'
+    name:    'test (openbsd, 1.24)'
     timeout-minutes: 10
     steps:
       - uses: 'actions/checkout@v4'
-      - name: 'test (openbsd, 1.17)'
+      - name: 'test (openbsd, 1.24)'
         id:   'openbsd'
         uses: 'vmactions/openbsd-vm@v1'
         with:
           prepare: pkg_add go
           run: |
             useradd -mG wheel action
+            su action -c 'go version'
             FSNOTIFY_BUFFER=4096 su action -c 'go test -parallel 1    ./...'
                                  su action -c 'go test -parallel 1    ./...'
             FSNOTIFY_DEBUG=1     su action -c 'go test -parallel 1 -v ./...'
@@ -118,6 +123,7 @@ jobs:
           # TODO: no -race for the same reason as OpenBSD (the timing; it does run).
           run: |
             useradd -mG wheel action
+            su action -c '/usr/pkg/bin/go??? version'
             FSNOTIFY_BUFFER=4096 su action -c '/usr/pkg/bin/go??? test -parallel 1    ./...'
                                  su action -c '/usr/pkg/bin/go??? test -parallel 1    ./...'
             FSNOTIFY_DEBUG=1     su action -c '/usr/pkg/bin/go??? test -parallel 1 -v ./...'
@@ -125,11 +131,11 @@ jobs:
   # DragonFlyBSD
   dragonflybsd:
     runs-on: 'ubuntu-latest'
-    name:    'test (dragonflybsd, 1.20)'
+    name:    'test (dragonflybsd, 1.21)'
     timeout-minutes: 10
     steps:
       - uses: 'actions/checkout@v4'
-      - name: 'test (dragonflybsd, 1.20)'
+      - name: 'test (dragonflybsd, 1.21)'
         id:   'dragonflybsd'
         uses: 'vmactions/dragonflybsd-vm@v1'
         with:
@@ -137,6 +143,7 @@ jobs:
           # TODO: no -race for the same reason as OpenBSD (the timing; it does run).
           run: |
             pw user add -mG wheel -n action
+            su action -c 'go version'
             env FSNOTIFY_BUFFER=4096 su action -c 'go test -parallel 1    ./...'
                                      su action -c 'go test -parallel 1    ./...'
             env FSNOTIFY_DEBUG=1     su action -c 'go test -parallel 1 -v ./...'
@@ -157,29 +164,7 @@ jobs:
           useradd action
           export GOCACHE=/tmp/go-cache
           export GOPATH=/tmp/go-path
+          su action -c 'go version'
           FSNOTIFY_BUFFER=4096 su action -c '/opt/ooce/go-1.22/bin/go test -parallel 1    ./...'
                                su action -c '/opt/ooce/go-1.22/bin/go test -parallel 1    ./...'
           FSNOTIFY_DEBUG=1     su action -c '/opt/ooce/go-1.22/bin/go test -parallel 1 -v ./...'
-
-
-  # Solaris
-  # TODO: latest version is go 1.7(!) Need to find a good way to install a more
-  # recent version; the go.dev doesn't have binaries for Solaris.
-  # solaris:
-  #   runs-on: 'ubuntu-latest'
-  #   name: 'test (solaris, 1.17)'
-  #   timeout-minutes: 10
-  #   steps:
-  #   - uses: 'actions/checkout@v4'
-  #   - name: 'test (solaris, 1.17)'
-  #     id:   'solaris'
-  #     uses: 'vmactions/solaris-vm@v1'
-  #     with:
-  #       prepare: pkg install pkg://solaris/developer/golang-17
-  #       run: |
-  #         useradd action
-  #         export GOCACHE=/tmp/go-cache
-  #         export GOPATH=/tmp/go-path
-  #         FSNOTIFY_BUFFER=4096 su action -c 'go test -parallel 1    ./...'
-  #                              su action -c 'go test -parallel 1    ./...'
-  #         FSNOTIFY_DEBUG=1     su action -c 'go test -parallel 1 -v ./...'

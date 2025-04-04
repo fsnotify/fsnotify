@@ -21,7 +21,7 @@ Commands:
     dedup [paths]  Watch the paths for changes, suppressing duplicate events.
 `[1:]
 
-func exit(format string, a ...interface{}) {
+func exit(format string, a ...any) {
 	fmt.Fprintf(os.Stderr, filepath.Base(os.Args[0])+": "+format+"\n", a...)
 	fmt.Print("\n" + usage)
 	os.Exit(1)
@@ -35,7 +35,7 @@ func help() {
 
 // Print line prefixed with the time (a bit shorter than log.Print; we don't
 // really need the date and ms is useful here).
-func printTime(s string, args ...interface{}) {
+func printTime(s string, args ...any) {
 	fmt.Printf(time.Now().Format("15:04:05.0000")+" "+s+"\n", args...)
 }
 
