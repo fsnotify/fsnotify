@@ -19,13 +19,7 @@ import (
 	"github.com/fsnotify/fsnotify/internal"
 )
 
-// Set soft open file limit to the maximum; on e.g. OpenBSD it's 512/1024.
-//
-// Go 1.19 will always do this when the os package is imported.
-//
-// https://go-review.googlesource.com/c/go/+/393354/
 func init() {
-	internal.SetRlimit()
 	enableRecurse = true
 }
 

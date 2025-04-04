@@ -1,5 +1,10 @@
 # Changelog
 
+Unreleased
+----------
+This version of fsnotify needs Go 1.19.
+
+
 1.9.0 2024-04-04
 ----------------
 
