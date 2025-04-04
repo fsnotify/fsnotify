@@ -471,6 +471,13 @@ func withOps(op Op) addOpt {
 
 // WithNoFollow disables following symlinks, so the symlinks themselves are
 // watched.
+//
+// TODO: this should probably be a 3-enum:
+//
+//  1. Follow no symlinks (default)
+//  2. Follow only symlinks in Add (i.e. Add("link") will follow that link only)
+//  3. Follow all symlinks, both for those explicitly mentioned in Add() and
+//     those added in dirs
 func withNoFollow() addOpt {
 	return func(opt *withOpts) { opt.noFollow = true }
 }

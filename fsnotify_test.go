@@ -542,18 +542,29 @@ func TestAdd(t *testing.T) {
 			t.Fatal(err)
 		}
 
+		// XXX problem: it sets up two watches, one for file and one for link.
+		//
+		// In inotify this is not an issue because inotify_add_watch() follows
+		// links and returns the current wd when adding a path twice.
+		//
+		// Previously we did os.Readlink to fix this in kq. Should probs do that
+		// again.
+		//
+		// https://github.com/fsnotify/fsnotify/pull/679/commits
+		w.w.b.(interface{ state() }).state()
+
 		w.collect(t)
 		echoAppend(t, "aaa", tmp, "file")
-		rm(t, tmp, "file")
+		//rm(t, tmp, "file")
 
 		cmpEvents(t, tmp, w.events(t), newEvents(t, `
-			write /file
+			write  /file
 			remove /file
 
 			linux:
-				write /file
-				chmod /file
-				remove /file
+				write   /file
+				chmod   /file
+				remove  /file
 		`))
 	})
 

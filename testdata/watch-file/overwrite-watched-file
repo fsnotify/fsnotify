@@ -19,11 +19,14 @@ Output:
 		chmod    /file
 		remove   /file
 
-	kqueue:
-		remove   /file
-		create   /file
-		write    /file
-		remove   /file
+	# XXX changed: before it would explicitly try to stat to see if the file had
+	# been overwritten. Didn't happen on Windows or inotify, so probs best to
+	# just change it.
+	# kqueue:
+	# 	remove   /file
+	# 	create   /file
+	# 	write    /file
+	# 	remove   /file
 
 	dragonfly:
 		no-events

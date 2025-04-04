@@ -646,7 +646,7 @@ func isSolaris() bool {
 
 func supportsRecurse(t *testing.T) {
 	switch runtime.GOOS {
-	case "windows", "linux":
+	case "windows", "linux": //, "darwin", "freebsd", "openbsd", "netbsd", "dragonfly":
 		// Run test.
 	default:
 		t.Skip("recursion not yet supported on " + runtime.GOOS)
@@ -655,7 +655,7 @@ func supportsRecurse(t *testing.T) {
 
 func supportsFilter(t *testing.T) {
 	switch runtime.GOOS {
-	case "linux":
+	case "linux": // "darwin", "freebsd", "openbsd", "netbsd", "dragonfly":
 		// Run test.
 	default:
 		t.Skip("withOps() not yet supported on " + runtime.GOOS)
@@ -664,7 +664,7 @@ func supportsFilter(t *testing.T) {
 
 func supportsRename() bool {
 	switch runtime.GOOS {
-	case "linux", "windows":
+	case "linux", "windows": //, "darwin", "freebsd", "openbsd", "netbsd", "dragonfly":
 		return true
 	default:
 		return false
@@ -673,7 +673,7 @@ func supportsRename() bool {
 
 func supportsNofollow(t *testing.T) {
 	switch runtime.GOOS {
-	case "linux":
+	case "linux", "darwin": //, "freebsd", "openbsd", "netbsd", "dragonfly":
 		// Run test.
 	default:
 		t.Skip("withNoFollow() not yet supported on " + runtime.GOOS)

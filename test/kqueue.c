@@ -63,6 +63,8 @@ int main(int argc, char* argv[]) {
 		char *path = malloc(strlen(dir) + strlen(ls->d_name) + 2);
 		sprintf(path, "%s/%s", dir, ls->d_name);
 
+		printf("%s\n", path);
+
 		int fp = open(path, O_RDONLY | O_PATH | O_NOFOLLOW);
 		if (fp == -1)
 			die("open: %s:", path);
