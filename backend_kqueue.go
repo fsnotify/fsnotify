@@ -377,19 +377,12 @@ func (w *kqueue) addWatch(name string, flags uint32, listDir bool) (string, erro
 			}
 		}
 
-		// Retry on EINTR; open() can return EINTR in practice on macOS.
-		// See #354, and Go issues 11180 and 39237.
-		for {
-			info.wd, err = unix.Open(name, openMode, 0)
-			if err == nil {
-				break
-			}
-			if errors.Is(err, unix.EINTR) {
-				continue
-			}
+		info.wd, err = internal.IgnoringEINTR(func() (int, error) {
+			return unix.Open(name, openMode, 0)
+		})
+		if err != nil {
 			return "", err
 		}
-
 		info.isDir = fi.IsDir()
 	}
 
@@ -437,9 +430,10 @@ func (w *kqueue) readEvents() {
 
 	eventBuffer := make([]unix.Kevent_t, 10)
 	for {
-		kevents, err := w.read(eventBuffer)
-		// EINTR is okay, the syscall was interrupted before timeout expired.
-		if err != nil && err != unix.EINTR {
+		kevents, err := internal.IgnoringEINTR(func() ([]unix.Kevent_t, error) {
+			return w.read(eventBuffer)
+		})
+		if err != nil {
 			if !w.sendError(fmt.Errorf("fsnotify.readEvents: %w", err)) {
 				return
 			}
