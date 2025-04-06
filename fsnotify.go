@@ -220,7 +220,7 @@ const (
 
 	// File opened for reading was closed.
 	//
-	// Only works on Linux and FreeBSD.
+	// Only works on Linux.
 	xUnportableCloseRead
 )
 
