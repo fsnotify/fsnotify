@@ -578,6 +578,6 @@ func (w *inotify) state() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for wd, ww := range w.watches.wd {
-		fmt.Fprintf(os.Stderr, "%4d: recurse=%t %q\n", wd, ww.recurse, ww.path)
+		fmt.Fprintf(os.Stderr, "%4d: %q  recurse=%t\n", wd, ww.path, ww.recurse)
 	}
 }
