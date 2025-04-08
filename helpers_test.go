@@ -840,9 +840,14 @@ loop:
 			default:
 				t.Fatalf("line %d: unknown %s reason: %q", c.line, c.cmd, c.args[0])
 			}
-		//case "state":
-		//	mustArg(c, 0)
-		//	do = append(do, func() { eventSeparator(); fmt.Fprintln(os.Stderr); w.w.state(); fmt.Fprintln(os.Stderr) })
+		case "state":
+			mustArg(c, 0)
+			do = append(do, func() {
+				eventSeparator()
+				fmt.Fprintln(os.Stderr)
+				w.w.b.(interface{ state() }).state()
+				fmt.Fprintln(os.Stderr)
+			})
 		case "debug":
 			mustArg(c, 1)
 			switch c.args[0] {

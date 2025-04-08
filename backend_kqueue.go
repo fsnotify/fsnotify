@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"sync"
 	"time"
 
@@ -702,4 +703,20 @@ func (w *kqueue) xSupports(op Op) bool {
 		return false
 	}
 	return true
+}
+
+func (w *kqueue) state() {
+	w.watches.mu.Lock()
+	defer w.watches.mu.Unlock()
+
+	all := make([]int, 0, len(w.watches.wd))
+	for wd := range w.watches.wd {
+		all = append(all, wd)
+	}
+	sort.Ints(all)
+
+	for _, wd := range all {
+		ww := w.watches.wd[wd]
+		fmt.Fprintf(os.Stderr, "%4d  %q  linkname=%q\n", wd, ww.name, ww.linkName)
+	}
 }
