@@ -203,7 +203,7 @@ func (w *inotify) AddWith(path string, opts ...addOpt) error {
 			flags |= unix.IN_DELETE | unix.IN_DELETE_SELF
 		}
 		if with.op.Has(Rename) {
-			flags |= unix.IN_MOVED_TO | unix.IN_MOVED_FROM | unix.IN_MOVE_SELF
+			flags |= unix.IN_MOVED_TO | unix.IN_MOVED_FROM | unix.IN_MOVE_SELF | unix.SYS_RENAME
 		}
 		if with.op.Has(Chmod) {
 			flags |= unix.IN_ATTRIB
@@ -538,7 +538,7 @@ func (w *inotify) newEvent(name string, mask, cookie uint32) Event {
 	if mask&unix.IN_CLOSE_NOWRITE == unix.IN_CLOSE_NOWRITE {
 		e.Op |= xUnportableCloseRead
 	}
-	if mask&unix.IN_MOVE_SELF == unix.IN_MOVE_SELF || mask&unix.IN_MOVED_FROM == unix.IN_MOVED_FROM {
+	if mask&unix.IN_MOVE_SELF == unix.IN_MOVE_SELF || mask&unix.IN_MOVED_FROM == unix.IN_MOVED_FROM || mask&unix.SYS_RENAME > 0 {
 		e.Op |= Rename
 	}
 	if mask&unix.IN_ATTRIB == unix.IN_ATTRIB {
