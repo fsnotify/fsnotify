@@ -67,27 +67,19 @@ func (w *kqueue) AddWith(path string, opts ...addOpt) error {
 		return fmt.Errorf("%w: %s", xErrUnsupported, with.op)
 	}
 
-	// TODO
-	//if with.noFollow {
-	//	flags |= unix.IN_DONT_FOLLOW
-	//}
-
 	// We always need at least DELETE and RENAME to know when to stop watching;
 	// otherwise we would never get any events for this. These get filtered
 	// later.
 	fflags := unix.NOTE_DELETE | unix.NOTE_RENAME
 	if with.op.Has(Create) {
+		// Create is WRITE on parent dir.
+		// TODO: probably don't need to set this for files if Create isn't
+		// given?
 		fflags |= unix.NOTE_WRITE
 	}
 	if with.op.Has(Write) {
 		fflags |= unix.NOTE_WRITE
 	}
-	//if with.op.Has(Remove) {
-	//	fflags |= unix.NOTE_DELETE
-	//}
-	//if with.op.Has(Rename) {
-	//	fflags |= unix.NOTE_RENAME
-	//}
 	if with.op.Has(Chmod) {
 		fflags |= unix.NOTE_ATTRIB
 	}
@@ -126,13 +118,19 @@ func (w *kqueue) Remove(path string) error {
 }
 
 func (w *kqueue) WatchList() []string {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
 	if w.isClosed() {
 		return nil
 	}
-	return nil
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	entries := make([]string, 0, 8)
+	for _, w := range w.watches.wd {
+		if w.byUser {
+			entries = append(entries, w.path)
+		}
+	}
+	return entries
 }
 
 func (w *kqueue) xSupports(op Op) bool {
@@ -193,7 +191,10 @@ func (w *kqueue) addWatch(path string, fflags int, withOp Op, listDir, fromAdd b
 		}
 	}
 	if err != nil {
-		if errors.Is(err, unix.ENOENT) {
+		if fromAdd { // Always return error from AddWith().
+			return err
+		}
+		if errors.Is(err, unix.ENOENT) { // Doesn't exist: probably race. Ignore.
 			return nil
 		}
 
