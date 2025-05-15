@@ -48,21 +48,6 @@ jobs:
           $Env:FSNOTIFY_DEBUG = 1
           go test -parallel 1 -race -v ./...
 
-  # Test gccgo
-  gcc:
-    runs-on: 'ubuntu-24.04'
-    name:    'test (ubuntu-24.04, gccgo 13.2)'
-    timeout-minutes: 10
-    steps:
-      - uses: 'actions/checkout@v4'
-      - name: test
-        run: |
-          sudo apt-get -y install gccgo-13
-          go-13 version
-          FSNOTIFY_BUFFER=4096 go-13 test -parallel 1    ./...
-                               go-13 test -parallel 1    ./...
-          FSNOTIFY_DEBUG=1     go-13 test -parallel 1 -v ./...
-
   macos:
     name: 'test'
     strategy:
