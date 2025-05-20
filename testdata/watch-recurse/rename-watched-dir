@@ -1,0 +1,15 @@
+require recurse
+
+mkdir /dir
+mkdir /dir/sub
+
+watch /dir/...
+
+mv /dir /renamed
+touch /renamed/sub/file
+
+Output:
+	rename   /dir
+
+	windows:  # TODO
+		create  /dir/sub/file

@@ -4,9 +4,7 @@ require symlink
 mkdir /dir
 watch /
 ln -s /dir /link
-
-# Shouldn't give any events.
-touch link/file
+touch link/file  # Shouldn't give any events.
 
 Output:
 	create  /link

@@ -1,0 +1,24 @@
+# Looks like Windows doesn't allow rename if there's watch:
+# mv("/001/dir", "/001/dir-rename"): rename /001/dir /001/dir-rename: Access is denied.
+skip windows
+
+mkdir -p /dir/sub
+
+watch /dir
+watch /dir/sub
+
+mv /dir /dir-rename
+touch /dir-rename/sub/file
+
+Output:
+	rename   /dir
+	# Still /dir as it's a different watch, which doesn't get updated. Could be
+	# considered both a feature and a bug (see #694).
+	create   /dir/sub/file
+
+	kqueue: # TODO: kqueue only sends rename.
+		rename /dir
+
+	illumos:  # TODO
+		rename   /dir
+		remove   /dir/sub

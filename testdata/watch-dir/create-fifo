@@ -1,5 +1,3 @@
-# FIFO
-
 require mkfifo
 
 watch  /
