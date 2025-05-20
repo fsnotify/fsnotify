@@ -15,7 +15,6 @@ Output:
 	create     /sub-rename/file      # touch /sub-rename/file
 	create     /sub-rename/dir/file  # touch /sub-rename/dir/file
 
-
 	# Same as above, but with these stupid dir writes Windows sends.
 	#
 	# TODO: see if we can suppress that.

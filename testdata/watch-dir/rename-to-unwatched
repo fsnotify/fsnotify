@@ -1,9 +1,5 @@
 # Rename to unwatched dir.
 
-# if runtime.GOOS == "netbsd" && isCI() {
-# 	t.Skip("fails in CI; see #488") // TODO
-# }
-
 mkdir /dir
 mkdir /unwatch
 watch /dir

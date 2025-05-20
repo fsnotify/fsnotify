@@ -494,3 +494,13 @@ func recursivePath(path string) (string, bool) {
 	}
 	return path, false
 }
+
+type watchFlag uint8
+
+const (
+	// Added by user with Add(), rather than an internal watch.
+	flagByUser = watchFlag(0x01)
+	// Part of recursive watch; as the top-level path added by the user or an
+	// "internal" watch.
+	flagRecurse = watchFlag(0x02)
+)

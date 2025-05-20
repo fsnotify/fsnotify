@@ -1,0 +1,23 @@
+# TODO: frequently (but not always) hangs in the CI until it gets killed. Not
+# sure what's going on – can't reproduce locally.
+skip windows
+
+# Make sure RenamedFrom is set when renaming from one directory to another.
+require recurse
+
+mkdir /dir1
+mkdir /dir2
+touch /dir1/file
+
+watch /...
+
+mv /dir1/file /dir2/rename
+
+Output:
+	rename   /dir1/file
+	create   /dir2/rename ← /dir1/file
+
+	windows:  # TODO: Windows sends these stupid writes
+		remove   /dir1/file
+		create   /dir2/rename
+		write    /dir2

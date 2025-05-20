@@ -1,5 +1,3 @@
-#
-
 touch /before-watch
 watch /
 

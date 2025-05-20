@@ -7,6 +7,6 @@ rm /file
 Output:
 	remove /file
 
-	linux:  # unlink always emits a chmod on linux.
+	linux:  # unlink always emits a chmod on Linux.
 		chmod  /file
 		remove /file

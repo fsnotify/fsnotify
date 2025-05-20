@@ -6,16 +6,19 @@ touch /rename
 watch /
 
 mv /file /rename
+echo foo >>/rename
 
 Output:
 	remove  /rename
 	rename  /file
 	create  /rename ← /file
+	write   /rename
 
 	# Inotify just sends MOVED_FROM and MOVED_TO.
 	linux:
 		rename /file
 		create /rename ← /file
+		write  /rename
 
 	dragonfly:
 		remove /
