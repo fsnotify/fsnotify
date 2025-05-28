@@ -556,13 +556,13 @@ func newEvents(t *testing.T, s string) Events {
 			case "CHMOD":
 				op |= Chmod
 			case "OPEN":
-				op |= UnportableOpen
+				op |= xUnportableOpen
 			case "READ":
-				op |= UnportableRead
+				op |= xUnportableRead
 			case "CLOSE_WRITE":
-				op |= UnportableCloseWrite
+				op |= xUnportableCloseWrite
 			case "CLOSE_READ":
-				op |= UnportableCloseRead
+				op |= xUnportableCloseRead
 			default:
 				t.Fatalf("newEvents: line %d has unknown event %q: %s", no+1, ee, line)
 			}

@@ -527,16 +527,16 @@ func (w *inotify) newEvent(name string, mask, cookie uint32) Event {
 		e.Op |= Write
 	}
 	if mask&unix.IN_OPEN == unix.IN_OPEN {
-		e.Op |= UnportableOpen
+		e.Op |= xUnportableOpen
 	}
 	if mask&unix.IN_ACCESS == unix.IN_ACCESS {
-		e.Op |= UnportableRead
+		e.Op |= xUnportableRead
 	}
 	if mask&unix.IN_CLOSE_WRITE == unix.IN_CLOSE_WRITE {
-		e.Op |= UnportableCloseWrite
+		e.Op |= xUnportableCloseWrite
 	}
 	if mask&unix.IN_CLOSE_NOWRITE == unix.IN_CLOSE_NOWRITE {
-		e.Op |= UnportableCloseRead
+		e.Op |= xUnportableCloseRead
 	}
 	if mask&unix.IN_MOVE_SELF == unix.IN_MOVE_SELF || mask&unix.IN_MOVED_FROM == unix.IN_MOVED_FROM {
 		e.Op |= Rename

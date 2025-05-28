@@ -201,12 +201,12 @@ const (
 	// File descriptor was opened.
 	//
 	// Only works on Linux.
-	UnportableOpen
+	xUnportableOpen
 
 	// File was read from.
 	//
 	// Only works on Linux.
-	UnportableRead
+	xUnportableRead
 
 	// File opened for writing was closed.
 	//
@@ -216,12 +216,12 @@ const (
 	// waiting for Write events to stop. It's also faster (if you're not
 	// listening to Write events): copying a file of a few GB can easily
 	// generate tens of thousands of Write events in a short span of time.
-	UnportableCloseWrite
+	xUnportableCloseWrite
 
 	// File opened for reading was closed.
 	//
 	// Only works on Linux.
-	UnportableCloseRead
+	xUnportableCloseRead
 )
 
 var (
@@ -363,16 +363,16 @@ func (o Op) String() string {
 	if o.Has(Write) {
 		b.WriteString("|WRITE")
 	}
-	if o.Has(UnportableOpen) {
+	if o.Has(xUnportableOpen) {
 		b.WriteString("|OPEN")
 	}
-	if o.Has(UnportableRead) {
+	if o.Has(xUnportableRead) {
 		b.WriteString("|READ")
 	}
-	if o.Has(UnportableCloseWrite) {
+	if o.Has(xUnportableCloseWrite) {
 		b.WriteString("|CLOSE_WRITE")
 	}
-	if o.Has(UnportableCloseRead) {
+	if o.Has(xUnportableCloseRead) {
 		b.WriteString("|CLOSE_READ")
 	}
 	if o.Has(Rename) {

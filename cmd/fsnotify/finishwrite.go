@@ -28,16 +28,19 @@ func finishWrite(paths ...string) {
 	}
 	defer w.Close()
 
-	// Check if CloseWrite is supported.
+	// CloseWrite is supported by all platforms.
+	// Leaving this just because it was already there.
 	var (
 		op fsnotify.Op
-		cw = w.Supports(fsnotify.UnportableCloseWrite)
+		cw = false
+		// cw = w.Supports(fsnotify.xUnportableCloseWrite)
 	)
-	if cw {
-		op |= fsnotify.UnportableCloseWrite
-	} else {
-		op |= fsnotify.Create | fsnotify.Write
-	}
+	/*
+		if cw {
+			op |= fsnotify.xUnportableCloseWrite
+		} else {
+	*/
+	op |= fsnotify.Create | fsnotify.Write
 
 	go finishWriteLoop(w, cw)
 
@@ -78,7 +81,7 @@ func finishWriteLoop(w *fsnotify.Watcher, cw bool) {
 
 			// CloseWrite is supported: easy case.
 			if cw {
-				if e.Has(fsnotify.UnportableCloseWrite) {
+				if e.Has(fsnotify.xUnportableCloseWrite) {
 					printTime(e.String())
 				}
 				continue
