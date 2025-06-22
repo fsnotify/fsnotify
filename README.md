@@ -74,7 +74,7 @@ func main() {
     }
 
     // Block main goroutine forever.
-    <-make(chan struct{})
+    select {}
 }
 ```
 
