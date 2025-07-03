@@ -1,0 +1,28 @@
+version: "2"
+run:
+  modules-download-mode: readonly
+  allow-parallel-runners: true
+linters:
+  default: standard
+  disable:
+    - errcheck
+    - unused
+  settings:
+    staticcheck:
+        checks:
+            - "all"
+formatters:
+  enable:
+    - "gci"
+    - "gofumpt"
+    - "goimports"
+  settings:
+    gci:
+      sections:
+        - "standard"
+        - "default"
+        - "prefix(github.com/fsnotify)"
+        - "localmodule"
+    goimports:
+      local-prefixes:
+        - "github.com/fsnotify/fsnotify"

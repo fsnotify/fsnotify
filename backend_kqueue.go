@@ -12,8 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fsnotify/fsnotify/internal"
 	"golang.org/x/sys/unix"
+
+	"github.com/fsnotify/fsnotify/internal"
 )
 
 type kqueue struct {
@@ -242,7 +243,7 @@ func newKqueue() (kq int, closepipe [2]int, err error) {
 }
 
 func (w *kqueue) Close() error {
-	if w.shared.close() {
+	if w.close() {
 		return nil
 	}
 

@@ -240,7 +240,7 @@ func echo(t *testing.T, trunc bool, data string, path ...string) {
 		if trunc {
 			fp, err = os.Create(join(path...))
 		} else {
-			fp, err = os.OpenFile(join(path...), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+			fp, err = os.OpenFile(join(path...), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o666)
 		}
 		if err != nil {
 			return err
@@ -762,7 +762,7 @@ func parseScript(t *testing.T, in string) {
 loop:
 	for _, c := range cmds {
 		c := c
-		//fmt.Printf("line %d: %q  %q\n", c.line, c.cmd, c.args)
+		// fmt.Printf("line %d: %q  %q\n", c.line, c.cmd, c.args)
 		switch c.cmd {
 		case "skip", "require":
 			mustArg(c, 1)

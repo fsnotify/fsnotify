@@ -827,14 +827,22 @@ func TestEventString(t *testing.T) {
 		{Event{}, `[no events]   ""`},
 		{Event{Name: "/file", Op: 0}, `[no events]   "/file"`},
 
-		{Event{Name: "/file", Op: Chmod | Create},
-			`CREATE|CHMOD  "/file"`},
-		{Event{Name: "/file", Op: Rename},
-			`RENAME        "/file"`},
-		{Event{Name: "/file", Op: Remove},
-			`REMOVE        "/file"`},
-		{Event{Name: "/file", Op: Write | Chmod},
-			`WRITE|CHMOD   "/file"`},
+		{
+			Event{Name: "/file", Op: Chmod | Create},
+			`CREATE|CHMOD  "/file"`,
+		},
+		{
+			Event{Name: "/file", Op: Rename},
+			`RENAME        "/file"`,
+		},
+		{
+			Event{Name: "/file", Op: Remove},
+			`REMOVE        "/file"`,
+		},
+		{
+			Event{Name: "/file", Op: Write | Chmod},
+			`WRITE|CHMOD   "/file"`,
+		},
 	}
 
 	for _, tt := range tests {

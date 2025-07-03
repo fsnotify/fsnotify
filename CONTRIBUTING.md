@@ -14,7 +14,7 @@ merge PRs in a reasonable timeframe, but please be aware that:
 
 Testing
 -------
-Just `go test ./...` runs all the tests; the CI runs this on all supported
+Just `make test` runs all the tests; the CI runs this on all supported
 platforms. Testing different platforms locally can be done with something like
 [goon] or [Vagrant], but this isn't super-easy to set up at the moment.
 
@@ -144,4 +144,3 @@ You can specify multiple platforms with a comma (e.g. "windows, linux:").
 
 [goon]: https://github.com/arp242/goon
 [Vagrant]: https://www.vagrantup.com/
-[integration_test.go]: /integration_test.go

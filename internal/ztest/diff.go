@@ -403,7 +403,7 @@ func (m *sequenceMatcher) GetGroupedOpCodes(n int) [][]opCode {
 	}
 	codes := m.GetOpCodes()
 	if len(codes) == 0 {
-		codes = []opCode{opCode{'e', 0, 1, 0, 1}}
+		codes = []opCode{{'e', 0, 1, 0, 1}}
 	}
 
 	// Fixup leading and trailing groups if they show no changes.
@@ -427,8 +427,10 @@ func (m *sequenceMatcher) GetGroupedOpCodes(n int) [][]opCode {
 		// End the current group and start a new one whenever
 		// there is a large range with no changes.
 		if c.Tag == 'e' && i2-i1 > nn {
-			group = append(group, opCode{c.Tag, i1, min(i2, i1+n),
-				j1, min(j2, j1+n)})
+			group = append(group, opCode{
+				c.Tag, i1, min(i2, i1+n),
+				j1, min(j2, j1+n),
+			})
 			groups = append(groups, group)
 			group = []opCode{}
 			i1, j1 = max(i1, i2-n), max(j1, j2-n)
@@ -436,7 +438,7 @@ func (m *sequenceMatcher) GetGroupedOpCodes(n int) [][]opCode {
 		group = append(group, opCode{c.Tag, i1, i2, j1, j2})
 	}
 
-	if len(group) > 0 && !(len(group) == 1 && group[0].Tag == 'e') {
+	if len(group) > 0 && len(group) != 1 || group[0].Tag != 'e' {
 		groups = append(groups, group)
 	}
 	return groups
@@ -536,12 +538,14 @@ func min(a, b int) int {
 	}
 	return b
 }
+
 func max(a, b int) int {
 	if a > b {
 		return a
 	}
 	return b
 }
+
 func splitLines(s string) []string {
 	lines := strings.SplitAfter(s, "\n")
 	lines[len(lines)-1] += "\n"
