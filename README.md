@@ -126,7 +126,7 @@ settings* until we have a native FSEvents implementation (see [#11]).
 ### Watching a file doesn't work well
 Watching individual files (rather than directories) is generally not recommended
 as many programs (especially editors) update files atomically: it will write to
-a temporary file which is then moved to to destination, overwriting the original
+a temporary file which is then moved to a destination, overwriting the original
 (or some variant thereof). The watcher on the original file is now lost, as that
 no longer exists.
 
