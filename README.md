@@ -151,26 +151,25 @@ This is the event that inotify sends, so not much can be changed about this.
 The `fs.inotify.max_user_watches` sysctl variable specifies the upper limit for
 the number of watches per user, and `fs.inotify.max_user_instances` specifies
 the maximum number of inotify instances per user. Every Watcher you create is an
-"instance", and every path you add is a "watch".
+"instance", and every path you add is a "watch". Reaching the limit will result
+in a "no space left on device" or "too many open files" error.
 
 These are also exposed in `/proc` as `/proc/sys/fs/inotify/max_user_watches` and
-`/proc/sys/fs/inotify/max_user_instances`
+`/proc/sys/fs/inotify/max_user_instances`. The default values differ per distro
+and available memory.
 
 To increase them you can use `sysctl` or write the value to proc file:
 
-    # The default values on Linux 5.18
-    sysctl fs.inotify.max_user_watches=124983
-    sysctl fs.inotify.max_user_instances=128
+    sysctl fs.inotify.max_user_watches=200000
+    sysctl fs.inotify.max_user_instances=256
 
 To make the changes persist on reboot edit `/etc/sysctl.conf` or
 `/usr/lib/sysctl.d/50-default.conf` (details differ per Linux distro; check your
 distro's documentation):
 
-    fs.inotify.max_user_watches=124983
-    fs.inotify.max_user_instances=128
+    fs.inotify.max_user_watches=200000
+    fs.inotify.max_user_instances=256
 
-Reaching the limit will result in a "no space left on device" or "too many open
-files" error.
 
 ### kqueue (macOS, all BSD systems)
 kqueue requires opening a file descriptor for every file that's being watched;
