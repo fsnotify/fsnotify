@@ -635,16 +635,17 @@ func (w *kqueue) dirChange(dir string) error {
 // Send a create event if the file isn't already being tracked, and start
 // watching this file.
 func (w *kqueue) sendCreateIfNew(path string, fi os.FileInfo) error {
-	if !w.watches.seenBefore(path) {
-		if !w.sendEvent(Event{Name: path, Op: Create}) {
-			return nil
-		}
-	}
-
+	// To avoid the event handler missing writes, set up the watch first.
 	// Like watchDirectoryFiles, but without doing another ReadDir.
 	path, err := w.internalWatch(path, fi)
 	if err != nil {
 		return err
+	}
+
+	if !w.watches.seenBefore(path) {
+		if !w.sendEvent(Event{Name: path, Op: Create}) {
+			return nil
+		}
 	}
 	w.watches.markSeen(path, true)
 	return nil
