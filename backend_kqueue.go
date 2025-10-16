@@ -637,17 +637,20 @@ func (w *kqueue) dirChange(dir string) error {
 func (w *kqueue) sendCreateIfNew(path string, fi os.FileInfo) error {
 	// To avoid the event handler missing writes, set up the watch first.
 	// Like watchDirectoryFiles, but without doing another ReadDir.
-	path, err := w.internalWatch(path, fi)
-	if err != nil {
-		return err
-	}
+	watchPath, watchErr := w.internalWatch(path, fi)
+	// Even if the watch fails, send notifications before returning an error.
 
 	if !w.watches.seenBefore(path) {
 		if !w.sendEvent(Event{Name: path, Op: Create}) {
 			return nil
 		}
 	}
-	w.watches.markSeen(path, true)
+
+	if watchErr != nil {
+		return watchErr
+	}
+
+	w.watches.markSeen(watchPath, true)
 	return nil
 }
 
