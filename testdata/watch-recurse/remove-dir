@@ -1,6 +1,11 @@
 # Remove nested directory
 require recurse
 
+# TODO: (very) flaky on Windows, frequently misses one or more files. I'm not
+# sure if we can improve on that or if that's just what Windows sends? But test
+# should be reliable.
+skip windows
+
 mkdir -p /sub/dir
 watch /...
 
