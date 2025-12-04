@@ -11,7 +11,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ['ubuntu-22.04', 'ubuntu-latest', 'ubuntu-24.04-arm']
-        go: ['1.19', '1.25']
+        go: ['1.23', '1.25']
     runs-on: '${{ matrix.os }}'
     timeout-minutes: 10
     steps:
@@ -30,7 +30,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ['windows-latest']
-        go: ['1.19', '1.25']
+        go: ['1.23', '1.25']
     runs-on: '${{ matrix.os }}'
     timeout-minutes: 10
     steps:
@@ -54,7 +54,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ['macos-13', 'macos-latest']
-        go: ['1.19', '1.25']
+        go: ['1.23', '1.25']
     runs-on: '${{ matrix.os }}'
     timeout-minutes: 10
     steps:
