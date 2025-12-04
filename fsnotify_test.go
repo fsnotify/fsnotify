@@ -1157,3 +1157,81 @@ func TestNewWatcher(t *testing.T) {
 		t.Errorf("cap of NewWatcher() is not %d but %d", 42, c)
 	}
 }
+
+// Test that a watcher receives a "Write" even if content is written soon after the "Create" event.
+// Regression test for https://github.com/fsnotify/fsnotify/issues/717.
+func TestFileCreateWriteRace(t *testing.T) {
+	// Run the test multiple times to trigger the race.
+	const attempts = 100
+	for i := 0; i < attempts; i++ {
+		dir := filepath.Join(t.TempDir(), fmt.Sprintf("watch-dir-%d", i))
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+
+		runFileCreateWriteRaceTest(t, dir)
+		if t.Failed() {
+			return
+		}
+	}
+}
+
+func runFileCreateWriteRaceTest(t testing.TB, dir string) {
+	filename := filepath.Join(dir, "config.yaml")
+
+	watcher, err := NewWatcher()
+	if err != nil {
+		t.Fatalf("new watcher: %v", err)
+	}
+	defer watcher.Close()
+	if err := watcher.Add(dir); err != nil {
+		t.Fatalf("watcher add: %v", err)
+	}
+
+	file, err := os.Create(filename)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	// Wait for Create before writing content to trigger a separate Write event.
+	const writeContent = "file-contents"
+	waitForEvent(t, watcher, Create, filename)
+	if _, err := file.Write([]byte(writeContent)); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	for {
+		waitForEvent(t, watcher, Write, filename)
+		content, err := os.ReadFile(filename)
+		if err != nil {
+			t.Fatalf("ReadFile failed: %v", err)
+		}
+
+		if string(content) == writeContent {
+			// Success, got write event and file content matches expected content.
+			return
+		}
+
+		t.Log("content mismatch, may be due to partial writes, keep waiting")
+	}
+}
+
+func waitForEvent(t testing.TB, watcher *Watcher, op Op, filename string) Event {
+	const timeout = 5 * time.Second
+	for {
+		select {
+		case ev := <-watcher.Events:
+			if !ev.Has(op) || filepath.Base(ev.Name) != filepath.Base(filename) {
+				t.Logf("ignore unexpected event %v(%s), waiting for %v(%s)",
+					ev.Op, filepath.Base(ev.Name), op, filepath.Base(filename))
+				continue
+			}
+			return ev
+		case <-time.After(timeout):
+			t.Fatal("timed out waiting for event", op, filename)
+		}
+	}
+}
