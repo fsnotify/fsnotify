@@ -24,7 +24,7 @@ jobs:
             staticcheck-${{ github.ref }}
             staticcheck-refs/heads/main
       - uses: 'actions/setup-go@v5'
-        with: {go-version: '1.24'}
+        with: {go-version: '1.25'}
       - uses: 'actions/cache@v4'
         with:
           key: '${{ runner.os }}-staticcheck'

@@ -24,6 +24,3 @@ Output:
 	create  /abc
 	remove  /abc/def
 	remove  /abc
-
-	dragonfly:  # TODO: no remove events?
-		create  /abc

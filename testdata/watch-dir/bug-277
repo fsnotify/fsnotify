@@ -21,11 +21,3 @@ Output:
 	rename   /apple   # mv /apple /pear
 	create   /pear ← /apple
 	remove   /pear    # rm -r /pear
-
-	dragonfly:
-		create   /foo
-		remove   /foo
-		create   /apple
-		rename   /apple
-		create   /pear
-		# No event for rm -r pear?
