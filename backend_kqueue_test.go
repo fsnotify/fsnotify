@@ -4,9 +4,63 @@ package fsnotify
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
+	"time"
 )
+
+// TestDeleteRecreateRace tests a race condition in the kqueue backend (issue #717).
+//
+// When a file is deleted and quickly recreated with new content, kqueue may
+// miss the WRITE event, causing the file to be read before new content is available.
+//
+// To reliably reproduce the race condition before the fix:
+//
+//	go test -run TestDeleteRecreateRace -count=100
+func TestDeleteRecreateRace(t *testing.T) {
+	tmp := t.TempDir()
+	dir := join(tmp, "dir")
+	mkdirAll(t, dir)
+	file := join(dir, "file")
+
+	// Create initial file
+	if err := os.WriteFile(file, []byte("initial"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	w := newWatcher(t, dir)
+
+	// Delete and recreate the file quickly
+	if err := os.Remove(file); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte("recreated"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for the recreated content to be visible via events
+	timeout := time.After(500 * time.Millisecond)
+	for {
+		select {
+		case err := <-w.Errors:
+			t.Fatal(err)
+		case ev := <-w.Events:
+			if ev.Name != file {
+				continue
+			}
+			content, err := os.ReadFile(file)
+			if err != nil {
+				continue // File might not exist on REMOVE
+			}
+			if string(content) == "recreated" {
+				return // Success
+			}
+		case <-timeout:
+			t.Fatal("timeout waiting for recreated content")
+		}
+	}
+}
 
 func TestRemoveState(t *testing.T) {
 	var (
