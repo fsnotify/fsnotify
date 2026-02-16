@@ -410,6 +410,7 @@ type (
 		bufsize    int
 		op         Op
 		sendCreate bool
+		dirsOnly   bool
 	}
 )
 
@@ -470,6 +471,19 @@ func withOps(op Op) addOpt {
 // "Internal" option for recursive watches on inotify.
 func withCreate() addOpt {
 	return func(opt *withOpts) { opt.sendCreate = true }
+}
+
+// WithDirsOnly configures kqueue watchers to only watch directories, not
+// individual files within those directories.
+//
+// Reduces file descriptor usage on BSD from 1+N to 1, where kqueue requires
+// one file descriptor per watched file. With this option, Create and Remove
+// events for files are still detected via modifications to the parent
+// directory, but not any Write events.
+//
+// No-op on non-kqueue systems.
+func WithDirsOnly() addOpt {
+	return func(opt *withOpts) { opt.dirsOnly = true }
 }
 
 var enableRecurse = false

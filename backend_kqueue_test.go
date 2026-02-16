@@ -8,6 +8,34 @@ import (
 	"testing"
 )
 
+func TestDirsOnly(t *testing.T) {
+	var (
+		tmp = t.TempDir()
+		dir = join(tmp, "dir")
+	)
+	mkdir(t, dir)
+	touch(t, dir, "file1")
+	touch(t, dir, "file2")
+
+	w := newWatcher(t)
+	kq := w.b.(*kqueue)
+
+	if err := w.AddWith(dir, WithDirsOnly()); err != nil {
+		t.Fatalf("AddWith(WithDirsOnly()): %s", err)
+	}
+
+	if !kq.dirsOnly {
+		t.Errorf("dirsOnly should be true after AddWith(withDirsOnly())")
+	}
+
+	// Only the directory itself is watched, not individual files.
+	if n := len(kq.watches.wd); n != 1 {
+		t.Errorf("with dirsOnly, expected 1 watch (directory only), got %d", n)
+	}
+
+	w.Close()
+}
+
 func TestRemoveState(t *testing.T) {
 	var (
 		tmp  = t.TempDir()

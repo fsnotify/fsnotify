@@ -24,6 +24,7 @@ type kqueue struct {
 	kq        int    // File descriptor (as returned by the kqueue() syscall).
 	closepipe [2]int // Pipe used for closing kq.
 	watches   *watches
+	dirsOnly  bool
 }
 
 type (
@@ -266,6 +267,10 @@ func (w *kqueue) AddWith(name string, opts ...addOpt) error {
 	with := getOptions(opts...)
 	if !w.xSupports(with.op) {
 		return fmt.Errorf("%w: %s", xErrUnsupported, with.op)
+	}
+
+	if with.dirsOnly {
+		w.dirsOnly = true
 	}
 
 	_, err := w.addWatch(name, noteAllEvents, false)
@@ -656,6 +661,10 @@ func (w *kqueue) internalWatch(name string, fi os.FileInfo) (string, error) {
 		// the flags used if currently watching subdirectory
 		info, _ := w.watches.byPath(name)
 		return w.addWatch(name, info.dirFlags|unix.NOTE_DELETE|unix.NOTE_RENAME, true)
+	}
+
+	if w.dirsOnly {
+		return filepath.Clean(name), nil
 	}
 
 	// Watch file to mimic Linux inotify.
