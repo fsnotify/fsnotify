@@ -19,9 +19,7 @@ import (
 	"github.com/fsnotify/fsnotify/internal"
 )
 
-func init() {
-	enableRecurse = true
-}
+// enableRecurse is now true by default; no init() override needed.
 
 func TestScript(t *testing.T) {
 	err := filepath.Walk("./testdata", func(path string, info fs.FileInfo, err error) error {

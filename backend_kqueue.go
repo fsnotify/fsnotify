@@ -5,10 +5,12 @@ package fsnotify
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,29 +30,32 @@ type kqueue struct {
 
 type (
 	watches struct {
-		mu     sync.RWMutex
-		wd     map[int]watch               // wd → watch
-		path   map[string]int              // pathname → wd
-		byDir  map[string]map[int]struct{} // dirname(path) → wd
-		seen   map[string]struct{}         // Keep track of if we know this file exists.
-		byUser map[string]struct{}         // Watches added with Watcher.Add()
+		mu      sync.RWMutex
+		wd      map[int]watch               // wd → watch
+		path    map[string]int              // pathname → wd
+		byDir   map[string]map[int]struct{} // dirname(path) → wd
+		seen    map[string]struct{}         // Keep track of if we know this file exists.
+		byUser  map[string]struct{}         // Watches added with Watcher.Add()
+		recurse map[string]struct{}         // Root paths of recursive watches.
 	}
 	watch struct {
-		wd       int
-		name     string
-		linkName string // In case of links; name is the target, and this is the link.
-		isDir    bool
-		dirFlags uint32
+		wd         int
+		name       string
+		linkName   string // In case of links; name is the target, and this is the link.
+		isDir      bool
+		dirFlags   uint32
+		watchFlags watchFlag
 	}
 )
 
 func newWatches() *watches {
 	return &watches{
-		wd:     make(map[int]watch),
-		path:   make(map[string]int),
-		byDir:  make(map[string]map[int]struct{}),
-		seen:   make(map[string]struct{}),
-		byUser: make(map[string]struct{}),
+		wd:      make(map[int]watch),
+		path:    make(map[string]int),
+		byDir:   make(map[string]map[int]struct{}),
+		seen:    make(map[string]struct{}),
+		byUser:  make(map[string]struct{}),
+		recurse: make(map[string]struct{}),
 	}
 }
 
@@ -183,6 +188,53 @@ func (w *watches) seenBefore(path string) bool {
 	return ok
 }
 
+func (w *watches) isRecurse(path string) bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	fd, ok := w.path[path]
+	if !ok {
+		return false
+	}
+	return w.wd[fd].watchFlags&flagRecurse != 0
+}
+
+// isUnderRecurse reports whether path falls under any recursive watch root.
+func (w *watches) isUnderRecurse(path string) bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	for p := range w.recurse {
+		if path == p || strings.HasPrefix(path, p+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// removePaths removes a path and, if it was added recursively, all sub-paths.
+// Returns paths that were removed.
+func (w *watches) removePaths(path string) []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	fd, ok := w.path[path]
+	if !ok {
+		return nil
+	}
+	ww := w.wd[fd]
+	isRecurse := ww.watchFlags&flagRecurse != 0
+
+	removed := []string{path}
+	if isRecurse {
+		for p := range w.path {
+			if p != path && strings.HasPrefix(p, path+"/") {
+				removed = append(removed, p)
+			}
+		}
+		delete(w.recurse, path)
+	}
+	return removed
+}
+
 var defaultBufferSize = 0
 
 func newBackend(ev chan Event, errs chan error) (backend, error) {
@@ -268,6 +320,11 @@ func (w *kqueue) AddWith(name string, opts ...addOpt) error {
 		return fmt.Errorf("%w: %s", xErrUnsupported, with.op)
 	}
 
+	name, recurse := recursivePath(name)
+	if recurse {
+		return w.addRecursive(name, with)
+	}
+
 	_, err := w.addWatch(name, noteAllEvents, false)
 	if err != nil {
 		return err
@@ -276,12 +333,92 @@ func (w *kqueue) AddWith(name string, opts ...addOpt) error {
 	return nil
 }
 
+// addRecursive walks the directory tree and adds watches for all directories.
+func (w *kqueue) addRecursive(name string, with withOpts) error {
+	err := filepath.WalkDir(name, func(root string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			if root == name {
+				return fmt.Errorf("fsnotify: not a directory: %q", name)
+			}
+			return nil
+		}
+
+		// Send a Create event when adding new directory from a recursive
+		// watch; this is for "mkdir -p one/two/three".
+		if with.sendCreate && root != name {
+			w.sendEvent(Event{Name: root, Op: Create})
+		}
+
+		_, err = w.addWatch(root, noteAllEvents, false)
+		if err != nil {
+			return err
+		}
+		if root == name {
+			w.watches.addUserWatch(root)
+		}
+
+		// Mark this watch as recursive.
+		w.watches.mu.Lock()
+		if fd, ok := w.watches.path[root]; ok {
+			ww := w.watches.wd[fd]
+			wf := flagRecurse
+			if root == name {
+				wf |= flagByUser
+			}
+			ww.watchFlags = wf
+			w.watches.wd[fd] = ww
+		}
+		w.watches.mu.Unlock()
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	w.watches.mu.Lock()
+	w.watches.recurse[name] = struct{}{}
+	w.watches.mu.Unlock()
+	return nil
+}
+
 func (w *kqueue) Remove(name string) error {
 	if debug {
 		fmt.Fprintf(os.Stderr, "FSNOTIFY_DEBUG: %s  Remove(%q)\n",
 			time.Now().Format("15:04:05.000000000"), name)
 	}
+
+	name, recurse := recursivePath(name)
+
+	// If called with /..., the watch must have been added recursively.
+	if recurse && !w.watches.isRecurse(name) {
+		return fmt.Errorf("can't use /... with non-recursive watch %q", name)
+	}
+
+	// If the watch was added recursively, remove it and all children
+	// even without /... in the path (matches inotify behavior).
+	if w.watches.isRecurse(name) || recurse {
+		return w.removeRecursive(name)
+	}
 	return w.remove(name, true)
+}
+
+// removeRecursive removes a recursive watch and all its sub-watches.
+func (w *kqueue) removeRecursive(name string) error {
+	paths := w.watches.removePaths(name)
+	if len(paths) == 0 {
+		return fmt.Errorf("%w: %s", ErrNonExistentWatch, name)
+	}
+	for _, p := range paths {
+		if err := w.remove(p, true); err != nil {
+			if !errors.Is(err, ErrNonExistentWatch) {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (w *kqueue) remove(name string, unwatchFiles bool) error {
@@ -641,6 +778,12 @@ func (w *kqueue) sendCreateIfNew(path string, fi os.FileInfo) error {
 		}
 	}
 
+	// If a new directory appears under a recursive watch, walk it and add
+	// watches for the entire subtree.
+	if fi.IsDir() && w.watches.isUnderRecurse(path) {
+		return w.addRecursiveSubdir(path)
+	}
+
 	// Like watchDirectoryFiles, but without doing another ReadDir.
 	path, err := w.internalWatch(path, fi)
 	if err != nil {
@@ -648,6 +791,54 @@ func (w *kqueue) sendCreateIfNew(path string, fi os.FileInfo) error {
 	}
 	w.watches.markSeen(path, true)
 	return nil
+}
+
+// addRecursiveSubdir adds watches for a newly created subdirectory and all
+// nested children when under a recursive watch.
+func (w *kqueue) addRecursiveSubdir(root string) error {
+	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			// kqueue needs per-file watches; set them up.
+			fi, err := d.Info()
+			if err != nil {
+				return err
+			}
+			cleanPath, err := w.internalWatch(path, fi)
+			if err != nil {
+				if errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM) {
+					cleanPath = filepath.Clean(path)
+				} else {
+					return err
+				}
+			}
+			w.watches.markSeen(cleanPath, true)
+			return nil
+		}
+
+		// Add directory watch.
+		_, err = w.addWatch(path, noteAllEvents, false)
+		if err != nil {
+			return err
+		}
+
+		// Mark as recursive sub-watch.
+		w.watches.mu.Lock()
+		if fd, ok := w.watches.path[path]; ok {
+			ww := w.watches.wd[fd]
+			ww.watchFlags = flagRecurse
+			w.watches.wd[fd] = ww
+		}
+		w.watches.mu.Unlock()
+
+		// Watch files inside this directory.
+		if err := w.watchDirectoryFiles(path); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 func (w *kqueue) internalWatch(name string, fi os.FileInfo) (string, error) {
