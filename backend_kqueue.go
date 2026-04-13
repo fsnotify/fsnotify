@@ -573,6 +573,12 @@ func (w *kqueue) watchDirectoryFiles(dirPath string) error {
 
 		fi, err := f.Info()
 		if err != nil {
+			// Broken symlinks (pointing to nonexistent targets) will
+			// fail here. Skip them instead of aborting the entire
+			// directory watch, so remaining files are still watched.
+			if f.Type()&os.ModeSymlink != 0 {
+				continue
+			}
 			return fmt.Errorf("%q: %w", path, err)
 		}
 
