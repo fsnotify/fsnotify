@@ -11,7 +11,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ['ubuntu-22.04', 'ubuntu-latest', 'ubuntu-24.04-arm']
-        go: ['1.19', '1.25']
+        go: ['1.19', '1.26']
     runs-on: '${{ matrix.os }}'
     timeout-minutes: 10
     steps:
@@ -30,7 +30,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ['windows-latest']
-        go: ['1.19', '1.25']
+        go: ['1.19', '1.26']
     runs-on: '${{ matrix.os }}'
     timeout-minutes: 10
     steps:
@@ -53,8 +53,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ['macos-13', 'macos-latest']
-        go: ['1.19', '1.25']
+        # macos-15-intel: x86_64 coverage; macos-latest: arm64 (Apple Silicon).
+        os: ['macos-15-intel', 'macos-latest']
+        go: ['1.19', '1.26']
     runs-on: '${{ matrix.os }}'
     timeout-minutes: 10
     steps:
@@ -164,12 +165,12 @@ jobs:
       id:   'illumos'
       uses: 'vmactions/omnios-vm@v1'
       with:
-        prepare: pkg install go-125
+        prepare: pkg install go-126
         run: |
           useradd action
           export GOCACHE=/tmp/go-cache
           export GOPATH=/tmp/go-path
           su action -c 'go version'
-          FSNOTIFY_BUFFER=4096 su action -c '/opt/ooce/go-1.25/bin/go test -parallel 1    ./...'
-                               su action -c '/opt/ooce/go-1.25/bin/go test -parallel 1    ./...'
-          FSNOTIFY_DEBUG=1     su action -c '/opt/ooce/go-1.25/bin/go test -parallel 1 -v ./...'
+          FSNOTIFY_BUFFER=4096 su action -c '/opt/ooce/go-1.26/bin/go test -parallel 1    ./...'
+                               su action -c '/opt/ooce/go-1.26/bin/go test -parallel 1    ./...'
+          FSNOTIFY_DEBUG=1     su action -c '/opt/ooce/go-1.26/bin/go test -parallel 1 -v ./...'
