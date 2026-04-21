@@ -12,7 +12,7 @@ Platform support:
 | :-------------------- | :--------- | :------------------------------------------------------------------------ |
 | inotify               | Linux      | Supported                                                                 |
 | kqueue                | BSD, macOS | Supported                                                                 |
-| ReadDirectoryChangesW | Windows    | Supported                                                                 |
+| ReadDirectoryChangesW | Windows    | Supported ([excluding `Chmod` operations][#487])                          |
 | FEN                   | illumos    | Supported                                                                 |
 | fanotify              | Linux 5.9+ | [Not yet](https://github.com/fsnotify/fsnotify/issues/114)                |
 | FSEvents              | macOS      | [Needs support in x/sys/unix][fsevents]                                   |
@@ -22,6 +22,7 @@ Platform support:
 Linux and illumos should include Android and Solaris, but these are currently
 untested.
 
+[#487]:       https://github.com/fsnotify/fsnotify/issues/487
 [fsevents]:   https://github.com/fsnotify/fsnotify/issues/11#issuecomment-1279133120
 [usn]:        https://github.com/fsnotify/fsnotify/issues/53#issuecomment-1279829847
 
