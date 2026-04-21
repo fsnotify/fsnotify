@@ -71,3 +71,16 @@ func TestWindowsRemWatch(t *testing.T) {
 		t.Fatal("Should be fail with closed handle\n")
 	}
 }
+
+func TestWindowsRemWatchRecurseNil(t *testing.T) {
+	tmp := t.TempDir()
+
+	w := newWatcher(t)
+	defer w.Close()
+
+	// remWatch used to dereference watch.recurse before the nil check, so
+	// calling it on an unwatched path with "...\" panicked.
+	if err := w.b.(*readDirChangesW).remWatch(tmp + `\...`); err == nil {
+		t.Fatal("expected error for non-existent watch")
+	}
+}
