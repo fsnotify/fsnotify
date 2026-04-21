@@ -394,17 +394,19 @@ func (w *readDirChangesW) remWatch(pathname string) error {
 	w.mu.Lock()
 	watch := w.watches.get(ino)
 	w.mu.Unlock()
+	if watch == nil {
+		windows.CloseHandle(ino.handle)
+		return fmt.Errorf("%w: %s", ErrNonExistentWatch, pathname)
+	}
 
 	if recurse && !watch.recurse {
+		windows.CloseHandle(ino.handle)
 		return fmt.Errorf("can't use \\... with non-recursive watch %q", pathname)
 	}
 
 	err = windows.CloseHandle(ino.handle)
 	if err != nil {
 		w.sendError(os.NewSyscallError("CloseHandle", err))
-	}
-	if watch == nil {
-		return fmt.Errorf("%w: %s", ErrNonExistentWatch, pathname)
 	}
 	if pathname == dir {
 		w.sendEvent(watch.path, "", watch.mask&sysFSIGNORED)
