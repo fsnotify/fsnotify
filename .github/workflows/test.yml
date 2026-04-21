@@ -53,7 +53,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ['macos-13', 'macos-latest']
+        # macos-15-intel: x86_64 coverage; macos-latest: arm64 (Apple Silicon).
+        os: ['macos-15-intel', 'macos-latest']
         go: ['1.19', '1.25']
     runs-on: '${{ matrix.os }}'
     timeout-minutes: 10
