@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -459,9 +458,8 @@ func (w *readDirChangesW) startRead(watch *watch) error {
 	}
 
 	// We need to pass the array, rather than the slice.
-	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&watch.buf))
 	rdErr := windows.ReadDirectoryChanges(watch.ino.handle,
-		(*byte)(unsafe.Pointer(hdr.Data)), uint32(hdr.Len),
+		unsafe.SliceData(watch.buf), uint32(len(watch.buf)),
 		watch.recurse, mask, nil, &watch.ov, 0)
 	if rdErr != nil {
 		err := os.NewSyscallError("ReadDirectoryChanges", rdErr)
@@ -567,12 +565,7 @@ func (w *readDirChangesW) readEvents() {
 
 			// Create a buf that is the size of the path name
 			size := int(raw.FileNameLength / 2)
-			var buf []uint16
-			// TODO: Use unsafe.Slice in Go 1.17; https://stackoverflow.com/questions/51187973
-			sh := (*reflect.SliceHeader)(unsafe.Pointer(&buf))
-			sh.Data = uintptr(unsafe.Pointer(&raw.FileName))
-			sh.Len = size
-			sh.Cap = size
+			buf := unsafe.Slice(&raw.FileName, size)
 			name := windows.UTF16ToString(buf)
 			fullname := filepath.Join(watch.path, name)
 
