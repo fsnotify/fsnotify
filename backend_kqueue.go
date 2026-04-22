@@ -257,6 +257,10 @@ func (w *kqueue) Close() error {
 	for _, name := range pathsToRemove {
 		info, ok := w.watches.byPath(name)
 		if !ok {
+			// w.path has an entry for name but w.wd doesn't --
+			// drop the stale lookup entry so the map state is
+			// consistent after Close.
+			w.watches.remove(0, name)
 			continue
 		}
 		_ = w.register([]int{info.wd}, unix.EV_DELETE, 0)
