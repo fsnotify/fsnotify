@@ -11,7 +11,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ['ubuntu-22.04', 'ubuntu-latest', 'ubuntu-24.04-arm']
-        go: ['1.19', '1.26']
+        go: ['1.23', '1.26']
     runs-on: '${{ matrix.os }}'
     timeout-minutes: 10
     steps:
@@ -30,7 +30,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ['windows-latest']
-        go: ['1.19', '1.26']
+        go: ['1.23', '1.26']
     runs-on: '${{ matrix.os }}'
     timeout-minutes: 10
     steps:
@@ -55,7 +55,7 @@ jobs:
       matrix:
         # macos-15-intel: x86_64 coverage; macos-latest: arm64 (Apple Silicon).
         os: ['macos-15-intel', 'macos-latest']
-        go: ['1.19', '1.26']
+        go: ['1.23', '1.26']
     runs-on: '${{ matrix.os }}'
     timeout-minutes: 10
     steps:
