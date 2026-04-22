@@ -92,6 +92,16 @@ import (
 // Sometimes it will send events for all files, sometimes it will send no
 // events, and often only for some files.
 //
+// On Windows the filesystem updates a directory's last-write time when an
+// entry inside it is created, renamed, or removed. The Windows backend
+// requests FILE_NOTIFY_CHANGE_LAST_WRITE to support Write events, so those
+// directory last-write updates are reported as Write events on the parent
+// directory. This is a deliberate, known behavior and differs from inotify,
+// where Write corresponds to file-content changes only. Whether the
+// parent-directory Write is observed depends on OS-level timing, so
+// applications should not rely on it always appearing, nor on it never
+// appearing, alongside the child events.
+//
 // The default ReadDirectoryChangesW() buffer size is 64K, which is the largest
 // value that is guaranteed to work with SMB filesystems. If you have many
 // events in quick succession this may not be enough, and you will have to use
@@ -128,8 +138,13 @@ type Watcher struct {
 	//                      want to wait until you've stopped receiving them
 	//                      (see the dedup example in cmd/fsnotify).
 	//
-	//                      Some systems may send Write event for directories
-	//                      when the directory content changes.
+	//                      Some systems may also send Write events for
+	//                      directories when the directory contents change. On
+	//                      Windows, creating, renaming, or removing an entry
+	//                      updates the parent directory's last-write time and
+	//                      is reported as a Write on the parent; this is a
+	//                      known, OS-level behavior that does not happen on
+	//                      inotify.
 	//
 	//   fsnotify.Chmod     Attributes were changed. On Linux this is also sent
 	//                      when a file is removed (or more accurately, when a
@@ -178,7 +193,10 @@ const (
 	Create Op = 1 << iota
 
 	// The pathname was written to; this does *not* mean the write has finished,
-	// and a write can be followed by more writes.
+	// and a write can be followed by more writes. On Windows, a Write on a
+	// directory is also emitted when a child entry is created, renamed, or
+	// removed, because the filesystem updates the directory's last-write time;
+	// see the Windows notes on [Watcher].
 	Write
 
 	// The path was removed; any watches on it will be removed. Some "remove"

@@ -171,6 +171,22 @@ distro's documentation):
     fs.inotify.max_user_watches=200000
     fs.inotify.max_user_instances=256
 
+### Windows
+On Windows, the filesystem updates a directory's last-write time when an entry
+inside it is created, renamed, or removed. The Windows backend (built on
+`ReadDirectoryChangesW`) requests `FILE_NOTIFY_CHANGE_LAST_WRITE` to support
+`Write` events, so those directory last-write updates are reported as `Write`
+events on the parent directory.
+
+This is a deliberate, known behavior and differs from inotify, where `Write`
+corresponds to file-content changes only. It can be useful when you want to
+detect "something changed in this directory" without tracking every child
+event.
+
+Whether this parent-directory `Write` is observed depends on OS-level timing,
+so applications should not rely on it always appearing, nor on it never
+appearing, alongside the child events.
+
 
 ### kqueue (macOS, all BSD systems)
 kqueue requires opening a file descriptor for every file that's being watched;
