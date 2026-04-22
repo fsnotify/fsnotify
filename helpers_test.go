@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -92,12 +93,7 @@ const noWait = ""
 
 func shouldWait(path ...string) bool {
 	// Take advantage of the fact that join skips empty parameters.
-	for _, p := range path {
-		if p == "" {
-			return false
-		}
-	}
-	return true
+	return !slices.Contains(path, "")
 }
 
 // Create n empty files with the prefix in the directory dir.
@@ -117,7 +113,7 @@ func createFiles(t *testing.T, dir, prefix string, n int, d time.Duration) int {
 		max     = time.After(d)
 		created int
 	)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		select {
 		case <-max:
 			t.Logf("createFiles: stopped at %s files because it took longer than %s", fmtNum(created), d)
@@ -761,7 +757,6 @@ func parseScript(t *testing.T, in string) {
 	)
 loop:
 	for _, c := range cmds {
-		c := c
 		//fmt.Printf("line %d: %q  %q\n", c.line, c.cmd, c.args)
 		switch c.cmd {
 		case "skip", "require":

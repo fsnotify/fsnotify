@@ -259,7 +259,7 @@ func TestClose(t *testing.T) {
 		tmp := t.TempDir()
 
 		files := make([]string, 0, 200)
-		for i := 0; i < 200; i++ {
+		for i := range 200 {
 			f := join(tmp, fmt.Sprintf("file-%03d", i))
 			touch(t, f, noWait)
 			files = append(files, f)
@@ -306,7 +306,7 @@ func TestClose(t *testing.T) {
 		t.Run("default", func(t *testing.T) {
 			t.Parallel()
 
-			for i := 0; i < 150; i++ {
+			for range 150 {
 				w, err := NewWatcher()
 				if err != nil {
 					if strings.Contains(err.Error(), "too many") { // syscall.EMFILE
@@ -323,7 +323,7 @@ func TestClose(t *testing.T) {
 		t.Run("buffered=4096", func(t *testing.T) {
 			t.Parallel()
 
-			for i := 0; i < 150; i++ {
+			for range 150 {
 				w, err := NewBufferedWatcher(4096)
 				if err != nil {
 					if strings.Contains(err.Error(), "too many") { // syscall.EMFILE
@@ -731,7 +731,7 @@ func TestRemove(t *testing.T) {
 		tmp := t.TempDir()
 		touch(t, tmp, "file")
 
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			w := newWatcher(t)
 			defer w.Close()
 			addWatch(t, w, tmp)
@@ -1040,7 +1040,7 @@ func TestRace(t *testing.T) {
 			wg  sync.WaitGroup
 		)
 		wg.Add(400)
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			go func() { defer wg.Done(); os.MkdirAll(dir, 0o0755) }()
 			go func() { defer wg.Done(); os.RemoveAll(dir) }()
 			go func() { defer wg.Done(); w.w.Add(dir) }()
@@ -1114,7 +1114,7 @@ func TestRace(t *testing.T) {
 		)
 		w.w.Add(dir)
 		wg.Add(2000)
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			go func() { defer wg.Done(); os.RemoveAll(dir) }()
 			go func() { defer wg.Done(); os.MkdirAll(dir, 0o0755) }()
 			w.w.Add(dir)
