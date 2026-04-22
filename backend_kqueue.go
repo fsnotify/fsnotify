@@ -246,9 +246,22 @@ func (w *kqueue) Close() error {
 		return nil
 	}
 
+	// Snapshot and drop all watches directly. w.Remove -> w.remove
+	// short-circuits on isClosed() (which is already true after
+	// w.shared.close() above), so calling Remove here in the happy path
+	// leaked every watched directory + file descriptor. On macOS a
+	// single directory watch opens an fd for every file in the dir, so
+	// long-running processes that recreate watchers (hot-reload dev
+	// servers, etc.) ran out of fds with EMFILE (#732).
 	pathsToRemove := w.watches.listPaths(false)
 	for _, name := range pathsToRemove {
-		w.Remove(name)
+		info, ok := w.watches.byPath(name)
+		if !ok {
+			continue
+		}
+		_ = w.register([]int{info.wd}, unix.EV_DELETE, 0)
+		unix.Close(info.wd)
+		w.watches.remove(info.wd, name)
 	}
 
 	unix.Close(w.closepipe[1]) // Send "quit" message to readEvents
