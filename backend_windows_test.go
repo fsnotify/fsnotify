@@ -9,9 +9,6 @@ import (
 )
 
 func TestRemoveState(t *testing.T) {
-	// TODO: the Windows backend is too confusing; needs some serious attention.
-	t.Skip("broken test")
-
 	var (
 		tmp  = t.TempDir()
 		dir  = join(tmp, "dir")
@@ -26,13 +23,14 @@ func TestRemoveState(t *testing.T) {
 
 	check := func(want int) {
 		t.Helper()
-		if len(w.b.(*readDirChangesW).watches) != want {
+		got := len(w.WatchList())
+		if got != want {
 			var d []string
 			for k, v := range w.b.(*readDirChangesW).watches {
 				d = append(d, fmt.Sprintf("%#v = %#v", k, v))
 			}
-			t.Errorf("unexpected number of entries in w.watches (have %d, want %d):\n%v",
-				len(w.b.(*readDirChangesW).watches), want, strings.Join(d, "\n"))
+			t.Errorf("unexpected number of watch entries (have %d, want %d):\nwatchlist=%q\ninternal=%v",
+				got, want, w.WatchList(), strings.Join(d, "\n"))
 		}
 	}
 
