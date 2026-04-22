@@ -250,11 +250,7 @@ func TestClose(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// TODO: windows backend doesn't work well here; can't easily fix it.
-		//       Need to rewrite things a bit.
-		if runtime.GOOS != "windows" {
-			chanClosed(t, w)
-		}
+		chanClosed(t, w)
 	})
 
 	// Make sure that calling Close() while REMOVE events are emitted doesn't race.
