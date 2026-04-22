@@ -142,7 +142,7 @@ func newBackend(ev chan Event, errs chan error) (backend, error) {
 	// I/O operations won't terminate on close.
 	fd, errno := unix.InotifyInit1(unix.IN_CLOEXEC | unix.IN_NONBLOCK)
 	if fd == -1 {
-		return nil, errno
+		return nil, fmt.Errorf("couldn't initialize inotify: %w", errno)
 	}
 
 	w := &inotify{
