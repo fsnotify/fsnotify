@@ -818,6 +818,13 @@ func (w *kqueue) addRecursiveSubdir(root string) error {
 			return nil
 		}
 
+		// Emit Create for nested dirs the caller doesn't know about.
+		if path != root {
+			if !w.sendEvent(Event{Name: path, Op: Create}) {
+				return nil
+			}
+		}
+
 		// Add directory watch.
 		_, err = w.addWatch(path, noteAllEvents, false)
 		if err != nil {

@@ -458,6 +458,9 @@ func (w *fen) updateDirectory(path string) error {
 		// If a new directory appears under a recursive watch, walk it and
 		// add watches for the entire subtree.
 		if finfo.IsDir() && w.isUnderRecurse(path) {
+			if !w.sendEvent(Event{Name: entryPath, Op: Create}) {
+				return nil
+			}
 			if err := w.addRecursiveSubdir(entryPath); err != nil {
 				if errors.Is(err, fs.ErrNotExist) {
 					continue
@@ -465,9 +468,6 @@ func (w *fen) updateDirectory(path string) error {
 				if !w.sendError(err) {
 					return nil
 				}
-			}
-			if !w.sendEvent(Event{Name: entryPath, Op: Create}) {
-				return nil
 			}
 			continue
 		}
@@ -510,6 +510,14 @@ func (w *fen) addRecursiveSubdir(root string) error {
 		if !d.IsDir() {
 			return nil
 		}
+
+		// Emit Create for nested dirs the caller doesn't know about.
+		if path != root {
+			if !w.sendEvent(Event{Name: path, Op: Create}) {
+				return nil
+			}
+		}
+
 		stat, err := d.Info()
 		if err != nil {
 			return err
