@@ -578,12 +578,14 @@ func (w *kqueue) watchDirectoryFiles(dirPath string) error {
 
 		cleanPath, err := w.internalWatch(path, fi)
 		if err != nil {
-			// No permission to read the file; that's not a problem: just skip.
-			// But do add it to w.fileExists to prevent it from being picked up
-			// as a "new" file later (it still shows up in the directory
+			// No permission, or the entry resolved to a missing target
+			// (e.g. a dangling symlink): not a problem, just skip. But
+			// do mark it as seen to prevent it from being picked up as
+			// a "new" file later (it still shows up in the directory
 			// listing).
 			switch {
-			case errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM):
+			case errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM) ||
+				errors.Is(err, os.ErrNotExist):
 				cleanPath = filepath.Clean(path)
 			default:
 				return fmt.Errorf("%q: %w", path, err)
