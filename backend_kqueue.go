@@ -652,18 +652,35 @@ func (w *kqueue) dirChange(dir string) error {
 // Send a create event if the file isn't already being tracked, and start
 // watching this file.
 func (w *kqueue) sendCreateIfNew(path string, fi os.FileInfo) error {
-	if !w.watches.seenBefore(path) {
+	seenBefore := w.watches.seenBefore(path)
+
+	// Set up the watch BEFORE sending the CREATE event. This ensures that any
+	// WRITE events that occur after the CREATE are captured. This fixes a race
+	// condition where a file is deleted and quickly recreated with new content:
+	// without this fix, the WRITE event could be missed because the watch wasn't
+	// set up yet when the write occurred.
+	// See: https://github.com/fsnotify/fsnotify/issues/717
+	cleanPath, err := w.internalWatch(path, fi)
+	if err != nil {
+		// If watching fails (e.g., unresolvable symlink), still send the CREATE
+		// event but don't return the error - match original behavior where CREATE
+		// was sent regardless of watch success.
+		if !seenBefore {
+			w.sendEvent(Event{Name: path, Op: Create})
+		}
+		return err
+	}
+	w.watches.markSeen(cleanPath, true)
+
+	// Now send the CREATE event after the watch is established.
+	// Use the original path for the event name (not the resolved path from
+	// internalWatch, which may be empty for special files like FIFOs).
+	if !seenBefore {
 		if !w.sendEvent(Event{Name: path, Op: Create}) {
 			return nil
 		}
 	}
 
-	// Like watchDirectoryFiles, but without doing another ReadDir.
-	path, err := w.internalWatch(path, fi)
-	if err != nil {
-		return err
-	}
-	w.watches.markSeen(path, true)
 	return nil
 }
 
