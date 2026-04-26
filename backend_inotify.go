@@ -429,11 +429,7 @@ func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offs
 		nameLen = uint32(inEvent.Len)
 	)
 	if nameLen > 0 {
-		/// Point "bytes" at the first byte of the filename
-		bb := *buf
-		bytes := (*[unix.PathMax]byte)(unsafe.Pointer(&bb[offset+unix.SizeofInotifyEvent]))[:nameLen:nameLen]
-		/// The filename is padded with NULL bytes. TrimRight() gets rid of those.
-		name += "/" + strings.TrimRight(string(bytes[0:nameLen]), "\x00")
+		name += "/" + inotifyEventName(buf, offset, nameLen)
 	}
 
 	if debug {
@@ -515,6 +511,15 @@ func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offs
 	}
 
 	return ev, true
+}
+
+func inotifyEventName(buf *[65536]byte, offset, nameLen uint32) string {
+	start := int(offset + unix.SizeofInotifyEvent)
+	bytes := (*[unix.PathMax]byte)(unsafe.Pointer(&buf[start]))[:nameLen:nameLen]
+	for nameLen > 0 && bytes[nameLen-1] == 0 {
+		nameLen--
+	}
+	return string(bytes[:nameLen])
 }
 
 func (w *inotify) newEvent(name string, mask, cookie uint32) Event {
