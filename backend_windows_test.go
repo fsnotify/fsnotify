@@ -4,6 +4,8 @@ package fsnotify
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -81,4 +83,42 @@ func TestWindowsRemWatchRecurseNil(t *testing.T) {
 	if err := w.b.(*readDirChangesW).remWatch(tmp + `\...`); err == nil {
 		t.Fatal("expected error for non-existent watch")
 	}
+}
+
+// TestWatchListRace is a regression test for
+// https://github.com/fsnotify/fsnotify/issues/709: WatchList() iterating
+// watch.names / reading watch.mask raced with the I/O thread mutating
+// the same fields from addWatch. Run with -race.
+func TestWatchListRace(t *testing.T) {
+	root := t.TempDir()
+	w := newWatcher(t)
+	defer w.Close()
+
+	addWatch(t, w, root)
+
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				_ = w.WatchList()
+			}
+		}
+	}()
+
+	for i := 0; i < 50; i++ {
+		dir := filepath.Join(root, fmt.Sprintf("d%d", i))
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.Add(dir); err != nil {
+			t.Fatal(err)
+		}
+	}
+	close(stop)
+	<-done
 }
