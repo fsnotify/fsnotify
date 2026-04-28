@@ -172,21 +172,29 @@ distro's documentation):
     fs.inotify.max_user_instances=256
 
 ### Windows
-With a recursive watch, the Windows backend may emit `Write` events on
-intermediate directories: on an NTFS-backed volume, creating, renaming, or
-removing a child entry updates the containing directory's last-write time,
-and because the backend requests `FILE_NOTIFY_CHANGE_LAST_WRITE` to support
-`Write` on files, that update is surfaced as a `Write` on the directory
-that contains the changed entry.
+On Windows, when you watch a directory recursively, you may receive a
+`Write` event for an intermediate directory whenever a child entry inside
+it is created, renamed, or removed. For example, with a recursive watch on
+`/a` and a new file `/a/b/c`, you will receive `Create /a/b/c` and may
+also receive `Write /a/b`.
 
-This differs from inotify, where `Write` corresponds to file-content changes
-only. kqueue has similar "directory `Write` = directory contents changed"
-semantics, so portable code that treats `Write` on a directory as "something
-inside it changed" works on Windows and BSD/macOS but not Linux.
+This happens because, on NTFS-backed volumes, modifying the entries of a
+directory updates that directory's last-write time, and the Windows
+backend requests `FILE_NOTIFY_CHANGE_LAST_WRITE` to support `Write` events
+on files. The same `Write` filter therefore picks up the directory's
+metadata update.
 
-Whether the directory `Write` is delivered alongside the child events is not
-guaranteed: it depends on `ReadDirectoryChangesW` buffering, NTFS metadata
-update timing, and event coalescing, none of which fsnotify controls.
+kqueue has the same "directory `Write` = directory contents changed"
+semantics, so portable code that treats `Write` on a directory as
+"something inside it changed" works on Windows and BSD/macOS, but not on
+Linux (inotify uses `Write` only for file-content changes). If you only
+care about file content, filter out `Write` events whose path refers to a
+directory.
+
+Whether the directory `Write` is actually delivered alongside the child
+events is not guaranteed: it depends on `ReadDirectoryChangesW` buffering,
+NTFS metadata update timing, and event coalescing, none of which fsnotify
+controls.
 
 
 ### kqueue (macOS, all BSD systems)

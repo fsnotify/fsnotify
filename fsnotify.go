@@ -92,15 +92,21 @@ import (
 // Sometimes it will send events for all files, sometimes it will send no
 // events, and often only for some files.
 //
-// With a recursive watch the Windows backend may emit Write events on
-// intermediate directories: on an NTFS-backed volume, creating, renaming,
-// or removing a child entry updates the containing directory's last-write
-// time, and because the backend requests FILE_NOTIFY_CHANGE_LAST_WRITE to
-// support Write on files, that update can surface as a Write on the
-// directory that contains the changed entry. Whether such a directory
-// Write is delivered alongside the child events is not guaranteed; it
-// depends on ReadDirectoryChangesW buffering, NTFS metadata update timing,
-// and event coalescing.
+// When you watch a directory recursively, you may receive a Write event
+// for an intermediate directory whenever a child entry inside it is
+// created, renamed, or removed. For example, with a recursive watch on /a
+// and a new file /a/b/c, you will receive Create /a/b/c and may also
+// receive Write /a/b.
+//
+// This happens because, on NTFS-backed volumes, modifying the entries of a
+// directory updates that directory's last-write time, and the Windows
+// backend requests FILE_NOTIFY_CHANGE_LAST_WRITE to support Write events
+// on files. The same Write filter therefore picks up the directory's
+// metadata update.
+//
+// Whether the directory Write is actually delivered alongside the child
+// events is not guaranteed; it depends on ReadDirectoryChangesW buffering,
+// NTFS metadata update timing, and event coalescing.
 //
 // The default ReadDirectoryChangesW() buffer size is 64K, which is the largest
 // value that is guaranteed to work with SMB filesystems. If you have many
