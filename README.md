@@ -172,11 +172,18 @@ distro's documentation):
     fs.inotify.max_user_instances=256
 
 ### Windows
-On Windows, when you watch a directory recursively, you may receive a
-`Write` event for an intermediate directory whenever a child entry inside
-it is created, renamed, or removed. For example, with a recursive watch on
-`/a` and a new file `/a/b/c`, you will receive `Create /a/b/c` and may
-also receive `Write /a/b`.
+Recursive watching is not currently enabled through fsnotify's public API
+(see the FAQ "Are subdirectories watched?" above). The notes below
+describe Windows backend behavior observed when recursive watching is
+enabled internally (for example, in fsnotify's own tests). They are kept
+here as a reference for maintainers and contributors who encounter the
+behavior, since the recursive code path still exists in the backend.
+
+When recursive watching is enabled and you watch a directory, you may
+receive a `Write` event for an intermediate directory whenever a child
+entry inside it is created, renamed, or removed. For example, with a
+recursive watch on `/a` and a new file `/a/b/c`, you will receive
+`Create /a/b/c` and may also receive `Write /a/b`.
 
 This happens because, on NTFS-backed volumes, modifying the entries of a
 directory updates that directory's last-write time, and the Windows
