@@ -92,15 +92,16 @@ import (
 // Sometimes it will send events for all files, sometimes it will send no
 // events, and often only for some files.
 //
-// On Windows the filesystem updates a directory's last-write time when an
-// entry inside it is created, renamed, or removed. The Windows backend
-// requests FILE_NOTIFY_CHANGE_LAST_WRITE to support Write events, so those
-// directory last-write updates are reported as Write events on the parent
-// directory. This is a deliberate, known behavior and differs from inotify,
-// where Write corresponds to file-content changes only. Whether the
-// parent-directory Write is observed depends on OS-level timing, so
-// applications should not rely on it always appearing, nor on it never
-// appearing, alongside the child events.
+// ReadDirectoryChangesW reports changes inside a watched directory; it never
+// reports changes to the watched directory itself. With a recursive watch
+// you may see Write events on intermediate directories: on an NTFS-backed
+// volume, creating, renaming, or removing a child entry updates the
+// containing directory's last-write time, and because the backend requests
+// FILE_NOTIFY_CHANGE_LAST_WRITE to support Write on files, that update can
+// surface as a Write on the directory that contains the changed entry.
+// Whether such a directory Write is delivered alongside the child events is
+// not guaranteed; it depends on ReadDirectoryChangesW buffering, NTFS
+// metadata update timing, and event coalescing.
 //
 // The default ReadDirectoryChangesW() buffer size is 64K, which is the largest
 // value that is guaranteed to work with SMB filesystems. If you have many
@@ -138,13 +139,12 @@ type Watcher struct {
 	//                      want to wait until you've stopped receiving them
 	//                      (see the dedup example in cmd/fsnotify).
 	//
-	//                      Some systems may also send Write events for
-	//                      directories when the directory contents change. On
-	//                      Windows, creating, renaming, or removing an entry
-	//                      updates the parent directory's last-write time and
-	//                      is reported as a Write on the parent; this is a
-	//                      known, OS-level behavior that does not happen on
-	//                      inotify.
+	//                      Some systems also send Write events for directories
+	//                      when the directory contents change. This is the
+	//                      case for kqueue, and on Windows for the directory
+	//                      that contains a created, renamed, or removed child
+	//                      entry. It does not happen on inotify. See the
+	//                      per-platform notes on [Watcher].
 	//
 	//   fsnotify.Chmod     Attributes were changed. On Linux this is also sent
 	//                      when a file is removed (or more accurately, when a
@@ -193,10 +193,9 @@ const (
 	Create Op = 1 << iota
 
 	// The pathname was written to; this does *not* mean the write has finished,
-	// and a write can be followed by more writes. On Windows, a Write on a
-	// directory is also emitted when a child entry is created, renamed, or
-	// removed, because the filesystem updates the directory's last-write time;
-	// see the Windows notes on [Watcher].
+	// and a write can be followed by more writes. On Windows and kqueue, a
+	// Write on a directory can also indicate that its contents changed; see
+	// the per-platform notes on [Watcher].
 	Write
 
 	// The path was removed; any watches on it will be removed. Some "remove"

@@ -172,20 +172,23 @@ distro's documentation):
     fs.inotify.max_user_instances=256
 
 ### Windows
-On Windows, the filesystem updates a directory's last-write time when an entry
-inside it is created, renamed, or removed. The Windows backend (built on
-`ReadDirectoryChangesW`) requests `FILE_NOTIFY_CHANGE_LAST_WRITE` to support
-`Write` events, so those directory last-write updates are reported as `Write`
-events on the parent directory.
+The Windows backend uses `ReadDirectoryChangesW`, which reports changes
+inside a watched directory and never reports changes to the watched
+directory itself. With a recursive watch, however, you may see `Write`
+events on intermediate directories: on an NTFS-backed volume, creating,
+renaming, or removing a child entry updates the containing directory's
+last-write time, and because the backend requests
+`FILE_NOTIFY_CHANGE_LAST_WRITE` to support `Write` on files, that update is
+surfaced as a `Write` on the directory that contains the changed entry.
 
-This is a deliberate, known behavior and differs from inotify, where `Write`
-corresponds to file-content changes only. It can be useful when you want to
-detect "something changed in this directory" without tracking every child
-event.
+This differs from inotify, where `Write` corresponds to file-content changes
+only. kqueue has similar "directory `Write` = directory contents changed"
+semantics, so portable code that treats `Write` on a directory as "something
+inside it changed" works on Windows and BSD/macOS but not Linux.
 
-Whether this parent-directory `Write` is observed depends on OS-level timing,
-so applications should not rely on it always appearing, nor on it never
-appearing, alongside the child events.
+Whether the directory `Write` is delivered alongside the child events is not
+guaranteed: it depends on `ReadDirectoryChangesW` buffering, NTFS metadata
+update timing, and event coalescing, none of which fsnotify controls.
 
 
 ### kqueue (macOS, all BSD systems)
