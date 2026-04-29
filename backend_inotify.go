@@ -102,8 +102,9 @@ func (w *watches) removePath(path string) ([]uint32, error) {
 
 	wds := make([]uint32, 0, 8)
 	wds = append(wds, wd)
+	prefix := path + "/"
 	for p, rwd := range w.path {
-		if strings.HasPrefix(p, path) {
+		if strings.HasPrefix(p, prefix) {
 			delete(w.path, p)
 			delete(w.wd, rwd)
 			wds = append(wds, rwd)
@@ -497,14 +498,22 @@ func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offs
 			// in the future. For now I'm okay with this as it's not publicly
 			// available. Correctness first, performance second.
 			if ev.renamedFrom != "" {
+				oldPrefix := ev.renamedFrom + "/"
 				for k, ww := range w.watches.wd {
 					if k == watch.wd || ww.path == ev.Name {
 						continue
 					}
-					if strings.HasPrefix(ww.path, ev.renamedFrom) {
-						ww.path = strings.Replace(ww.path, ev.renamedFrom, ev.Name, 1)
-						w.watches.wd[k] = ww
+					oldPath := ww.path
+					if ww.path == ev.renamedFrom {
+						ww.path = ev.Name
+					} else if strings.HasPrefix(ww.path, oldPrefix) {
+						ww.path = ev.Name + "/" + strings.TrimPrefix(ww.path, oldPrefix)
+					} else {
+						continue
 					}
+					w.watches.wd[k] = ww
+					delete(w.watches.path, oldPath)
+					w.watches.path[ww.path] = k
 				}
 			}
 		}
