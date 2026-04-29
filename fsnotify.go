@@ -295,7 +295,16 @@ func NewBufferedWatcher(sz uint) (*Watcher, error) {
 //
 // All files in a directory are monitored, including new files that are created
 // after the watcher is started. Subdirectories are not watched (i.e. it's
-// non-recursive).
+// non-recursive) unless the path ends with "/..." (e.g. Add("/tmp/dir/...")).
+//
+// # Watching directories recursively
+//
+// Append "/..." to the path to watch a directory tree. For example
+// Add("/tmp/dir/...") watches /tmp/dir and all subdirectories. New
+// subdirectories created after the watch is started are watched automatically.
+//
+// Recursive watches are removed with Remove() using the path without the
+// "/..." suffix: Remove("/tmp/dir").
 //
 // # Watching files
 //
@@ -323,8 +332,8 @@ func (w *Watcher) AddWith(path string, opts ...addOpt) error { return w.b.AddWit
 
 // Remove stops monitoring the path for changes.
 //
-// Directories are always removed non-recursively. For example, if you added
-// /tmp/dir and /tmp/dir/subdir then you will need to remove both.
+// If the path was added recursively (with "/..."), all sub-watches are removed.
+// The "/..." suffix is not required on Remove.
 //
 // Removing a path that has not yet been added returns [ErrNonExistentWatch].
 //
@@ -472,13 +481,13 @@ func withCreate() addOpt {
 	return func(opt *withOpts) { opt.sendCreate = true }
 }
 
-var enableRecurse = false
+var enableRecurse = true
 
 // Check if this path is recursive (ends with "/..." or "\..."), and return the
 // path with the /... stripped.
 func recursivePath(path string) (string, bool) {
 	path = filepath.Clean(path)
-	if !enableRecurse { // Only enabled in tests for now.
+	if !enableRecurse {
 		return path, false
 	}
 	if filepath.Base(path) == "..." {
