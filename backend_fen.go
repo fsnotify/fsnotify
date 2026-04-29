@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,8 +27,9 @@ type fen struct {
 
 	mu      sync.Mutex
 	port    *unix.EventPort
-	dirs    map[string]Op // Explicitly watched directories
-	watches map[string]Op // Explicitly watched non-directories
+	dirs    map[string]Op        // Explicitly watched directories
+	watches map[string]Op        // Explicitly watched non-directories
+	recurse map[string]Op        // Root paths → Op filter for recursive watches
 }
 
 var defaultBufferSize = 0
@@ -39,6 +41,7 @@ func newBackend(ev chan Event, errs chan error) (backend, error) {
 		Errors:  errs,
 		dirs:    make(map[string]Op),
 		watches: make(map[string]Op),
+		recurse: make(map[string]Op),
 	}
 
 	var err error
@@ -74,20 +77,21 @@ func (w *fen) AddWith(name string, opts ...addOpt) error {
 		return fmt.Errorf("%w: %s", xErrUnsupported, with.op)
 	}
 
-	// Currently we resolve symlinks that were explicitly requested to be
-	// watched. Otherwise we would use LStat here.
+	name, recurse := recursivePath(name)
+	if recurse {
+		return w.addRecursive(name, with)
+	}
+
 	stat, err := os.Stat(name)
 	if err != nil {
 		return err
 	}
 
-	// Associate all files in the directory.
 	if stat.IsDir() {
 		err := w.handleDirectory(name, stat, true, w.associateFile)
 		if err != nil {
 			return err
 		}
-
 		w.mu.Lock()
 		w.dirs[name] = with.op
 		w.mu.Unlock()
@@ -98,9 +102,44 @@ func (w *fen) AddWith(name string, opts ...addOpt) error {
 	if err != nil {
 		return err
 	}
-
 	w.mu.Lock()
 	w.watches[name] = with.op
+	w.mu.Unlock()
+	return nil
+}
+
+func (w *fen) addRecursive(name string, with withOpts) error {
+	err := filepath.WalkDir(name, func(root string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			if root == name {
+				return fmt.Errorf("fsnotify: not a directory: %q", name)
+			}
+			return nil
+		}
+		if with.sendCreate && root != name {
+			w.sendEvent(Event{Name: root, Op: Create})
+		}
+		stat, err := d.Info()
+		if err != nil {
+			return err
+		}
+		err = w.handleDirectory(root, stat, true, w.associateFile)
+		if err != nil {
+			return err
+		}
+		w.mu.Lock()
+		w.dirs[root] = with.op
+		w.mu.Unlock()
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	w.mu.Lock()
+	w.recurse[name] = with.op
 	w.mu.Unlock()
 	return nil
 }
@@ -109,6 +148,21 @@ func (w *fen) Remove(name string) error {
 	if w.isClosed() {
 		return nil
 	}
+
+	name, recurse := recursivePath(name)
+
+	w.mu.Lock()
+	_, isRecurse := w.recurse[name]
+	w.mu.Unlock()
+
+	if recurse && !isRecurse {
+		return fmt.Errorf("can't use /... with non-recursive watch %q", name)
+	}
+
+	if isRecurse {
+		return w.removeRecursive(name)
+	}
+
 	if !w.port.PathIsWatched(name) {
 		return fmt.Errorf("%w: %s", ErrNonExistentWatch, name)
 	}
@@ -117,9 +171,6 @@ func (w *fen) Remove(name string) error {
 			time.Now().Format("15:04:05.000000000"), name)
 	}
 
-	// The user has expressed an intent. Immediately remove this name from
-	// whichever watch list it might be in. If it's not in there the delete
-	// doesn't cause harm.
 	w.mu.Lock()
 	delete(w.watches, name)
 	delete(w.dirs, name)
@@ -130,20 +181,38 @@ func (w *fen) Remove(name string) error {
 		return err
 	}
 
-	// Remove associations for every file in the directory.
 	if stat.IsDir() {
-		err := w.handleDirectory(name, stat, false, w.dissociateFile)
-		if err != nil {
-			return err
+		return w.handleDirectory(name, stat, false, w.dissociateFile)
+	}
+	return w.port.DissociatePath(name)
+}
+
+func (w *fen) removeRecursive(name string) error {
+	w.mu.Lock()
+	var toRemove []string
+	for p := range w.dirs {
+		if p == name || strings.HasPrefix(p, name+"/") {
+			toRemove = append(toRemove, p)
 		}
-		return nil
 	}
+	delete(w.recurse, name)
+	w.mu.Unlock()
 
-	err = w.port.DissociatePath(name)
-	if err != nil {
-		return err
+	for _, p := range toRemove {
+		stat, err := os.Stat(p)
+		if err != nil {
+			w.mu.Lock()
+			delete(w.dirs, p)
+			w.mu.Unlock()
+			continue
+		}
+		if stat.IsDir() {
+			_ = w.handleDirectory(p, stat, false, w.dissociateFile)
+		}
+		w.mu.Lock()
+		delete(w.dirs, p)
+		w.mu.Unlock()
 	}
-
 	return nil
 }
 
@@ -363,8 +432,8 @@ func (w *fen) updateDirectory(path string) error {
 	}
 
 	for _, entry := range files {
-		path := filepath.Join(path, entry.Name())
-		if w.port.PathIsWatched(path) {
+		entryPath := filepath.Join(path, entry.Name())
+		if w.port.PathIsWatched(entryPath) {
 			continue
 		}
 
@@ -372,20 +441,83 @@ func (w *fen) updateDirectory(path string) error {
 		if err != nil {
 			return err
 		}
-		err = w.associateFile(path, finfo, false)
+
+		if finfo.IsDir() && w.isUnderRecurse(path) {
+			if !w.sendEvent(Event{Name: entryPath, Op: Create}) {
+				return nil
+			}
+			if err := w.addRecursiveSubdir(entryPath); err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					continue
+				}
+				if !w.sendError(err) {
+					return nil
+				}
+			}
+			continue
+		}
+
+		err = w.associateFile(entryPath, finfo, false)
 		if errors.Is(err, fs.ErrNotExist) {
-			// File may have disappeared between getting the dir listing and
-			// adding the port: that's okay to ignore.
 			continue
 		}
 		if !w.sendError(err) {
 			return nil
 		}
-		if !w.sendEvent(Event{Name: path, Op: Create}) {
+		if !w.sendEvent(Event{Name: entryPath, Op: Create}) {
 			return nil
 		}
 	}
 	return nil
+}
+
+func (w *fen) isUnderRecurse(path string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for p := range w.recurse {
+		if path == p || strings.HasPrefix(path, p+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+func (w *fen) addRecursiveSubdir(root string) error {
+	w.mu.Lock()
+	var op Op
+	for p, o := range w.recurse {
+		if root == p || strings.HasPrefix(root, p+"/") {
+			op = o
+			break
+		}
+	}
+	w.mu.Unlock()
+
+	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			return nil
+		}
+		if path != root {
+			if !w.sendEvent(Event{Name: path, Op: Create}) {
+				return nil
+			}
+		}
+		stat, err := d.Info()
+		if err != nil {
+			return err
+		}
+		err = w.handleDirectory(path, stat, true, w.associateFile)
+		if err != nil {
+			return err
+		}
+		w.mu.Lock()
+		w.dirs[path] = op
+		w.mu.Unlock()
+		return nil
+	})
 }
 
 func (w *fen) associateFile(path string, stat os.FileInfo, follow bool) error {
