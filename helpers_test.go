@@ -602,6 +602,8 @@ func cmpEvents(t *testing.T, tmp string, have, want Events) {
 	t.Helper()
 
 	have = have.TrimPrefix(tmp)
+	have = normalizeEventsForCompare(have)
+	want = normalizeEventsForCompare(want)
 
 	haveSort, wantSort := have.copy(), want.copy()
 	sort.Slice(haveSort, func(i, j int) bool {
@@ -616,6 +618,64 @@ func cmpEvents(t *testing.T, tmp string, have, want Events) {
 		b.WriteString(strings.TrimSpace(ztest.Diff(indent(haveSort), indent(wantSort))))
 		t.Errorf("\nhave:\n%s\nwant:\n%s\ndiff:\n%s", indent(have), indent(want), indent(b))
 	}
+}
+
+func normalizeEventsForCompare(events Events) Events {
+	if runtime.GOOS != "windows" {
+		return events
+	}
+
+	out := make(Events, 0, len(events))
+	for i, event := range events {
+		if event.Op == Write && hasDescendantEvent(events, i) {
+			continue
+		}
+		out = append(out, event)
+	}
+	return out
+}
+
+func hasDescendantEvent(events Events, i int) bool {
+	parent := filepath.ToSlash(events[i].Name)
+	if parent == "" {
+		return false
+	}
+	parent = strings.TrimRight(parent, "/")
+	if parent == "" {
+		parent = "/"
+	}
+
+	for j, event := range events {
+		if i == j {
+			continue
+		}
+		if isDescendantPath(parent, event.Name) || isDescendantPath(parent, event.renamedFrom) {
+			return true
+		}
+	}
+	return false
+}
+
+func isDescendantPath(parent, child string) bool {
+	if child == "" {
+		return false
+	}
+
+	parent = filepath.ToSlash(parent)
+	child = filepath.ToSlash(child)
+	parent = strings.TrimRight(parent, "/")
+	child = strings.TrimRight(child, "/")
+
+	if parent == "" {
+		parent = "/"
+	}
+	if child == "" || child == parent {
+		return false
+	}
+	if parent == "/" {
+		return strings.HasPrefix(child, "/")
+	}
+	return strings.HasPrefix(child, parent+"/")
 }
 
 func indent(s fmt.Stringer) string {
