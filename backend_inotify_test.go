@@ -86,6 +86,69 @@ func TestRemoveRecursiveDoesNotRemoveSiblingPrefixWatch(t *testing.T) {
 	}
 }
 
+func TestRenameRecursiveDoesNotRenameSiblingPrefixWatch(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	mkdir(t, tmp, "a")
+	mkdir(t, tmp, "a", "sub")
+	mkdir(t, tmp, "ab")
+	mkdir(t, tmp, "ab", "sub")
+
+	w := newWatcher(t)
+	t.Cleanup(func() {
+		if err := w.Close(); err != nil {
+			t.Fatal(err)
+		}
+	})
+	go func() {
+		for range w.Events {
+		}
+	}()
+	go func() {
+		for range w.Errors {
+		}
+	}()
+
+	addWatch(t, w, tmp, "...")
+
+	have := w.WatchList()
+	slices.Sort(have)
+	want := []string{tmp, join(tmp, "a"), join(tmp, "a", "sub"), join(tmp, "ab"), join(tmp, "ab", "sub")}
+	if !slices.Equal(have, want) {
+		t.Fatalf("before rename: watch list = %#v, want %#v", have, want)
+	}
+
+	mv(t, join(tmp, "a"), tmp, "x")
+
+	// rename rewrites watch paths in the wd map directly (WatchList reads
+	// the path map, which the rewrite does not touch), so inspect the wd
+	// map paths to observe whether siblings were incorrectly renamed.
+	wdPaths := func() []string {
+		inot := w.b.(*inotify)
+		inot.mu.Lock()
+		defer inot.mu.Unlock()
+		paths := make([]string, 0, len(inot.watches.wd))
+		for _, ww := range inot.watches.wd {
+			paths = append(paths, ww.path)
+		}
+		slices.Sort(paths)
+		return paths
+	}
+
+	wantAfter := []string{tmp, join(tmp, "ab"), join(tmp, "ab", "sub"), join(tmp, "x"), join(tmp, "x", "sub")}
+	deadline := time.Now().Add(2 * time.Second)
+	var got []string
+	for time.Now().Before(deadline) {
+		got = wdPaths()
+		if slices.Equal(got, wantAfter) {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("after rename: wd paths = %#v, want %#v", got, wantAfter)
+}
+
 // Ensure that the correct error is returned on overflows.
 func TestInotifyOverflow(t *testing.T) {
 	t.Parallel()
