@@ -5,6 +5,7 @@ package fsnotify
 import (
 	"errors"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -49,6 +50,40 @@ func TestRemoveState(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(0)
+}
+
+func TestRemoveRecursiveDoesNotRemoveSiblingPrefixWatch(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	mkdir(t, tmp, "a")
+	mkdir(t, tmp, "ab")
+
+	w := newWatcher(t)
+	t.Cleanup(func() {
+		if err := w.Close(); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	addWatch(t, w, tmp, "a", "...")
+	addWatch(t, w, tmp, "ab", "...")
+
+	have := w.WatchList()
+	slices.Sort(have)
+	want := []string{join(tmp, "a"), join(tmp, "ab")}
+	if !slices.Equal(have, want) {
+		t.Fatalf("before remove: watch list = %#v, want %#v", have, want)
+	}
+
+	if err := w.Remove(join(tmp, "a", "...")); err != nil {
+		t.Fatal(err)
+	}
+
+	have = w.WatchList()
+	if len(have) != 1 || have[0] != join(tmp, "ab") {
+		t.Fatalf("after remove: watch list = %#v, want %#v", have, []string{join(tmp, "ab")})
+	}
 }
 
 // Ensure that the correct error is returned on overflows.
