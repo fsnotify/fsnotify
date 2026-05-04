@@ -1,7 +1,7 @@
 # Changelog
 
-Unreleased
-----------
+1.10.1 2026-05-04
+-----------------
 
 ### Changes and fixes
 
