@@ -508,7 +508,7 @@ func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offs
 					if k == watch.wd || ww.path == ev.Name {
 						continue
 					}
-					if strings.HasPrefix(ww.path, ev.renamedFrom) {
+					if isSameOrDescendantPath(ww.path, ev.renamedFrom) {
 						ww.path = strings.Replace(ww.path, ev.renamedFrom, ev.Name, 1)
 						w.watches.wd[k] = ww
 					}
