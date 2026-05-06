@@ -1,0 +1,12 @@
+# Previously removing "/a/..." would also remove a watch for "/ab".
+require recurse
+
+mkdir /a
+mkdir /ab
+
+watch /a/...
+watch /ab/...
+
+watchlist /a /ab
+unwatch /a/...
+watchlist ab

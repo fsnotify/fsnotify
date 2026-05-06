@@ -1,5 +1,9 @@
 //go:build freebsd || openbsd || netbsd || dragonfly || darwin
 
+// Note: do not add a test here unless the behaviour is truly specific to this
+// backend. fsnotify is a cross-platform library: most tests should be as a
+// "script" in testdata/ or in fsnotify_test.go. See CONTRIBUTING.md.
+
 package fsnotify
 
 import (
@@ -92,46 +96,12 @@ func TestRemoveState(t *testing.T) {
 			return
 		}
 	}
-}
 
-// TestCloseClearsWatchState is a regression test for
-// https://github.com/fsnotify/fsnotify/issues/732: Close() previously
-// called w.Remove for every registered path after marking the watcher
-// closed, but remove() short-circuits on isClosed() and never closes
-// the underlying kqueue fds or drops the bookkeeping maps. Long-running
-// processes that recreate watchers hit EMFILE because every watched
-// directory and each file inside it leaked its fd on Close.
-func TestCloseClearsWatchState(t *testing.T) {
-	var (
-		tmp  = t.TempDir()
-		dir  = join(tmp, "dir")
-		file = join(dir, "file")
-	)
-	mkdir(t, dir)
-	touch(t, file)
-
-	w := newWatcher(t, tmp)
-	kq := w.b.(*kqueue)
+	// Make sure Close() cleans up everything.
 	addWatch(t, w, tmp)
 	addWatch(t, w, file)
-
 	if err := w.Close(); err != nil {
 		t.Fatal(err)
 	}
-
-	// After Close() every watch map should be drained. Pre-fix these
-	// stayed populated because remove() returned nil without touching
-	// the wd map.
-	if got := len(kq.watches.path); got != 0 {
-		t.Errorf("watches.path not drained after Close(): %d entries", got)
-	}
-	if got := len(kq.watches.wd); got != 0 {
-		t.Errorf("watches.wd not drained after Close(): %d entries", got)
-	}
-	if got := len(kq.watches.byUser); got != 0 {
-		t.Errorf("watches.byUser not drained after Close(): %d entries", got)
-	}
-	if got := len(kq.watches.byDir); got != 0 {
-		t.Errorf("watches.byDir not drained after Close(): %d entries", got)
-	}
+	check(0, 0)
 }

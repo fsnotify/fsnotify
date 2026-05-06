@@ -93,7 +93,7 @@ const noWait = ""
 
 func shouldWait(path ...string) bool {
 	// Take advantage of the fact that join skips empty parameters.
-	return !slices.Contains(path, "")
+	return !slices.Contains(path, noWait)
 }
 
 // Create n empty files with the prefix in the directory dir.
@@ -602,8 +602,6 @@ func cmpEvents(t *testing.T, tmp string, have, want Events) {
 	t.Helper()
 
 	have = have.TrimPrefix(tmp)
-	have = normalizeEventsForCompare(have)
-	want = normalizeEventsForCompare(want)
 
 	haveSort, wantSort := have.copy(), want.copy()
 	sort.Slice(haveSort, func(i, j int) bool {
@@ -618,64 +616,6 @@ func cmpEvents(t *testing.T, tmp string, have, want Events) {
 		b.WriteString(strings.TrimSpace(ztest.Diff(indent(haveSort), indent(wantSort))))
 		t.Errorf("\nhave:\n%s\nwant:\n%s\ndiff:\n%s", indent(have), indent(want), indent(b))
 	}
-}
-
-func normalizeEventsForCompare(events Events) Events {
-	if runtime.GOOS != "windows" {
-		return events
-	}
-
-	out := make(Events, 0, len(events))
-	for i, event := range events {
-		if event.Op == Write && hasDescendantEvent(events, i) {
-			continue
-		}
-		out = append(out, event)
-	}
-	return out
-}
-
-func hasDescendantEvent(events Events, i int) bool {
-	parent := filepath.ToSlash(events[i].Name)
-	if parent == "" {
-		return false
-	}
-	parent = strings.TrimRight(parent, "/")
-	if parent == "" {
-		parent = "/"
-	}
-
-	for j, event := range events {
-		if i == j {
-			continue
-		}
-		if isDescendantPath(parent, event.Name) || isDescendantPath(parent, event.renamedFrom) {
-			return true
-		}
-	}
-	return false
-}
-
-func isDescendantPath(parent, child string) bool {
-	if child == "" {
-		return false
-	}
-
-	parent = filepath.ToSlash(parent)
-	child = filepath.ToSlash(child)
-	parent = strings.TrimRight(parent, "/")
-	child = strings.TrimRight(child, "/")
-
-	if parent == "" {
-		parent = "/"
-	}
-	if child == "" || child == parent {
-		return false
-	}
-	if parent == "/" {
-		return strings.HasPrefix(child, "/")
-	}
-	return strings.HasPrefix(child, parent+"/")
 }
 
 func indent(s fmt.Stringer) string {
@@ -814,6 +754,12 @@ func parseScript(t *testing.T, in string) {
 					c.line, c.cmd, n, len(c.args), c.args)
 			}
 		}
+		atleastArg = func(c command, n int) {
+			if len(c.args) < 1 {
+				t.Fatalf("line %d: %q requires at least %d arguments (have %d: %q)",
+					c.line, c.cmd, 1, len(c.args), c.args)
+			}
+		}
 	)
 loop:
 	for _, c := range cmds {
@@ -906,10 +852,7 @@ loop:
 			mustArg(c, 0)
 			break loop
 		case "watch":
-			if len(c.args) < 1 {
-				t.Fatalf("line %d: %q requires at least %d arguments (have %d: %q)",
-					c.line, c.cmd, 1, len(c.args), c.args)
-			}
+			atleastArg(c, 1)
 			if len(c.args) == 1 {
 				do = append(do, func() { addWatch(t, w.w, tmppath(tmp, c.args[0])) })
 				continue
@@ -955,17 +898,30 @@ loop:
 			mustArg(c, 1)
 			do = append(do, func() { rmWatch(t, w.w, tmppath(tmp, c.args[0])) })
 		case "watchlist":
-			mustArg(c, 1)
+			atleastArg(c, 1)
 			n, err := strconv.ParseInt(c.args[0], 10, 0)
-			if err != nil {
-				t.Fatalf("line %d: %s", c.line, err)
+			if err == nil { // Assert length
+				do = append(do, func() {
+					wl := w.w.WatchList()
+					if l := int64(len(wl)); l != n {
+						t.Errorf("line %d: watchlist has %d entries, not %d\n%q", c.line, l, n, wl)
+					}
+				})
+			} else { // Assert contents
+				do = append(do, func() {
+					have := w.w.WatchList()
+					for i := range c.args {
+						c.args[i] = tmppath(tmp, c.args[i])
+					}
+					slices.Sort(c.args)
+					slices.Sort(have)
+					if !slices.Equal(c.args, have) {
+						t.Errorf("line %d: watchlist has incorrect entries\n  have:\n    %s\n  want:\n    %s", c.line,
+							strings.Join(have, "\n    "),
+							strings.Join(c.args, "\n    "))
+					}
+				})
 			}
-			do = append(do, func() {
-				wl := w.w.WatchList()
-				if l := int64(len(wl)); l != n {
-					t.Errorf("line %d: watchlist has %d entries, not %d\n%q", c.line, l, n, wl)
-				}
-			})
 		case "touch":
 			mustArg(c, 1)
 			do = append(do, func() { touch(t, tmppath(tmp, c.args[0])) })

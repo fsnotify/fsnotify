@@ -12,7 +12,7 @@ Platform support:
 | :-------------------- | :--------- | :------------------------------------------------------------------------ |
 | inotify               | Linux      | Supported                                                                 |
 | kqueue                | BSD, macOS | Supported                                                                 |
-| ReadDirectoryChangesW | Windows    | Supported ([excluding `Chmod` operations][#487])                          |
+| ReadDirectoryChangesW | Windows    | Supported                                                                 |
 | FEN                   | illumos    | Supported                                                                 |
 | fanotify              | Linux 5.9+ | [Not yet](https://github.com/fsnotify/fsnotify/issues/114)                |
 | FSEvents              | macOS      | [Needs support in x/sys/unix][fsevents]                                   |
@@ -22,9 +22,8 @@ Platform support:
 Linux and illumos should include Android and Solaris, but these are currently
 untested.
 
-[#487]:       https://github.com/fsnotify/fsnotify/issues/487
-[fsevents]:   https://github.com/fsnotify/fsnotify/issues/11#issuecomment-1279133120
-[usn]:        https://github.com/fsnotify/fsnotify/issues/53#issuecomment-1279829847
+[fsevents]: https://github.com/fsnotify/fsnotify/issues/11#issuecomment-1279133120
+[usn]:      https://github.com/fsnotify/fsnotify/issues/53#issuecomment-1279829847
 
 Usage
 -----
@@ -170,39 +169,6 @@ distro's documentation):
 
     fs.inotify.max_user_watches=200000
     fs.inotify.max_user_instances=256
-
-### Windows
-Recursive watching is not currently enabled through fsnotify's public API
-(see the FAQ "Are subdirectories watched?" above). The notes below
-describe Windows backend behavior observed when recursive watching is
-enabled internally (for example, in fsnotify's own tests). They are kept
-here as a reference for maintainers and contributors who encounter the
-behavior, since the recursive code path still exists in the backend.
-
-When recursive watching is enabled and you watch a directory, you may
-receive a `Write` event for an intermediate directory whenever a child
-entry inside it is created, renamed, or removed. For example, with a
-recursive watch on `/a` and a new file `/a/b/c`, you will receive
-`Create /a/b/c` and may also receive `Write /a/b`.
-
-This happens because, on NTFS-backed volumes, modifying the entries of a
-directory updates that directory's last-write time, and the Windows
-backend requests `FILE_NOTIFY_CHANGE_LAST_WRITE` to support `Write` events
-on files. The same `Write` filter therefore picks up the directory's
-metadata update.
-
-kqueue has the same "directory `Write` = directory contents changed"
-semantics, so portable code that treats `Write` on a directory as
-"something inside it changed" works on Windows and BSD/macOS, but not on
-Linux (inotify uses `Write` only for file-content changes). If you only
-care about file content, filter out `Write` events whose path refers to a
-directory.
-
-Whether the directory `Write` is actually delivered alongside the child
-events is not guaranteed: it depends on `ReadDirectoryChangesW` buffering,
-NTFS metadata update timing, and event coalescing, none of which fsnotify
-controls.
-
 
 ### kqueue (macOS, all BSD systems)
 kqueue requires opening a file descriptor for every file that's being watched;

@@ -36,13 +36,6 @@ type readDirChangesW struct {
 
 var defaultBufferSize = 50
 
-func isSameOrDescendantPath(path, root string) bool {
-	if path == root {
-		return true
-	}
-	return strings.HasPrefix(path, root+string(os.PathSeparator))
-}
-
 func newBackend(ev chan Event, errs chan error) (backend, error) {
 	port, err := windows.CreateIoCompletionPort(windows.InvalidHandle, 0, 0, 0)
 	if err != nil {
@@ -612,7 +605,7 @@ func (w *readDirChangesW) readEvents() {
 				w.mu.Lock()
 				for _, watchMap := range w.watches {
 					for _, ww := range watchMap {
-						if isSameOrDescendantPath(ww.path, old) {
+						if hasPathPrefix(ww.path, old) {
 							ww.path = filepath.Join(fullname, strings.TrimPrefix(ww.path, old))
 						}
 					}

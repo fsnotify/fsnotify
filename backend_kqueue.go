@@ -246,26 +246,8 @@ func (w *kqueue) Close() error {
 		return nil
 	}
 
-	// Snapshot and drop all watches directly. w.Remove -> w.remove
-	// short-circuits on isClosed() (which is already true after
-	// w.shared.close() above), so calling Remove here in the happy path
-	// leaked every watched directory + file descriptor. On macOS a
-	// single directory watch opens an fd for every file in the dir, so
-	// long-running processes that recreate watchers (hot-reload dev
-	// servers, etc.) ran out of fds with EMFILE (#732).
-	pathsToRemove := w.watches.listPaths(false)
-	for _, name := range pathsToRemove {
-		info, ok := w.watches.byPath(name)
-		if !ok {
-			// w.path has an entry for name but w.wd doesn't --
-			// drop the stale lookup entry so the map state is
-			// consistent after Close.
-			w.watches.remove(0, name)
-			continue
-		}
-		_ = w.register([]int{info.wd}, unix.EV_DELETE, 0)
-		unix.Close(info.wd)
-		w.watches.remove(info.wd, name)
+	for _, name := range w.watches.listPaths(false) {
+		w.remove2(name, true)
 	}
 
 	unix.Close(w.closepipe[1]) // Send "quit" message to readEvents
@@ -305,7 +287,11 @@ func (w *kqueue) remove(name string, unwatchFiles bool) error {
 	if w.isClosed() {
 		return nil
 	}
+	return w.remove2(name, unwatchFiles)
+}
 
+// remove() but without checking isClosed
+func (w *kqueue) remove2(name string, unwatchFiles bool) error {
 	name = filepath.Clean(name)
 	info, ok := w.watches.byPath(name)
 	if !ok {
@@ -323,12 +309,11 @@ func (w *kqueue) remove(name string, unwatchFiles bool) error {
 
 	// Find all watched paths that are in this directory that are not external.
 	if unwatchFiles && isDir {
-		pathsToRemove := w.watches.watchesInDir(name)
-		for _, name := range pathsToRemove {
+		for _, name := range w.watches.watchesInDir(name) {
 			// Since these are internal, not much sense in propagating error to
 			// the user, as that will just confuse them with an error about a
 			// path they did not explicitly watch themselves.
-			w.Remove(name)
+			w.remove2(name, false)
 		}
 	}
 	return nil
@@ -595,14 +580,12 @@ func (w *kqueue) watchDirectoryFiles(dirPath string) error {
 
 		cleanPath, err := w.internalWatch(path, fi)
 		if err != nil {
-			// No permission, or the entry resolved to a missing target
-			// (e.g. a dangling symlink): not a problem, just skip. But
-			// do mark it as seen to prevent it from being picked up as
-			// a "new" file later (it still shows up in the directory
-			// listing).
+			// No permission, entry resolved to a missing target (e.g. a
+			// dangling symlink), or doesn't exist: not a problem, just skip.
+			// But do mark it as seen to prevent it from being picked up as a
+			// "new" file later (it still shows up in the directory listing).
 			switch {
-			case errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM) ||
-				errors.Is(err, os.ErrNotExist):
+			case errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM) || errors.Is(err, os.ErrNotExist):
 				cleanPath = filepath.Clean(path)
 			default:
 				return fmt.Errorf("%q: %w", path, err)

@@ -1,5 +1,9 @@
 //go:build solaris
 
+// Note: do not add a test here unless the behaviour is truly specific to this
+// backend. fsnotify is a cross-platform library: most tests should be as a
+// "script" in testdata/ or in fsnotify_test.go. See CONTRIBUTING.md.
+
 package fsnotify
 
 import (
