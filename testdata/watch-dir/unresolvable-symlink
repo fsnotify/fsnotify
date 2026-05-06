@@ -1,0 +1,12 @@
+# Add() should work if an unresolvable symlink is already present.
+require symlink
+
+ln   -s /nonexistent /dangling
+touch                /file
+
+watch /
+
+touch /after
+
+Output:
+	create  /after

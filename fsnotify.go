@@ -91,33 +91,6 @@ import (
 // directory itself, but may not send events for all files in that directory.
 // Sometimes it will send events for all files, sometimes it will send no
 // events, and often only for some files.
-//
-// Recursive watching is not currently enabled through fsnotify's public
-// API; the recursive code path is gated and only exercised by fsnotify's
-// own tests. The note below describes backend behavior observed when
-// recursive watching is enabled internally, and is kept here as a
-// reference for maintainers and contributors who encounter it.
-//
-// When recursive watching is enabled and you watch a directory, you may
-// receive a Write event for an intermediate directory whenever a child
-// entry inside it is created, renamed, or removed. For example, with a
-// recursive watch on /a and a new file /a/b/c, you will receive
-// Create /a/b/c and may also receive Write /a/b.
-//
-// This happens because, on NTFS-backed volumes, modifying the entries of a
-// directory updates that directory's last-write time, and the Windows
-// backend requests FILE_NOTIFY_CHANGE_LAST_WRITE to support Write events
-// on files. The same Write filter therefore picks up the directory's
-// metadata update.
-//
-// Whether the directory Write is actually delivered alongside the child
-// events is not guaranteed; it depends on ReadDirectoryChangesW buffering,
-// NTFS metadata update timing, and event coalescing.
-//
-// The default ReadDirectoryChangesW() buffer size is 64K, which is the largest
-// value that is guaranteed to work with SMB filesystems. If you have many
-// events in quick succession this may not be enough, and you will have to use
-// [WithBufferSize] to increase the value.
 type Watcher struct {
 	b backend
 
@@ -151,11 +124,7 @@ type Watcher struct {
 	//                      (see the dedup example in cmd/fsnotify).
 	//
 	//                      Some systems also send Write events for directories
-	//                      when the directory contents change. This is the
-	//                      case for kqueue, and on Windows for the directory
-	//                      that contains a created, renamed, or removed child
-	//                      entry. It does not happen on inotify. See the
-	//                      per-platform notes on [Watcher].
+	//                      when the directory contents changes.
 	//
 	//   fsnotify.Chmod     Attributes were changed. On Linux this is also sent
 	//                      when a file is removed (or more accurately, when a
@@ -204,9 +173,7 @@ const (
 	Create Op = 1 << iota
 
 	// The pathname was written to; this does *not* mean the write has finished,
-	// and a write can be followed by more writes. On Windows and kqueue, a
-	// Write on a directory can also indicate that its contents changed; see
-	// the per-platform notes on [Watcher].
+	// and a write can be followed by more writes.
 	Write
 
 	// The path was removed; any watches on it will be removed. Some "remove"
@@ -513,6 +480,13 @@ func recursivePath(path string) (string, bool) {
 		return filepath.Dir(path), true
 	}
 	return path, false
+}
+
+func hasPathPrefix(path, root string) bool {
+	if path == root {
+		return true
+	}
+	return strings.HasPrefix(path, root+string(os.PathSeparator))
 }
 
 type watchFlag uint8

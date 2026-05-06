@@ -6,8 +6,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"reflect"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -231,7 +231,10 @@ func TestClose(t *testing.T) {
 		}
 
 		if err := w.Add(t.TempDir()); err == nil {
-			t.Fatal("expected error on Watch() after Close(), got nil")
+			t.Fatal("no error on Add() after Close()")
+		}
+		if err := w.Remove(t.TempDir()); err != nil {
+			t.Fatalf("error on Remove() after Close(): %s", err)
 		}
 	})
 
@@ -568,7 +571,7 @@ func TestAdd(t *testing.T) {
 		{
 			have, want := w.WatchList(), []string{join(tmp, "/dir1"), join(tmp, "/dir2")}
 			sort.Strings(have)
-			if !reflect.DeepEqual(have, want) {
+			if !slices.Equal(have, want) {
 				t.Errorf("\nhave: %s\nwant: %s", have, want)
 			}
 		}
@@ -578,7 +581,7 @@ func TestAdd(t *testing.T) {
 		{
 			have, want := w.WatchList(), []string{join(tmp, "/dir2")}
 			sort.Strings(have)
-			if !reflect.DeepEqual(have, want) {
+			if !slices.Equal(have, want) {
 				t.Errorf("\nhave: %s\nwant: %s", have, want)
 			}
 		}
@@ -813,6 +816,19 @@ func TestRemove(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+
+	t.Run("... gives error if not watched", func(t *testing.T) {
+		supportsRecurse(t)
+		t.Parallel()
+
+		tmp := t.TempDir()
+		w := newWatcher(t)
+		defer w.Close()
+
+		if err := w.Remove(join(tmp, "...")); err == nil {
+			t.Fatal("err was nil")
+		}
+	})
 }
 
 func TestEventString(t *testing.T) {
@@ -844,24 +860,58 @@ func TestEventString(t *testing.T) {
 }
 
 func TestWatchList(t *testing.T) {
-	t.Parallel()
+	t.Run("works", func(t *testing.T) {
+		t.Parallel()
 
-	tmp := t.TempDir()
-	file := join(tmp, "file")
-	other := join(tmp, "other")
+		tmp := t.TempDir()
+		file := join(tmp, "file")
+		other := join(tmp, "other")
 
-	touch(t, file)
-	touch(t, other)
+		touch(t, file)
+		touch(t, other)
 
-	w := newWatcher(t, file, tmp)
-	defer w.Close()
+		w := newWatcher(t, file, tmp)
+		defer w.Close()
 
-	have := w.WatchList()
-	sort.Strings(have)
-	want := []string{tmp, file}
-	if !reflect.DeepEqual(have, want) {
-		t.Errorf("\nhave: %s\nwant: %s", have, want)
-	}
+		have := w.WatchList()
+		sort.Strings(have)
+		want := []string{tmp, file}
+		if !slices.Equal(have, want) {
+			t.Errorf("\nhave: %s\nwant: %s", have, want)
+		}
+	})
+
+	t.Run("race", func(t *testing.T) {
+		t.Parallel()
+
+		tmp := t.TempDir()
+
+		w := newWatcher(t, tmp)
+		defer w.Close()
+
+		stop := make(chan struct{})
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					// Just make sure it doesn't race, don't need to checkout output.
+					_ = w.WatchList()
+				}
+			}
+		}()
+
+		for i := range 50 {
+			dir := filepath.Join(tmp, fmt.Sprintf("d%d", i))
+			mkdir(t, dir)
+			addWatch(t, w, dir)
+		}
+		close(stop)
+		<-done
+	})
 }
 
 func TestOpHas(t *testing.T) {

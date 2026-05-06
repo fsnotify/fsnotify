@@ -1,0 +1,33 @@
+# Previously renaming "/a" would also remove a watch for "/ab".
+require recurse
+
+# TODO: not correct on Windows:
+#
+#    have:
+#      C:\Users\RUNNER~1\AppData\Local\Temp\TestScriptwatch-recurserename-prefix1361194314\001
+#    want:
+#      C:\Users\RUNNER~1\AppData\Local\Temp\TestScriptwatch-recurserename-prefix1361194314\001
+#      C:\Users\RUNNER~1\AppData\Local\Temp\TestScriptwatch-recurserename-prefix1361194314\001\a
+#      C:\Users\RUNNER~1\AppData\Local\Temp\TestScriptwatch-recurserename-prefix1361194314\001\a\sub
+#      C:\Users\RUNNER~1\AppData\Local\Temp\TestScriptwatch-recurserename-prefix1361194314\001\ab
+#      C:\Users\RUNNER~1\AppData\Local\Temp\TestScriptwatch-recurserename-prefix1361194314\001\ab\sub
+#
+# This is because Windows only tracks top-level paths, rather than all of them.
+#
+# It's actually Windows that is correct and inotify that is wrong, since it's
+# documented as "returns all paths explicitly added with [Watcher.Add]".
+#
+# Should probably add /... suffix for recursive paths too?
+skip windows
+
+mkdir -p /a/sub
+mkdir -p /ab/sub
+watch /...
+
+watchlist / /a /a/sub /ab /ab/sub
+mv /a /x
+watchlist / /x /x/sub /ab /ab/sub
+
+Output:
+	rename   /a
+	create   /x ← /a
