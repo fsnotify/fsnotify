@@ -79,6 +79,8 @@ functionally identical. End-of-line escapes with `\` are not supported.
                         #             permissions on Windows).
                         #   mkfifo    Platform doesn't support FIFO named sockets.
                         #   mknod     Platform doesn't support device nodes.
+    repeat n            # Run this test n times; useful for testing low-probability test failures.
+                        # Tests abort on the first failure.
 
     watchlist number    # Assert watchlist length.
     watchlist p1 p2     # Assert watchlist contents (unordered space-separated list).
