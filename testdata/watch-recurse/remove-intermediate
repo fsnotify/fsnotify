@@ -1,0 +1,31 @@
+# Removing an intermediate directory should not break the recursive root.
+require recurse
+
+mkdir -p /root/sub/deep
+watch /root/...
+
+touch /root/sub/deep/file1
+rm -r /root/sub
+
+mkdir /root/newsub
+touch /root/newsub/file2
+
+Output:
+	create   /root/sub/deep/file1
+
+	remove   /root/sub/deep/file1
+	remove   /root/sub/deep
+	remove   /root/sub
+
+	create   /root/newsub
+	create   /root/newsub/file2
+
+	linux:
+		create   /root/sub/deep/file1
+
+		remove   /root/sub/deep/file1
+		remove   /root/sub/deep
+		remove   /root/sub
+
+		create   /root/newsub
+		create   /root/newsub/file2

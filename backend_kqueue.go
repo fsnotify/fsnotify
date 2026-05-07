@@ -5,10 +5,12 @@ package fsnotify
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,7 +35,8 @@ type (
 		path   map[string]int              // pathname → wd
 		byDir  map[string]map[int]struct{} // dirname(path) → wd
 		seen   map[string]struct{}         // Keep track of if we know this file exists.
-		byUser map[string]struct{}         // Watches added with Watcher.Add()
+		byUser  map[string]struct{}         // Watches added with Watcher.Add()
+		recurse map[string]Op              // Root paths → Op for recursive watches
 	}
 	watch struct {
 		wd       int
@@ -50,7 +53,8 @@ func newWatches() *watches {
 		path:   make(map[string]int),
 		byDir:  make(map[string]map[int]struct{}),
 		seen:   make(map[string]struct{}),
-		byUser: make(map[string]struct{}),
+		byUser:  make(map[string]struct{}),
+		recurse: make(map[string]Op),
 	}
 }
 
@@ -183,6 +187,24 @@ func (w *watches) seenBefore(path string) bool {
 	return ok
 }
 
+func (w *watches) isRecurseRoot(path string) bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	_, ok := w.recurse[path]
+	return ok
+}
+
+func (w *watches) isUnderRecurse(path string) bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	for p := range w.recurse {
+		if path == p || strings.HasPrefix(path, p+"/") {
+			return true
+		}
+	}
+	return false
+}
+
 var defaultBufferSize = 0
 
 func newBackend(ev chan Event, errs chan error) (backend, error) {
@@ -267,6 +289,39 @@ func (w *kqueue) AddWith(name string, opts ...addOpt) error {
 		return fmt.Errorf("%w: %s", xErrUnsupported, with.op)
 	}
 
+	name, recurse := recursivePath(name)
+	if recurse {
+		err := filepath.WalkDir(name, func(root string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if !d.IsDir() {
+				if root == name {
+					return fmt.Errorf("fsnotify: not a directory: %q", name)
+				}
+				return nil
+			}
+			if with.sendCreate && root != name {
+				w.sendEvent(Event{Name: root, Op: Create})
+			}
+			_, err = w.addWatch(root, noteAllEvents, false)
+			if err != nil {
+				return err
+			}
+			if root == name {
+				w.watches.addUserWatch(root)
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		w.watches.mu.Lock()
+		w.watches.recurse[name] = with.op
+		w.watches.mu.Unlock()
+		return nil
+	}
+
 	_, err := w.addWatch(name, noteAllEvents, false)
 	if err != nil {
 		return err
@@ -279,6 +334,27 @@ func (w *kqueue) Remove(name string) error {
 	if debug {
 		fmt.Fprintf(os.Stderr, "FSNOTIFY_DEBUG: %s  Remove(%q)\n",
 			time.Now().Format("15:04:05.000000000"), name)
+	}
+
+	name, recurse := recursivePath(name)
+
+	if recurse && !w.watches.isRecurseRoot(name) {
+		return fmt.Errorf("can't use /... with non-recursive watch %q", name)
+	}
+	if w.watches.isRecurseRoot(name) {
+		w.watches.mu.Lock()
+		var toRemove []string
+		for p := range w.watches.path {
+			if p == name || strings.HasPrefix(p, name+"/") {
+				toRemove = append(toRemove, p)
+			}
+		}
+		delete(w.watches.recurse, name)
+		w.watches.mu.Unlock()
+		for _, p := range toRemove {
+			w.remove(p, true)
+		}
+		return nil
 	}
 	return w.remove(name, true)
 }
@@ -643,13 +719,53 @@ func (w *kqueue) sendCreateIfNew(path string, fi os.FileInfo) error {
 		}
 	}
 
-	// Like watchDirectoryFiles, but without doing another ReadDir.
+	if fi.IsDir() && w.watches.isUnderRecurse(path) {
+		return w.addRecursiveSubdir(path)
+	}
+
 	path, err := w.internalWatch(path, fi)
 	if err != nil {
 		return err
 	}
 	w.watches.markSeen(path, true)
 	return nil
+}
+
+func (w *kqueue) addRecursiveSubdir(root string) error {
+	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			fi, err := d.Info()
+			if err != nil {
+				return err
+			}
+			cleanPath, err := w.internalWatch(path, fi)
+			if err != nil {
+				if errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM) {
+					cleanPath = filepath.Clean(path)
+				} else {
+					return err
+				}
+			}
+			w.watches.markSeen(cleanPath, true)
+			return nil
+		}
+		if path != root {
+			if !w.sendEvent(Event{Name: path, Op: Create}) {
+				return nil
+			}
+		}
+		_, err = w.addWatch(path, noteAllEvents, false)
+		if err != nil {
+			return err
+		}
+		if err := w.watchDirectoryFiles(path); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 func (w *kqueue) internalWatch(name string, fi os.FileInfo) (string, error) {
