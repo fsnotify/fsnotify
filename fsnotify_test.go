@@ -19,10 +19,6 @@ import (
 	"github.com/fsnotify/fsnotify/internal"
 )
 
-func init() {
-	enableRecurse = true
-}
-
 func TestScript(t *testing.T) {
 	err := filepath.Walk("./testdata", func(path string, info fs.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
