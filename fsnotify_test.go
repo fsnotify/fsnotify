@@ -885,32 +885,33 @@ func TestWatchList(t *testing.T) {
 		t.Parallel()
 
 		tmp := t.TempDir()
+		w := newCollector(t, tmp)
+		w.collect(t)
 
-		w := newWatcher(t, tmp)
-		defer w.Close()
-
-		stop := make(chan struct{})
-		done := make(chan struct{})
 		go func() {
-			defer close(done)
 			for {
 				select {
-				case <-stop:
+				case <-w.done:
 					return
 				default:
-					// Just make sure it doesn't race, don't need to checkout output.
-					_ = w.WatchList()
+					_ = w.w.WatchList()
+					time.Sleep(10 * time.Millisecond)
 				}
 			}
 		}()
 
-		for i := range 50 {
-			dir := filepath.Join(tmp, fmt.Sprintf("d%d", i))
-			mkdir(t, dir)
-			addWatch(t, w, dir)
+		var wg sync.WaitGroup
+		wg.Add(20)
+		for i := range 20 {
+			go func() {
+				defer wg.Done()
+				dir := filepath.Join(tmp, fmt.Sprintf("d%d", i))
+				mkdir(t, dir)
+				addWatch(t, w.w, dir)
+			}()
 		}
-		close(stop)
-		<-done
+		wg.Wait()
+		w.stop(t)
 	})
 }
 

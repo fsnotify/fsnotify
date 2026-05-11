@@ -425,15 +425,15 @@ func (w *eventCollector) collect(t *testing.T) {
 			select {
 			case e, ok := <-w.w.Errors:
 				if !ok {
-					w.done <- struct{}{}
+					close(w.done)
 					return
 				}
 				t.Errorf("eventCollector: unexpected error on Errors chan: %s", e)
-				w.done <- struct{}{}
+				close(w.done)
 				return
 			case e, ok := <-w.w.Events:
 				if !ok {
-					w.done <- struct{}{}
+					close(w.done)
 					return
 				}
 				w.mu.Lock()
