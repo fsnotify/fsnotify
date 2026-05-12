@@ -1,0 +1,21 @@
+# Sequential mkdir under a recursive watch should emit CREATE for each dir.
+require recurse
+
+watch /...
+
+mkdir /a
+mkdir /a/b
+mkdir /a/b/c
+touch /a/b/c/file
+
+Output:
+	create   /a
+	create   /a/b
+	create   /a/b/c
+	create   /a/b/c/file
+
+	linux:
+		create   /a
+		create   /a/b
+		create   /a/b/c
+		create   /a/b/c/file
