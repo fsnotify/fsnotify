@@ -25,9 +25,10 @@ type readDirChangesW struct {
 	Events chan Event
 	Errors chan error
 
-	port  windows.Handle // Handle to completion port
-	input chan *input    // Inputs to the reader are sent on this channel
-	done  chan chan<- error
+	port    windows.Handle // Handle to completion port
+	input   chan *input    // Inputs to the reader are sent on this channel
+	done    chan chan<- error
+	closing chan struct{}
 
 	mu      sync.Mutex // Protects access to watches, closed
 	watches watchMap   // Map of watches (key: i-number)
@@ -48,6 +49,7 @@ func newBackend(ev chan Event, errs chan error) (backend, error) {
 		watches: make(watchMap),
 		input:   make(chan *input, 1),
 		done:    make(chan chan<- error, 1),
+		closing: make(chan struct{}),
 	}
 	go w.readEvents()
 	return w, nil
@@ -95,6 +97,7 @@ func (w *readDirChangesW) Close() error {
 	w.mu.Lock()
 	w.closed = true
 	w.mu.Unlock()
+	close(w.closing)
 
 	// Send "done" message to the reader goroutine
 	ch := make(chan error)
@@ -103,6 +106,25 @@ func (w *readDirChangesW) Close() error {
 		return err
 	}
 	return <-ch
+}
+
+func (w *readDirChangesW) sendInput(in *input) error {
+	select {
+	case <-w.closing:
+		return ErrClosed
+	case w.input <- in:
+	}
+
+	if err := w.wakeupReader(); err != nil {
+		return err
+	}
+
+	select {
+	case err := <-in.reply:
+		return err
+	case <-w.closing:
+		return ErrClosed
+	}
 }
 
 func (w *readDirChangesW) Add(name string) error { return w.AddWith(name) }
@@ -131,11 +153,7 @@ func (w *readDirChangesW) AddWith(name string, opts ...addOpt) error {
 		reply:   make(chan error),
 		bufsize: with.bufsize,
 	}
-	w.input <- in
-	if err := w.wakeupReader(); err != nil {
-		return err
-	}
-	return <-in.reply
+	return w.sendInput(in)
 }
 
 func (w *readDirChangesW) Remove(name string) error {
@@ -152,11 +170,7 @@ func (w *readDirChangesW) Remove(name string) error {
 		path:  filepath.Clean(name),
 		reply: make(chan error),
 	}
-	w.input <- in
-	if err := w.wakeupReader(); err != nil {
-		return err
-	}
-	return <-in.reply
+	return w.sendInput(in)
 }
 
 func (w *readDirChangesW) WatchList() []string {
@@ -510,6 +524,15 @@ func (w *readDirChangesW) readEvents() {
 		if watch == nil {
 			select {
 			case ch := <-w.done:
+				for {
+					select {
+					case in := <-w.input:
+						in.reply <- ErrClosed
+					default:
+						goto shutdown
+					}
+				}
+			shutdown:
 				w.mu.Lock()
 				var indexes []indexMap
 				for _, index := range w.watches {

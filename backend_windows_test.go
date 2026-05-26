@@ -7,7 +7,10 @@
 package fsnotify
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -81,5 +84,36 @@ func TestWindowsRemWatch(t *testing.T) {
 	}
 	if err := w.b.(*readDirChangesW).remWatch(tmp); err == nil {
 		t.Fatal("Should be fail with closed handle")
+	}
+}
+
+func TestCloseDuringAdd(t *testing.T) {
+	root := t.TempDir()
+
+	watcher, err := NewWatcher()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := watcher.Add(root); err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan struct{})
+
+	go func() {
+		<-done
+		_ = watcher.Close()
+	}()
+
+	for i := range 100 {
+		if err := os.Mkdir(filepath.Join(root, fmt.Sprintf("foo%v", i)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if i == 10 {
+			close(done)
+		}
+		if err := watcher.Add(filepath.Join(root, fmt.Sprintf("foo%v", i))); err != nil && !errors.Is(err, ErrClosed) {
+			t.Fatal(err)
+		}
 	}
 }
