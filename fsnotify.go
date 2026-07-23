@@ -218,6 +218,9 @@ var (
 	// Unportable event that's not supported on this platform.
 	//lint:ignore ST1012 not relevant
 	xErrUnsupported = errors.New("fsnotify: not supported with this backend")
+
+// ErrEmptyPath is returned when Add/AddWith/Remove is called with an empty path.
+	ErrEmptyPath = errors.New("fsnotify: empty path")
 )
 
 // NewWatcher creates a new Watcher.
@@ -283,7 +286,12 @@ func NewBufferedWatcher(sz uint) (*Watcher, error) {
 //
 // Watch the parent directory and use Event.Name to filter out files you're not
 // interested in. There is an example of this in cmd/fsnotify/file.go.
-func (w *Watcher) Add(path string) error { return w.b.Add(path) }
+func (w *Watcher) Add(path string) error {
+	if path == "" {
+		return ErrEmptyPath
+	}
+	return w.b.Add(path)
+}
 
 // AddWith is like [Watcher.Add], but allows adding options. When using Add()
 // the defaults described below are used.
@@ -292,7 +300,12 @@ func (w *Watcher) Add(path string) error { return w.b.Add(path) }
 //
 //   - [WithBufferSize] sets the buffer size for the Windows backend; no-op on
 //     other platforms. The default is 64K (65536 bytes).
-func (w *Watcher) AddWith(path string, opts ...addOpt) error { return w.b.AddWith(path, opts...) }
+func (w *Watcher) AddWith(path string, opts ...addOpt) error {
+	if path == "" {
+		return ErrEmptyPath
+	}
+	return w.b.AddWith(path, opts...)
+}
 
 // Remove stops monitoring the path for changes.
 //
@@ -302,7 +315,12 @@ func (w *Watcher) AddWith(path string, opts ...addOpt) error { return w.b.AddWit
 // Removing a path that has not yet been added returns [ErrNonExistentWatch].
 //
 // Returns nil if [Watcher.Close] was called.
-func (w *Watcher) Remove(path string) error { return w.b.Remove(path) }
+func (w *Watcher) Remove(path string) error {
+	if path == "" {
+		return ErrEmptyPath
+	}
+	return w.b.Remove(path)
+}
 
 // Close removes all watches and closes the Events channel.
 func (w *Watcher) Close() error { return w.b.Close() }
