@@ -80,7 +80,12 @@ func (w *readDirChangesW) sendError(err error) bool {
 		return true
 	}
 	select {
-	case <-w.done:
+	case ch := <-w.done:
+		// Put the token back, the way sendEvent does. It is Close's only handshake
+		// with the reader: swallowing it here leaves Close blocked forever on a
+		// reply that can never come, while the reader parks in
+		// GetQueuedCompletionStatus having already consumed the wakeup.
+		w.done <- ch
 		return false
 	case w.Errors <- err:
 		return true
@@ -540,6 +545,22 @@ func (w *readDirChangesW) readEvents() {
 				}
 			default:
 			}
+			continue
+		}
+
+		// Drop completions for a watch that is no longer registered. remWatch may
+		// have torn this watch down between the read completing and us dequeuing
+		// it: its handle is closed and it is out of w.watches, but the completion
+		// packet queued earlier still carries its address. Falling through would
+		// re-arm it below and close that handle a SECOND time -- and Windows may
+		// have already reissued the value. In a Go program the most frequent taker
+		// is the runtime itself (CreateEvent per new M in semacreate), so the stray
+		// close destroys a handle the runtime believes it owns and the next
+		// semasleep/semawakeup/netpoll on it dies with ERROR_INVALID_HANDLE.
+		w.mu.Lock()
+		live := w.watches.get(watch.ino) == watch
+		w.mu.Unlock()
+		if !live {
 			continue
 		}
 
