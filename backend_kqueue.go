@@ -712,7 +712,7 @@ func (w *kqueue) xSupports(op Op) bool {
 	//	return true // Supports everything.
 	//}
 	if op.Has(xUnportableOpen) || op.Has(xUnportableRead) ||
-		op.Has(xUnportableCloseWrite) || op.Has(xUnportableCloseRead) {
+		op.Has(UnportableCloseWrite) || op.Has(xUnportableCloseRead) {
 		return false
 	}
 	return true

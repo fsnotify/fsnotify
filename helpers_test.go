@@ -556,7 +556,7 @@ func newEvents(t *testing.T, s string) Events {
 			case "READ":
 				op |= xUnportableRead
 			case "CLOSE_WRITE":
-				op |= xUnportableCloseWrite
+				op |= UnportableCloseWrite
 			case "CLOSE_READ":
 				op |= xUnportableCloseRead
 			default:
@@ -937,14 +937,14 @@ loop:
 				case "read":
 					op |= xUnportableRead
 				case "close_write":
-					op |= xUnportableCloseWrite
+					op |= UnportableCloseWrite
 				case "close_read":
 					op |= xUnportableCloseRead
 				}
 			}
 			do = append(do, func() {
 				p := tmppath(tmp, c.args[0])
-				err := w.w.AddWith(p, withOps(op))
+				err := w.w.AddWith(p, WithOps(op))
 				if err != nil {
 					t.Fatalf("line %d: addWatch(%q): %s", c.line+1, p, err)
 				}

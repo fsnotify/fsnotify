@@ -235,15 +235,15 @@ const (
 	// Only works on Linux and FreeBSD.
 	xUnportableRead
 
-	// File opened for writing was closed.
+	// UnportableCloseWrite is emitted when a file opened for writing is closed.
 	//
-	// Only works on Linux and FreeBSD.
+	// Only works on Linux and Android.
 	//
 	// The advantage of using this over Write is that it's more reliable than
 	// waiting for Write events to stop. It's also faster (if you're not
 	// listening to Write events): copying a file of a few GB can easily
 	// generate tens of thousands of Write events in a short span of time.
-	xUnportableCloseWrite
+	UnportableCloseWrite
 
 	// File opened for reading was closed.
 	//
@@ -269,8 +269,8 @@ var (
 	//  - kqueue, fen:  Not used.
 	ErrEventOverflow = errors.New("fsnotify: queue or buffer overflow")
 
-	// ErrUnsupported is returned by AddWith() when WithOps() specified an
-	// Unportable event that's not supported on this platform.
+	// xErrUnsupported is returned by AddWith() when WithOps() specified an
+	// unportable event that's not supported on this platform.
 	//lint:ignore ST1012 not relevant
 	xErrUnsupported = errors.New("fsnotify: not supported with this backend")
 )
@@ -347,6 +347,7 @@ func (w *Watcher) Add(path string) error { return w.b.Add(path) }
 //
 //   - [WithBufferSize] sets the buffer size for the Windows backend; no-op on
 //     other platforms. The default is 64K (65536 bytes).
+//   - [WithOps] sets which operations to listen for.
 func (w *Watcher) AddWith(path string, opts ...addOpt) error { return w.b.AddWith(path, opts...) }
 
 // Remove stops monitoring the path for changes.
@@ -372,8 +373,8 @@ func (w *Watcher) WatchList() []string { return w.b.WatchList() }
 // Supports reports if all the listed operations are supported by this platform.
 //
 // Create, Write, Remove, Rename, and Chmod are always supported. It can only
-// return false for an Op starting with Unportable.
-func (w *Watcher) xSupports(op Op) bool { return w.b.xSupports(op) }
+// return false for an unportable operation such as [UnportableCloseWrite].
+func (w *Watcher) Supports(op Op) bool { return w.b.xSupports(op) }
 
 func (o Op) String() string {
 	var b strings.Builder
@@ -392,7 +393,7 @@ func (o Op) String() string {
 	if o.Has(xUnportableRead) {
 		b.WriteString("|READ")
 	}
-	if o.Has(xUnportableCloseWrite) {
+	if o.Has(UnportableCloseWrite) {
 		b.WriteString("|CLOSE_WRITE")
 	}
 	if o.Has(xUnportableCloseRead) {
@@ -484,14 +485,12 @@ func WithBufferSize(bytes int) addOpt {
 // time; in some use cases there may be hundreds of thousands of useless Write
 // or Chmod operations per second.
 //
-// This can also be used to add unportable operations not supported by all
-// platforms; unportable operations all start with "Unportable":
-// [UnportableOpen], [UnportableRead], [UnportableCloseWrite], and
-// [UnportableCloseRead].
+// This can also be used to add [UnportableCloseWrite], which is not supported
+// by all platforms.
 //
 // AddWith returns an error when using an unportable operation that's not
-// supported. Use [Watcher.Support] to check for support.
-func withOps(op Op) addOpt {
+// supported. Use [Watcher.Supports] to check for support.
+func WithOps(op Op) addOpt {
 	return func(opt *withOpts) { opt.op = op }
 }
 
