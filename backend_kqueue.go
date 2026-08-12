@@ -38,7 +38,8 @@ type (
 	watch struct {
 		wd       int
 		name     string
-		linkName string // In case of links; name is the target, and this is the link.
+		linkName string      // In case of links; name is the target, and this is the link.
+		fileInfo os.FileInfo // Identity of the opened path; used to detect replacements.
 		isDir    bool
 		dirFlags uint32
 	}
@@ -102,12 +103,12 @@ func (w *watches) addLink(path string, fd int) {
 	w.seen[path] = struct{}{}
 }
 
-func (w *watches) add(path, linkPath string, fd int, isDir bool) {
+func (w *watches) add(path, linkPath string, fd int, fi os.FileInfo) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	w.path[path] = fd
-	w.wd[fd] = watch{wd: fd, name: path, linkName: linkPath, isDir: isDir}
+	w.wd[fd] = watch{wd: fd, name: path, linkName: linkPath, fileInfo: fi, isDir: fi.IsDir()}
 
 	parent := filepath.Dir(path)
 	byDir, ok := w.byDir[parent]
@@ -385,6 +386,7 @@ func (w *kqueue) addWatch(name string, flags uint32, listDir bool) (string, erro
 		if err != nil {
 			return "", err
 		}
+		info.fileInfo = fi
 		info.isDir = fi.IsDir()
 	}
 
@@ -395,7 +397,7 @@ func (w *kqueue) addWatch(name string, flags uint32, listDir bool) (string, erro
 	}
 
 	if !alreadyWatching {
-		w.watches.add(name, info.linkName, info.wd, info.isDir)
+		w.watches.add(name, info.linkName, info.wd, info.fileInfo)
 	}
 
 	// Watch the directory if it has not been watched before, or if it was
@@ -637,6 +639,17 @@ func (w *kqueue) dirChange(dir string) error {
 // Send a create event if the file isn't already being tracked, and start
 // watching this file.
 func (w *kqueue) sendCreateIfNew(path string, fi os.FileInfo) error {
+	// kqueue does not always report NOTE_DELETE when a symlink is removed.
+	// Detect a replacement at the same path from the directory scan so the old
+	// file descriptor does not suppress the Create event for the new symlink.
+	if fi.Mode()&os.ModeSymlink != 0 {
+		if old, ok := w.watches.byPath(path); ok && !os.SameFile(old.fileInfo, fi) {
+			if err := w.remove2(path, false); err != nil {
+				return err
+			}
+		}
+	}
+
 	if !w.watches.seenBefore(path) {
 		if !w.sendEvent(Event{Name: path, Op: Create}) {
 			return nil
