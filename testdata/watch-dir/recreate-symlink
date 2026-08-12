@@ -1,0 +1,20 @@
+# Replacing a symlink in a watched directory should report the new entry.
+require symlink
+
+mkdir -p /data/v1
+mkdir -p /data/v2
+ln -s /data/v1 /data/current
+
+watch /data
+
+rm /data/current
+ln -s /data/v2 /data/current
+
+Output:
+	remove /data/current
+	create /data/current
+
+	# kqueue does not report the symlink removal, but must still report the
+	# replacement. See https://github.com/fsnotify/fsnotify/issues/689.
+	kqueue:
+		create /data/current
