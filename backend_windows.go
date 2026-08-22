@@ -387,11 +387,15 @@ func (w *readDirChangesW) remWatch(pathname string) error {
 
 	dir, err := w.getDir(pathname)
 	if err != nil {
-		return err
+		// Path may already be gone (deleted file/dir). Fall back to path-based
+		// lookup so we still free the watchEntry and avoid leaking watches
+		// maps and overlapped I/O buffers (issue #669).
+		return w.remWatchByPath(pathname, recurse)
 	}
 	ino, err := w.getIno(dir)
 	if err != nil {
-		return err
+		// Same as above: inode open failed, but a watch may still be registered.
+		return w.remWatchByPath(pathname, recurse)
 	}
 
 	w.mu.Lock()
@@ -419,6 +423,77 @@ func (w *readDirChangesW) remWatch(pathname string) error {
 		w.sendEvent(watch.path, "", mask&sysFSIGNORED)
 	} else {
 		name := filepath.Base(pathname)
+		w.mu.Lock()
+		mask := watch.names[name]
+		delete(watch.names, name)
+		w.mu.Unlock()
+		w.sendEvent(filepath.Join(watch.path, name), "", mask&sysFSIGNORED)
+	}
+
+	return w.startRead(watch)
+}
+
+// remWatchByPath removes a watch when the path no longer exists on disk and
+// getDir/getIno cannot resolve an inode. It matches watches by stored path
+// (directory watch) or parent path + basename (file watch).
+// Must run within the I/O thread.
+func (w *readDirChangesW) remWatchByPath(pathname string, recurse bool) error {
+	pathname = filepath.Clean(pathname)
+	parent := filepath.Clean(filepath.Dir(pathname))
+	base := filepath.Base(pathname)
+
+	w.mu.Lock()
+	var (
+		watch  *watch
+		isDir  bool
+		name   string
+	)
+	for _, byIndex := range w.watches {
+		for _, entry := range byIndex {
+			if entry.path == pathname {
+				watch = entry
+				isDir = true
+				break
+			}
+			if entry.path == parent {
+				if _, ok := entry.names[base]; ok {
+					watch = entry
+					name = base
+					break
+				}
+			}
+		}
+		if watch != nil {
+			break
+		}
+	}
+	w.mu.Unlock()
+
+	if watch == nil {
+		return fmt.Errorf("%w: %s", ErrNonExistentWatch, pathname)
+	}
+	if recurse && !watch.recurse {
+		return fmt.Errorf("can't use \\... with non-recursive watch %q", pathname)
+	}
+
+	if isDir {
+		w.mu.Lock()
+		mask := watch.mask
+		watch.mask = 0
+		// Clear name watches under this directory entry as well so startRead
+		// can drop the whole watchEntry when nothing remains.
+		names := watch.names
+		watch.names = make(map[string]uint64)
+		w.mu.Unlock()
+		for n, m := range names {
+			if m&provisional == 0 {
+				w.sendEvent(filepath.Join(watch.path, n), "", m&sysFSIGNORED)
+			}
+		}
+		if mask != 0 {
+			w.sendEvent(watch.path, "", mask&sysFSIGNORED)
+		}
+	} else {
 		w.mu.Lock()
 		mask := watch.names[name]
 		delete(watch.names, name)
