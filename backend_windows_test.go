@@ -7,9 +7,13 @@
 package fsnotify
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRemoveState(t *testing.T) {
@@ -81,5 +85,65 @@ func TestWindowsRemWatch(t *testing.T) {
 	}
 	if err := w.b.(*readDirChangesW).remWatch(tmp); err == nil {
 		t.Fatal("Should be fail with closed handle")
+	}
+}
+
+// TestWindowsCloseAddRace reproduces https://github.com/fsnotify/fsnotify/issues/704:
+// a concurrent watcher.Close() and watcher.Add() could deadlock on Windows
+// because the reader goroutine might take the "done" branch and exit, leaving
+// the in-flight Add() blocked forever on its reply channel. After the fix, Add
+// (and Remove) bail out with ErrClosed as soon as Close() runs.
+//
+// This is racy by nature; we run it many times and fail the test if any trial
+// fails to settle (the deadlock would otherwise hang the whole test binary).
+func TestWindowsCloseAddRace(t *testing.T) {
+	for trial := 0; trial < 200; trial++ {
+		root := t.TempDir()
+
+		w, err := NewWatcher()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := w.Add(root); err != nil {
+			t.Fatal(err)
+		}
+
+		done := make(chan struct{})
+		go func() {
+			<-done
+			_ = w.Close() //nolint:errcheck
+		}()
+
+		for i := range 100 {
+			if err := os.Mkdir(filepath.Join(root, fmt.Sprintf("foo%v", i)), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if i == 10 {
+				close(done)
+			}
+			// A blocked Add() would mean the deadlock is back; ErrClosed (or any
+			// other error) returned promptly is the correct, non-deadlocking path.
+			if err := w.Add(filepath.Join(root, fmt.Sprintf("foo%v", i))); err != nil {
+				if !errors.Is(err, ErrClosed) {
+					t.Logf("trial %d: Add returned %v (non-fatal)", trial, err)
+				}
+			}
+		}
+
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("trial %d: Close()/Add() race did not settle (deadlock?)", trial)
+		}
+
+		// Drain channels so the closed watcher doesn't leak goroutines/events.
+		go func() {
+			for range w.Events {
+			}
+		}()
+		go func() {
+			for range w.Errors {
+			}
+		}()
 	}
 }

@@ -32,6 +32,7 @@ type readDirChangesW struct {
 	mu      sync.Mutex // Protects access to watches, closed
 	watches watchMap   // Map of watches (key: i-number)
 	closed  bool       // Set to true when Close() is first called
+	closeCh chan struct{} // Closed (once) when Close() runs, so Add/Remove can bail out
 }
 
 var defaultBufferSize = 50
@@ -48,6 +49,7 @@ func newBackend(ev chan Event, errs chan error) (backend, error) {
 		watches: make(watchMap),
 		input:   make(chan *input, 1),
 		done:    make(chan chan<- error, 1),
+		closeCh: make(chan struct{}),
 	}
 	go w.readEvents()
 	return w, nil
@@ -94,6 +96,7 @@ func (w *readDirChangesW) Close() error {
 
 	w.mu.Lock()
 	w.closed = true
+	close(w.closeCh) // Notify any in-flight Add/Remove that we're shutting down.
 	w.mu.Unlock()
 
 	// Send "done" message to the reader goroutine
@@ -131,11 +134,24 @@ func (w *readDirChangesW) AddWith(name string, opts ...addOpt) error {
 		reply:   make(chan error),
 		bufsize: with.bufsize,
 	}
+	// Bail out if Close() is racing with this Add(): otherwise the reader
+	// goroutine may take the "done" branch and exit, orphaning this input
+	// and leaving Add() blocked forever (see issue #704).
+	select {
+	case <-w.closeCh:
+		return ErrClosed
+	default:
+	}
 	w.input <- in
 	if err := w.wakeupReader(); err != nil {
 		return err
 	}
-	return <-in.reply
+	select {
+	case err := <-in.reply:
+		return err
+	case <-w.closeCh:
+		return ErrClosed
+	}
 }
 
 func (w *readDirChangesW) Remove(name string) error {
@@ -156,7 +172,12 @@ func (w *readDirChangesW) Remove(name string) error {
 	if err := w.wakeupReader(); err != nil {
 		return err
 	}
-	return <-in.reply
+	select {
+	case err := <-in.reply:
+		return err
+	case <-w.closeCh:
+		return ErrClosed
+	}
 }
 
 func (w *readDirChangesW) WatchList() []string {
