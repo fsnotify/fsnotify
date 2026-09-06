@@ -441,7 +441,11 @@ func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offs
 		internal.Debug(name, inEvent.Mask, inEvent.Cookie)
 	}
 
-	if inEvent.Mask&unix.IN_IGNORED != 0 || inEvent.Mask&unix.IN_UNMOUNT != 0 {
+	if inEvent.Mask&unix.IN_UNMOUNT != 0 {
+		w.watches.remove(watch)
+		return Event{Name: name, Op: Remove}, true
+	}
+	if inEvent.Mask&unix.IN_IGNORED != 0 {
 		w.watches.remove(watch)
 		return Event{}, true
 	}
