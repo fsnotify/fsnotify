@@ -1204,3 +1204,17 @@ func TestNewWatcher(t *testing.T) {
 		t.Errorf("cap of NewWatcher() is not %d but %d", 42, c)
 	}
 }
+
+func TestWithOpsExported(t *testing.T) {
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+
+	tmp := t.TempDir()
+	err = w.AddWith(tmp, WithOps(Create|Write))
+	if err != nil {
+		t.Fatalf("AddWith with WithOps failed: %s", err)
+	}
+}
