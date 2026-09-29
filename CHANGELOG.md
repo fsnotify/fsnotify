@@ -1,5 +1,13 @@
 # Changelog
 
+Unreleased
+----------
+
+### Changes and fixes
+
+- kqueue: emit Remove when a symlink in a watched directory is deleted ([#636])
+
+
 1.10.1 2026-05-04
 -----------------
 

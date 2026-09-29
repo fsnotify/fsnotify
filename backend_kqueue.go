@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"sync"
 	"time"
@@ -36,11 +35,12 @@ type (
 		byUser map[string]struct{}         // Watches added with Watcher.Add()
 	}
 	watch struct {
-		wd       int
-		name     string
-		linkName string // In case of links; name is the target, and this is the link.
-		isDir    bool
-		dirFlags uint32
+		wd         int
+		name       string
+		linkName   string // In case of links; name is the target, and this is the link.
+		isDir      bool
+		dirFlags   uint32
+		dirEntLink bool // Directory listing entry that was opened by following a symlink.
 	}
 )
 
@@ -102,12 +102,12 @@ func (w *watches) addLink(path string, fd int) {
 	w.seen[path] = struct{}{}
 }
 
-func (w *watches) add(path, linkPath string, fd int, isDir bool) {
+func (w *watches) add(path, linkPath string, fd int, isDir, dirEntLink bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	w.path[path] = fd
-	w.wd[fd] = watch{wd: fd, name: path, linkName: linkPath, isDir: isDir}
+	w.wd[fd] = watch{wd: fd, name: path, linkName: linkPath, isDir: isDir, dirEntLink: dirEntLink}
 
 	parent := filepath.Dir(path)
 	byDir, ok := w.byDir[parent]
@@ -181,6 +181,31 @@ func (w *watches) seenBefore(path string) bool {
 	defer w.mu.RUnlock()
 	_, ok := w.seen[path]
 	return ok
+}
+
+// lookup returns the watch for path if it has a real kqueue descriptor.
+func (w *watches) lookup(path string) (watch, bool) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	fd, ok := w.path[path]
+	if !ok || fd == 0 {
+		return watch{}, false
+	}
+	info, ok := w.wd[fd]
+	return info, ok
+}
+
+func (w *watches) seenChildren(dir string) []string {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	dir = filepath.Clean(dir)
+	out := make([]string, 0)
+	for p := range w.seen {
+		if filepath.Dir(p) == dir {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 var defaultBufferSize = 0
@@ -352,9 +377,11 @@ func (w *kqueue) addWatch(name string, flags uint32, listDir bool) (string, erro
 			return "", nil
 		}
 
+		wasSymlink := fi.Mode()&os.ModeSymlink == os.ModeSymlink
+
 		// Follow symlinks, but only for paths added with Add(), and not paths
 		// we're adding from internalWatch from a listdir.
-		if !listDir && fi.Mode()&os.ModeSymlink == os.ModeSymlink {
+		if !listDir && wasSymlink {
 			link, err := os.Readlink(name)
 			if err != nil {
 				return "", err
@@ -386,6 +413,10 @@ func (w *kqueue) addWatch(name string, flags uint32, listDir bool) (string, erro
 			return "", err
 		}
 		info.isDir = fi.IsDir()
+		// Opening a symlink follows it, so the kevent fd refers to the target.
+		// Remember that so dirChange can still emit Remove when the link itself
+		// is unlinked (see issue #636).
+		info.dirEntLink = listDir && wasSymlink
 	}
 
 	err := w.register([]int{info.wd}, unix.EV_ADD|unix.EV_CLEAR|unix.EV_ENABLE, flags)
@@ -395,7 +426,7 @@ func (w *kqueue) addWatch(name string, flags uint32, listDir bool) (string, erro
 	}
 
 	if !alreadyWatching {
-		w.watches.add(name, info.linkName, info.wd, info.isDir)
+		w.watches.add(name, info.linkName, info.wd, info.isDir, info.dirEntLink)
 	}
 
 	// Watch the directory if it has not been watched before, or if it was
@@ -474,13 +505,24 @@ func (w *kqueue) readEvents() {
 			// don't really see an obvious location where this is triggered –
 			// this doesn't seem intentional, but idk...
 			//
-			// Technically fd 0 is a valid descriptor, so only skip it if
-			// there's no path, and if we're on macOS.
-			if !ok && kevent.Ident == 0 && runtime.GOOS == "darwin" {
+			// Skip events for descriptors we already removed (for example after
+			// dirChange emits Remove for a followed symlink) as well as the
+			// spurious Ident=0 kevents on macOS.
+			if !ok {
 				continue
 			}
 
 			event := w.newEvent(path.name, path.linkName, mask)
+
+			// Directory-entry symlinks are opened by following the target, so
+			// unlinking the name never sets NOTE_DELETE on this fd. If the
+			// directory entry is already gone, treat this as Remove and let
+			// the parent dirChange skip a duplicate.
+			if path.dirEntLink {
+				if _, err := os.Lstat(path.name); errors.Is(err, os.ErrNotExist) {
+					event = Event{Name: path.name, Op: Remove}
+				}
+			}
 
 			if event.Has(Rename) || event.Has(Remove) {
 				w.remove(event.Name, false)
@@ -613,6 +655,7 @@ func (w *kqueue) dirChange(dir string) error {
 		return fmt.Errorf("fsnotify.dirChange %q: %w", dir, err)
 	}
 
+	current := make(map[string]os.FileInfo, len(files))
 	for _, f := range files {
 		fi, err := f.Info()
 		if err != nil {
@@ -622,7 +665,9 @@ func (w *kqueue) dirChange(dir string) error {
 			return fmt.Errorf("fsnotify.dirChange: %w", err)
 		}
 
-		err = w.sendCreateIfNew(filepath.Join(dir, fi.Name()), fi)
+		path := filepath.Join(dir, fi.Name())
+		current[filepath.Clean(path)] = fi
+		err = w.sendCreateIfNew(path, fi)
 		if err != nil {
 			// Don't need to send an error if this file isn't readable.
 			if errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM) || errors.Is(err, os.ErrNotExist) {
@@ -630,6 +675,25 @@ func (w *kqueue) dirChange(dir string) error {
 			}
 			return fmt.Errorf("fsnotify.dirChange: %w", err)
 		}
+	}
+
+	// kqueue reports NOTE_WRITE on the directory when an entry is unlinked, but
+	// not which name disappeared. Regular files have their own vnode watch, so
+	// NOTE_DELETE/NOTE_RENAME still fire. Directory-entry symlinks are opened
+	// by following the target, so unlinking the link never produces NOTE_DELETE
+	// on that fd. Emit Remove for those names.
+	for _, path := range w.watches.seenChildren(dir) {
+		if _, ok := current[path]; ok {
+			continue
+		}
+		info, watched := w.watches.lookup(path)
+		if !watched || !info.dirEntLink {
+			continue
+		}
+		if !w.sendEvent(Event{Name: path, Op: Remove}) {
+			return nil
+		}
+		_ = w.remove2(path, false)
 	}
 	return nil
 }

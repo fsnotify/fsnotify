@@ -12,5 +12,6 @@ Output:
 	rename /link
 	create /link-rename ← /link
 
-	kqueue:  # TODO: this is broken.
+	kqueue:  # Followed symlink fd never sees NOTE_RENAME; report unlink + create.
+		remove /link
 		create /link-rename
