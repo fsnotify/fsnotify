@@ -465,9 +465,6 @@ func TestAdd(t *testing.T) {
 	})
 	t.Run("add same dir twice through symlink", func(t *testing.T) {
 		t.Parallel()
-		if isSolaris() {
-			t.Skip("broken: links are resolved and added twice") // TODO: should fix
-		}
 		if !internal.HasPrivilegesForSymlink() {
 			t.Skip("admin permissions required on Windows")
 		}
@@ -522,9 +519,6 @@ func TestAdd(t *testing.T) {
 	})
 	t.Run("add same file twice through symlink", func(t *testing.T) {
 		t.Parallel()
-		if isSolaris() {
-			t.Skip("broken: links are resolved and added twice") // TODO: should fix
-		}
 		if !internal.HasPrivilegesForSymlink() {
 			t.Skip("admin permissions required on Windows")
 		}
@@ -638,9 +632,6 @@ func TestRemove(t *testing.T) {
 
 	t.Run("remove same dir twice through symlink", func(t *testing.T) {
 		t.Parallel()
-		if isSolaris() {
-			t.Skip("broken: links are resolved and added twice") // TODO: should fix
-		}
 		if !internal.HasPrivilegesForSymlink() {
 			t.Skip("admin permissions required on Windows")
 		}
@@ -692,9 +683,6 @@ func TestRemove(t *testing.T) {
 
 	t.Run("remove same file twice through symlink", func(t *testing.T) {
 		t.Parallel()
-		if isSolaris() {
-			t.Skip("broken: links are resolved and added twice") // TODO: should fix
-		}
 		if !internal.HasPrivilegesForSymlink() {
 			t.Skip("admin permissions required on Windows")
 		}

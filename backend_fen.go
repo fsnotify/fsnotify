@@ -81,6 +81,13 @@ func (w *fen) AddWith(name string, opts ...addOpt) error {
 		return err
 	}
 
+	// Watching a path and a symlink to that path must be a no-op, matching
+	// inotify and kqueue. Otherwise FEN associates both names and emits
+	// duplicate events (see #680).
+	if w.explicitlyWatchedSameFile(stat) {
+		return nil
+	}
+
 	// Associate all files in the directory.
 	if stat.IsDir() {
 		err := w.handleDirectory(name, stat, true, w.associateFile)
@@ -103,6 +110,28 @@ func (w *fen) AddWith(name string, opts ...addOpt) error {
 	w.watches[name] = with.op
 	w.mu.Unlock()
 	return nil
+}
+
+// explicitlyWatchedSameFile reports whether name's resolved target is already
+// an explicitly watched path (dirs or watches). FEN follows symlinks on Add,
+// so without this check "watch dir" + "watch link→dir" registers two watches.
+func (w *fen) explicitlyWatchedSameFile(stat os.FileInfo) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	check := func(paths map[string]Op) bool {
+		for p := range paths {
+			pst, err := os.Stat(p)
+			if err != nil {
+				continue
+			}
+			if os.SameFile(stat, pst) {
+				return true
+			}
+		}
+		return false
+	}
+	return check(w.dirs) || check(w.watches)
 }
 
 func (w *fen) Remove(name string) error {
