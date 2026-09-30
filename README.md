@@ -1,8 +1,15 @@
+**Fork:** Based on fsnotify v1.10.1 with the addition of
+`Event.RenamedFrom()` to expose the original path of Windows rename
+events. No other changes were made.
+Availability depends on the filesystem backend and watched paths.
+
+---
+
 fsnotify is a Go library to provide cross-platform filesystem notifications on
 Windows, Linux, macOS, BSD, and illumos.
 
 Go 1.23 or newer is required; the full documentation is at
-https://pkg.go.dev/github.com/fsnotify/fsnotify
+https://pkg.go.dev/github.com/scresto09/fsnotify
 
 ---
 
@@ -36,7 +43,7 @@ package main
 import (
     "log"
 
-    "github.com/fsnotify/fsnotify"
+    "github.com/scresto09/fsnotify"
 )
 
 func main() {
