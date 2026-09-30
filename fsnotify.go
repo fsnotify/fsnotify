@@ -130,6 +130,14 @@ type Event struct {
 	renamedFrom string
 }
 
+// RenamedFrom returns the original path associated with a rename event.
+// It returns an empty string when the original path is not available.
+// Availability depends on the underlying filesystem notification backend
+// and the paths being watched.
+func (e Event) RenamedFrom() string {
+	return e.renamedFrom
+}
+
 // Op describes a set of file operations.
 type Op uint32
 

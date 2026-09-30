@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fsnotify/fsnotify/internal"
+	"github.com/scresto09/fsnotify/internal"
 )
 
 func init() {
@@ -1078,7 +1078,7 @@ func BenchmarkAddRemove(b *testing.B) {
 }
 
 func TestRace(t *testing.T) {
-	// Would panic on inotify: https://github.com/fsnotify/fsnotify/issues/616
+	// Would panic on inotify: https://github.com/scresto09/fsnotify/issues/616
 	t.Run("add and remove watches", func(t *testing.T) {
 		t.Parallel()
 
@@ -1107,18 +1107,18 @@ func TestRace(t *testing.T) {
 		t.Parallel()
 
 		// TODO: seems to hang forever on Windows; possibly related to:
-		// https://github.com/fsnotify/fsnotify/issues/656
+		// https://github.com/scresto09/fsnotify/issues/656
 		//
 		// Although it seems to be on different points:
 		//
 		//   goroutine 8 [chan receive]:
-		//   github.com/fsnotify/fsnotify.(*readDirChangesW).AddWith(0xc00002ea40, {0xc0000940f0, 0x48}, {0x0, 0x0, 0xaf2e7f?})
+		//   github.com/scresto09/fsnotify.(*readDirChangesW).AddWith(0xc00002ea40, {0xc0000940f0, 0x48}, {0x0, 0x0, 0xaf2e7f?})
 		//           C:/Users/martin/fsnotify/backend_windows.go:141 +0x38d
-		//   github.com/fsnotify/fsnotify.(*readDirChangesW).Add(0xc000092000?, {0xc0000940f0?, 0x1?})
+		//   github.com/scresto09/fsnotify.(*readDirChangesW).Add(0xc000092000?, {0xc0000940f0?, 0x1?})
 		//           C:/Users/martin/fsnotify/backend_windows.go:111 +0x1f
-		//   github.com/fsnotify/fsnotify.(*Watcher).Add(...)
+		//   github.com/scresto09/fsnotify.(*Watcher).Add(...)
 		//           C:/Users/martin/fsnotify/fsnotify.go:313
-		//   github.com/fsnotify/fsnotify.TestRace.func2(0xc000003a40)
+		//   github.com/scresto09/fsnotify.TestRace.func2(0xc000003a40)
 		//           C:/Users/martin/fsnotify/fsnotify_test.go:865 +0x1ee
 		//   testing.tRunner(0xc000003a40, 0xb71930)
 		//           C:/Program Files/Go/src/testing/testing.go:1792 +0xcb
@@ -1126,19 +1126,19 @@ func TestRace(t *testing.T) {
 		//           C:/Program Files/Go/src/testing/testing.go:1851 +0x3f6
 		//
 		//   goroutine 9 [select, locked to thread]:
-		//   github.com/fsnotify/fsnotify.(*readDirChangesW).sendError(...)
+		//   github.com/scresto09/fsnotify.(*readDirChangesW).sendError(...)
 		//           C:/Users/martin/fsnotify/backend_windows.go:85
-		//   github.com/fsnotify/fsnotify.(*readDirChangesW).startRead(0xc00002ea40, 0xc0001a4100)
+		//   github.com/scresto09/fsnotify.(*readDirChangesW).startRead(0xc00002ea40, 0xc0001a4100)
 		//           C:/Users/martin/fsnotify/backend_windows.go:453 +0x319
-		//   github.com/fsnotify/fsnotify.(*readDirChangesW).readEvents(0xc00002ea40)
+		//   github.com/scresto09/fsnotify.(*readDirChangesW).readEvents(0xc00002ea40)
 		//           C:/Users/martin/fsnotify/backend_windows.go:548 +0x290
-		//   created by github.com/fsnotify/fsnotify.newBufferedBackend in goroutine 8
+		//   created by github.com/scresto09/fsnotify.newBufferedBackend in goroutine 8
 		//           C:/Users/martin/fsnotify/backend_windows.go:55 +0x198
 		//
 		//   goroutine 18 [chan send]:
-		//   github.com/fsnotify/fsnotify.(*eventCollector).collect.func1()
+		//   github.com/scresto09/fsnotify.(*eventCollector).collect.func1()
 		//           C:/Users/martin/fsnotify/helpers_test.go:436 +0x2cd
-		//   created by github.com/fsnotify/fsnotify.(*eventCollector).collect in goroutine 8
+		//   created by github.com/scresto09/fsnotify.(*eventCollector).collect in goroutine 8
 		//          C:/Users/martin/fsnotify/helpers_test.go:427 +0x67
 		//
 		// The Windows backend hasn't really changed in a long time, so old
