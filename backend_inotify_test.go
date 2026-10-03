@@ -63,6 +63,51 @@ func TestRemoveState(t *testing.T) {
 	check(0)
 }
 
+// The inotify watch mask is a property of the watch descriptor (i.e. the
+// inode), not of the path string we hand to inotify_add_watch(). Adding a
+// second watch for a path that resolves to an already-watched inode (a symlink
+// or hardlink to it) must therefore *add* to the mask, not replace it, or the
+// first Add()'s events are silently lost.
+func TestAddWithMaskIsPerInode(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		link func(t *testing.T, target, link string)
+	}{
+		{name: "symlink", link: func(t *testing.T, target, link string) { symlink(t, target, link) }},
+		{name: "hardlink", link: func(t *testing.T, target, link string) {
+			if err := os.Link(target, link); err != nil {
+				t.Fatalf("link: %s", err)
+			}
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tmp := t.TempDir()
+			file := join(tmp, "file")
+			link := join(tmp, "link")
+			touch(t, file)
+			tt.link(t, file, link)
+
+			w := newCollector(t)
+			if err := w.w.AddWith(file, withOps(Chmod)); err != nil {
+				t.Fatal(err)
+			}
+			// Same inode, different path: only ask for Write.
+			if err := w.w.AddWith(link, withOps(Write)); err != nil {
+				t.Fatal(err)
+			}
+			w.collect(t)
+
+			chmod(t, 0o700, file)
+
+			cmpEvents(t, tmp, w.stop(t), newEvents(t, `
+				chmod /file
+			`))
+		})
+	}
+}
+
 // Ensure that the correct error is returned on overflows.
 func TestInotifyOverflow(t *testing.T) {
 	t.Parallel()

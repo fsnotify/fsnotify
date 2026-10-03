@@ -267,10 +267,16 @@ func (w *inotify) AddWith(path string, opts ...addOpt) error {
 func (w *inotify) register(path string, flags uint32, wf watchFlag) error {
 	return w.watches.updatePath(path, func(existing *watch) (*watch, error) {
 		if existing != nil {
-			flags |= existing.flags | unix.IN_MASK_ADD
+			flags |= existing.flags
 		}
 
-		wd, err := unix.InotifyAddWatch(w.fd, path, flags)
+		// The inotify watch mask is a property of the watch descriptor (i.e.
+		// the inode), not of the path we pass in: inotify_add_watch() *replaces*
+		// the mask unless IN_MASK_ADD is set. Always merging means a second
+		// Add() for a path that resolves to an already-watched inode (a symlink
+		// or hardlink to it) can no longer silently drop the events the first
+		// Add() asked for. For a new watch descriptor this is a no-op.
+		wd, err := unix.InotifyAddWatch(w.fd, path, flags|unix.IN_MASK_ADD)
 		if wd == -1 {
 			return nil, err
 		}
