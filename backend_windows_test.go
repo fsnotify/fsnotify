@@ -205,4 +205,14 @@ func closeAndCheck(t *testing.T, w *Watcher, errs <-chan []string) {
 	if bad := <-errs; len(bad) > 0 {
 		t.Fatalf("a torn-down watch was acted on (%d errors), first: %s", len(bad), bad[0])
 	}
+	// Close returns after the reader has exited, so its state is safe to read.
+	if n := len(w.b.(*readDirChangesW).ops); n != 0 {
+		t.Fatalf("%d reads still outstanding after Close", n)
+	}
+	abandonedOpsMu.Lock()
+	abandoned := len(abandonedOps)
+	abandonedOpsMu.Unlock()
+	if abandoned != 0 {
+		t.Fatalf("Close gave up waiting for %d cancelled reads", abandoned)
+	}
 }
