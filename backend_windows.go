@@ -32,7 +32,34 @@ type readDirChangesW struct {
 	mu      sync.Mutex // Protects access to watches, closed
 	watches watchMap   // Map of watches (key: i-number)
 	closed  bool       // Set to true when Close() is first called
+
+	// Every ReadDirectoryChangesW call that was issued and whose completion
+	// packet has not been dequeued yet. The kernel holds the raw address of
+	// each op's OVERLAPPED and buffer until that packet is posted, and a raw
+	// address is not a GC root, so this set is what keeps them alive. Only
+	// the I/O thread touches it.
+	ops map[*readOp]struct{}
 }
+
+// readOp is one outstanding ReadDirectoryChangesW call. ov must stay the first
+// field: the completion packet hands back &op.ov, and the reader recovers the
+// op from it.
+type readOp struct {
+	ov    windows.Overlapped
+	watch *watch
+	buf   []byte
+}
+
+// How long Close waits for the completion packets of cancelled reads before
+// it gives up and pins them for the life of the process.
+const closeDrainTimeout = 5 * time.Second
+
+// Ops whose completions never arrived before Close gave up. Kept reachable
+// forever because the kernel may still write into them.
+var (
+	abandonedOpsMu sync.Mutex
+	abandonedOps   []*readOp
+)
 
 var defaultBufferSize = 50
 
@@ -46,6 +73,7 @@ func newBackend(ev chan Event, errs chan error) (backend, error) {
 		Errors:  errs,
 		port:    port,
 		watches: make(watchMap),
+		ops:     make(map[*readOp]struct{}),
 		input:   make(chan *input, 1),
 		done:    make(chan chan<- error, 1),
 	}
@@ -243,14 +271,18 @@ type inode struct {
 }
 
 type watch struct {
-	ov      windows.Overlapped
 	ino     *inode            // i-number
 	recurse bool              // Recursive watch?
 	path    string            // Directory path
 	mask    uint64            // Directory itself is being watched with these notify flags
 	names   map[string]uint64 // Map of names being watched and their notify flags
 	rename  string            // Remembers the old name while renaming a file
-	buf     []byte            // buffer, allocated later
+
+	// The fields below are owned by the I/O thread.
+	bufsize int     // Size of each read buffer
+	spare   []byte  // A read buffer no outstanding op owns, reused by the next read
+	cur     *readOp // The read whose results are wanted; nil when none is outstanding
+	retired bool    // Handle closed and removed from watches; never read again
 }
 
 type (
@@ -349,7 +381,8 @@ func (w *readDirChangesW) addWatch(pathname string, flags uint64, bufsize int) e
 			path:    dir,
 			names:   make(map[string]uint64),
 			recurse: recurse,
-			buf:     make([]byte, bufsize),
+			bufsize: bufsize,
+			spare:   make([]byte, bufsize),
 		}
 		w.mu.Lock()
 		w.watches.set(ino, watchEntry)
@@ -451,33 +484,63 @@ func (w *readDirChangesW) deleteWatch(watch *watch) {
 	}
 }
 
+// (Re)arms the read for watch, or tears the watch down when nothing on it is
+// watched any more.
+//
+// A read that is still outstanding is cancelled first. CancelIo only requests
+// the cancellation: the cancelled op's completion packet arrives later, and
+// until then the kernel may still write into its OVERLAPPED and buffer. So the
+// cancelled op stays in w.ops until the reader dequeues that packet, and the new
+// read gets its own op and its own buffer rather than reusing them.
+//
 // Must run within the I/O thread.
 func (w *readDirChangesW) startRead(watch *watch) error {
-	err := windows.CancelIo(watch.ino.handle)
-	if err != nil {
-		w.sendError(os.NewSyscallError("CancelIo", err))
-		w.deleteWatch(watch)
+	if watch.retired {
+		// Torn down already: the handle is closed and may have been reissued
+		// to someone else, so it must not be used again.
+		return nil
+	}
+	if watch.cur != nil {
+		watch.cur = nil
+		err := windows.CancelIo(watch.ino.handle)
+		if err != nil {
+			w.sendError(os.NewSyscallError("CancelIo", err))
+			w.deleteWatch(watch)
+		}
 	}
 	mask := w.toWindowsFlags(watch.mask)
 	for _, m := range watch.names {
 		mask |= w.toWindowsFlags(m)
 	}
 	if mask == 0 {
+		watch.retired = true
 		err := windows.CloseHandle(watch.ino.handle)
 		if err != nil {
 			w.sendError(os.NewSyscallError("CloseHandle", err))
 		}
 		w.mu.Lock()
-		delete(w.watches[watch.ino.volume], watch.ino.index)
+		if w.watches.get(watch.ino) == watch {
+			delete(w.watches[watch.ino.volume], watch.ino.index)
+		}
 		w.mu.Unlock()
 		return nil
 	}
 
+	op := &readOp{watch: watch, buf: watch.spare}
+	watch.spare = nil
+	if op.buf == nil {
+		op.buf = make([]byte, watch.bufsize)
+	}
 	// We need to pass the array, rather than the slice.
 	rdErr := windows.ReadDirectoryChanges(watch.ino.handle,
-		unsafe.SliceData(watch.buf), uint32(len(watch.buf)),
-		watch.recurse, mask, nil, &watch.ov, 0)
-	if rdErr != nil {
+		unsafe.SliceData(op.buf), uint32(len(op.buf)),
+		watch.recurse, mask, nil, &op.ov, 0)
+	if rdErr == nil {
+		w.ops[op] = struct{}{}
+		watch.cur = op
+	} else {
+		watch.spare = op.buf // Never issued, so the kernel doesn't hold it.
+
 		err := os.NewSyscallError("ReadDirectoryChanges", rdErr)
 		if rdErr == windows.ERROR_ACCESS_DENIED && watch.mask&provisional == 0 {
 			// Watched directory was probably removed
@@ -503,11 +566,10 @@ func (w *readDirChangesW) readEvents() {
 	runtime.LockOSThread()
 
 	for {
-		// This error is handled after the watch == nil check below.
+		// This error is handled after the ov == nil check below.
 		qErr := windows.GetQueuedCompletionStatus(w.port, &n, &key, &ov, windows.INFINITE)
 
-		watch := (*watch)(unsafe.Pointer(ov))
-		if watch == nil {
+		if ov == nil {
 			select {
 			case ch := <-w.done:
 				w.mu.Lock()
@@ -522,6 +584,9 @@ func (w *readDirChangesW) readEvents() {
 						w.startRead(watch)
 					}
 				}
+				// Every watch is torn down; wait for the cancelled reads to
+				// come back before the port goes away.
+				w.drainOps()
 
 				err := windows.CloseHandle(w.port)
 				if err != nil {
@@ -543,19 +608,43 @@ func (w *readDirChangesW) readEvents() {
 			continue
 		}
 
+		// Every packet with an OVERLAPPED comes from an op in w.ops, which is
+		// what has kept it alive until now. Look it up by identity before
+		// dereferencing anything.
+		op := (*readOp)(unsafe.Pointer(ov))
+		if _, ok := w.ops[op]; !ok {
+			continue
+		}
+		delete(w.ops, op)
+
+		watch := op.watch
+		if watch.retired {
+			// The watch was torn down after this read was issued. Its handle
+			// is closed, so nothing here may be acted on.
+			continue
+		}
+		// A read that is no longer the watch's current one was superseded by
+		// a re-arm in Add or Remove. Its buffer is still valid and is parsed
+		// below, but the watch already has a newer read outstanding, so this
+		// one must not re-arm it.
+		current := watch.cur == op
+		if current {
+			watch.cur = nil
+		}
+
 		switch qErr {
 		case nil:
 			// No error
 		case windows.ERROR_MORE_DATA:
-			if watch == nil {
-				w.sendError(errors.New("ERROR_MORE_DATA has unexpectedly null lpOverlapped buffer"))
-			} else {
-				// The i/o succeeded but the buffer is full.
-				// In theory we should be building up a full packet.
-				// In practice we can get away with just carrying on.
-				n = uint32(unsafe.Sizeof(watch.buf))
-			}
+			// The i/o succeeded but the buffer is full.
+			// In theory we should be building up a full packet.
+			// In practice we can get away with just carrying on.
+			n = uint32(unsafe.Sizeof(op.buf))
 		case windows.ERROR_ACCESS_DENIED:
+			w.recycle(watch, op)
+			if !current {
+				continue // The current read reports this too.
+			}
 			// Watched directory was probably removed
 			w.sendEvent(watch.path, "", watch.mask&sysFSDELETESELF)
 			w.deleteWatch(watch)
@@ -563,9 +652,13 @@ func (w *readDirChangesW) readEvents() {
 			continue
 		case windows.ERROR_OPERATION_ABORTED:
 			// CancelIo was called on this handle
+			w.recycle(watch, op)
 			continue
 		default:
-			w.sendError(os.NewSyscallError("GetQueuedCompletionPort", qErr))
+			w.recycle(watch, op)
+			if current {
+				w.sendError(os.NewSyscallError("GetQueuedCompletionPort", qErr))
+			}
 			continue
 		}
 
@@ -577,7 +670,7 @@ func (w *readDirChangesW) readEvents() {
 			}
 
 			// Point "raw" to the event in the buffer
-			raw := (*windows.FileNotifyInformation)(unsafe.Pointer(&watch.buf[offset]))
+			raw := (*windows.FileNotifyInformation)(unsafe.Pointer(&op.buf[offset]))
 
 			// Create a buf that is the size of the path name
 			size := int(raw.FileNameLength / 2)
@@ -653,9 +746,62 @@ func (w *readDirChangesW) readEvents() {
 			}
 		}
 
+		w.recycle(watch, op)
+		if !current || watch.retired {
+			// Superseded, or the events above tore the watch down.
+			continue
+		}
 		if err := w.startRead(watch); err != nil {
 			w.sendError(err)
 		}
+	}
+}
+
+// recycle keeps the buffer of a completed op for the watch's next read. The
+// kernel is done with it once the op's completion packet has been dequeued.
+//
+// Must run within the I/O thread.
+func (w *readDirChangesW) recycle(watch *watch, op *readOp) {
+	if !watch.retired && watch.spare == nil {
+		watch.spare = op.buf
+	}
+}
+
+// drainOps waits for the completion packets of every outstanding read, so no
+// op is released while the kernel may still write into it. Close calls it
+// after every watch handle has been closed, which cancels their reads, so the
+// packets arrive promptly. Ops still outstanding after closeDrainTimeout are
+// pinned for the life of the process instead of being released.
+//
+// Must run within the I/O thread.
+func (w *readDirChangesW) drainOps() {
+	deadline := time.Now().Add(closeDrainTimeout)
+	for len(w.ops) > 0 {
+		wait := time.Until(deadline)
+		if wait <= 0 {
+			break
+		}
+		var (
+			n   uint32
+			key uintptr
+			ov  *windows.Overlapped
+		)
+		err := windows.GetQueuedCompletionStatus(w.port, &n, &key, &ov, uint32(wait/time.Millisecond)+1)
+		if ov == nil {
+			if err == windows.Errno(windows.WAIT_TIMEOUT) {
+				break
+			}
+			continue // A wakeup posted by Add, Remove or Close.
+		}
+		delete(w.ops, (*readOp)(unsafe.Pointer(ov)))
+	}
+	if len(w.ops) > 0 {
+		abandonedOpsMu.Lock()
+		for op := range w.ops {
+			abandonedOps = append(abandonedOps, op)
+		}
+		abandonedOpsMu.Unlock()
+		w.ops = make(map[*readOp]struct{})
 	}
 }
 
