@@ -8,9 +8,94 @@ package fsnotify
 
 import (
 	"fmt"
+	"os"
 	"strings"
+	"sync"
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
+
+func TestConcurrentAdd(t *testing.T) {
+	dir := t.TempDir()
+	fi, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := newWatcher(t)
+	defer w.Close()
+	kq := w.b.(*kqueue)
+
+	// Directory entries are registered by the reader at the same time that a
+	// user may Add them in response to a Create event.
+	const count = 64
+	start := make(chan struct{})
+	errs := make(chan error, count)
+	var done sync.WaitGroup
+	for i := range count {
+		done.Add(1)
+		go func() {
+			defer done.Done()
+			<-start
+			if i%2 == 0 {
+				errs <- w.Add(dir)
+			} else {
+				_, err := kq.internalWatch(dir, fi)
+				errs <- err
+			}
+		}()
+	}
+	close(start)
+	done.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	kq.watches.mu.RLock()
+	if len(kq.watches.wd) != 1 {
+		t.Errorf("registered %d descriptors for one directory, want 1", len(kq.watches.wd))
+	}
+	kq.watches.mu.RUnlock()
+	info, ok := kq.watches.byPath(dir)
+	if !ok || info.dirFlags != noteAllEvents {
+		t.Errorf("directory flags: %#x, want %#x", info.dirFlags, noteAllEvents)
+	}
+
+	if err := w.Remove(dir); err != nil {
+		t.Fatal(err)
+	}
+	kq.watches.mu.RLock()
+	defer kq.watches.mu.RUnlock()
+	if len(kq.watches.wd) != 0 {
+		t.Errorf("Remove left %d descriptors registered", len(kq.watches.wd))
+	}
+}
+
+func TestInternalWatchPreservesDirectoryEvents(t *testing.T) {
+	dir := t.TempDir()
+	w := newCollector(t, dir)
+	w.collect(t)
+	kq := w.w.b.(*kqueue)
+
+	// Emulate an internal registration with flags read before the user Add.
+	// EV_ADD replaces the kernel flags, so these must be merged with the
+	// current flags before registering the existing descriptor again.
+	if _, err := kq.addWatch(dir, unix.NOTE_DELETE|unix.NOTE_RENAME, true); err != nil {
+		t.Fatal(err)
+	}
+	info, _ := kq.watches.byPath(dir)
+	if info.dirFlags != noteAllEvents {
+		t.Errorf("internal registration replaced directory flags: %#x, want %#x", info.dirFlags, noteAllEvents)
+	}
+
+	touch(t, dir, "file")
+	cmpEvents(t, dir, w.stop(t), newEvents(t, `
+		create  /file
+	`))
+}
 
 func TestRemoveState(t *testing.T) {
 	var (

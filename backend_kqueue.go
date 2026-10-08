@@ -24,6 +24,7 @@ type kqueue struct {
 	kq        int    // File descriptor (as returned by the kqueue() syscall).
 	closepipe [2]int // Pipe used for closing kq.
 	watches   *watches
+	mu        sync.Mutex // Serialize kernel registrations and watch bookkeeping.
 }
 
 type (
@@ -242,11 +243,15 @@ func newKqueue() (kq int, closepipe [2]int, err error) {
 }
 
 func (w *kqueue) Close() error {
+	w.mu.Lock()
 	if w.shared.close() {
+		w.mu.Unlock()
 		return nil
 	}
+	paths := w.watches.listPaths(false)
+	w.mu.Unlock()
 
-	for _, name := range w.watches.listPaths(false) {
+	for _, name := range paths {
 		w.remove2(name, true)
 	}
 
@@ -292,31 +297,41 @@ func (w *kqueue) remove(name string, unwatchFiles bool) error {
 
 // remove() but without checking isClosed
 func (w *kqueue) remove2(name string, unwatchFiles bool) error {
+	w.mu.Lock()
+	paths, err := w.removeWatch(name, unwatchFiles)
+	w.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	for _, path := range paths {
+		// These are internal watches; errors would only confuse the user with
+		// paths they did not explicitly watch themselves.
+		w.remove2(path, false)
+	}
+	return nil
+}
+
+// removeWatch removes a watch while mu is held, returning internal watches to remove.
+func (w *kqueue) removeWatch(name string, unwatchFiles bool) ([]string, error) {
 	name = filepath.Clean(name)
 	info, ok := w.watches.byPath(name)
 	if !ok {
-		return fmt.Errorf("%w: %s", ErrNonExistentWatch, name)
+		return nil, fmt.Errorf("%w: %s", ErrNonExistentWatch, name)
 	}
 
 	err := w.register([]int{info.wd}, unix.EV_DELETE, 0)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	unix.Close(info.wd)
 
 	isDir := w.watches.remove(info.wd, name)
 
-	// Find all watched paths that are in this directory that are not external.
 	if unwatchFiles && isDir {
-		for _, name := range w.watches.watchesInDir(name) {
-			// Since these are internal, not much sense in propagating error to
-			// the user, as that will just confuse them with an error about a
-			// path they did not explicitly watch themselves.
-			w.remove2(name, false)
-		}
+		return w.watches.watchesInDir(name), nil
 	}
-	return nil
+	return nil, nil
 }
 
 func (w *kqueue) WatchList() []string {
@@ -334,8 +349,26 @@ const noteAllEvents = unix.NOTE_DELETE | unix.NOTE_WRITE | unix.NOTE_ATTRIB | un
 //
 // Returns the real path to the file which was added, with symlinks resolved.
 func (w *kqueue) addWatch(name string, flags uint32, listDir bool) (string, error) {
+	w.mu.Lock()
+	name, watchDir, err := w.addWatchLocked(name, flags, listDir)
+	w.mu.Unlock()
+	if err != nil {
+		return "", err
+	}
+
+	// Scanning may call addWatch again for entries inside the directory.
+	if watchDir != "" {
+		if err := w.watchDirectoryFiles(watchDir); err != nil {
+			return "", err
+		}
+	}
+	return name, nil
+}
+
+// addWatchLocked registers a watch while mu is held, returning a directory to scan.
+func (w *kqueue) addWatchLocked(name string, flags uint32, listDir bool) (string, string, error) {
 	if w.isClosed() {
-		return "", ErrClosed
+		return "", "", ErrClosed
 	}
 
 	name = filepath.Clean(name)
@@ -344,12 +377,12 @@ func (w *kqueue) addWatch(name string, flags uint32, listDir bool) (string, erro
 	if !alreadyWatching {
 		fi, err := os.Lstat(name)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 
 		// Don't watch sockets or named pipes.
 		if (fi.Mode()&os.ModeSocket == os.ModeSocket) || (fi.Mode()&os.ModeNamedPipe == os.ModeNamedPipe) {
-			return "", nil
+			return "", "", nil
 		}
 
 		// Follow symlinks, but only for paths added with Add(), and not paths
@@ -357,7 +390,7 @@ func (w *kqueue) addWatch(name string, flags uint32, listDir bool) (string, erro
 		if !listDir && fi.Mode()&os.ModeSymlink == os.ModeSymlink {
 			link, err := os.Readlink(name)
 			if err != nil {
-				return "", err
+				return "", "", err
 			}
 			if !filepath.IsAbs(link) {
 				link = filepath.Join(filepath.Dir(name), link)
@@ -368,14 +401,14 @@ func (w *kqueue) addWatch(name string, flags uint32, listDir bool) (string, erro
 				// Add to watches so we don't get spurious Create events later
 				// on when we diff the directories.
 				w.watches.addLink(name, 0)
-				return link, nil
+				return link, "", nil
 			}
 
 			info.linkName = name
 			name = link
 			fi, err = os.Lstat(name)
 			if err != nil {
-				return "", err
+				return "", "", err
 			}
 		}
 
@@ -383,15 +416,19 @@ func (w *kqueue) addWatch(name string, flags uint32, listDir bool) (string, erro
 			return unix.Open(name, openMode, 0)
 		})
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 		info.isDir = fi.IsDir()
 	}
 
+	if info.isDir {
+		// An internal registration must not drop flags set by a user Add.
+		flags |= info.dirFlags
+	}
 	err := w.register([]int{info.wd}, unix.EV_ADD|unix.EV_CLEAR|unix.EV_ENABLE, flags)
 	if err != nil {
 		unix.Close(info.wd)
-		return "", err
+		return "", "", err
 	}
 
 	if !alreadyWatching {
@@ -404,7 +441,7 @@ func (w *kqueue) addWatch(name string, flags uint32, listDir bool) (string, erro
 		watchDir := (flags&unix.NOTE_WRITE) == unix.NOTE_WRITE &&
 			(!alreadyWatching || (info.dirFlags&unix.NOTE_WRITE) != unix.NOTE_WRITE)
 		if !w.watches.updateDirFlags(name, flags) {
-			return "", nil
+			return "", "", nil
 		}
 
 		if watchDir {
@@ -412,12 +449,10 @@ func (w *kqueue) addWatch(name string, flags uint32, listDir bool) (string, erro
 			if info.linkName != "" {
 				d = info.linkName
 			}
-			if err := w.watchDirectoryFiles(d); err != nil {
-				return "", err
-			}
+			return name, d, nil
 		}
 	}
-	return name, nil
+	return name, "", nil
 }
 
 // readEvents reads from kqueue and converts the received kevents into
@@ -654,10 +689,9 @@ func (w *kqueue) sendCreateIfNew(path string, fi os.FileInfo) error {
 
 func (w *kqueue) internalWatch(name string, fi os.FileInfo) (string, error) {
 	if fi.IsDir() {
-		// mimic Linux providing delete events for subdirectories, but preserve
-		// the flags used if currently watching subdirectory
-		info, _ := w.watches.byPath(name)
-		return w.addWatch(name, info.dirFlags|unix.NOTE_DELETE|unix.NOTE_RENAME, true)
+		// Mimic Linux providing delete events for subdirectories. addWatch
+		// preserves the flags of an existing user watch while holding mu.
+		return w.addWatch(name, unix.NOTE_DELETE|unix.NOTE_RENAME, true)
 	}
 
 	// Watch file to mimic Linux inotify.
