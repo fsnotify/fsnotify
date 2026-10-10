@@ -419,6 +419,9 @@ func TestAdd(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("chmod doesn't work on Windows") // TODO: see if we can make a file unreadable
 		}
+		if os.Geteuid() == 0 {
+			t.Skip("cannot test permissions as root")
+		}
 
 		tmp := t.TempDir()
 		dir := join(tmp, "dir-unreadable")
@@ -1203,4 +1206,150 @@ func TestNewWatcher(t *testing.T) {
 	if c := cap(w.Events); c != 42 {
 		t.Errorf("cap of NewWatcher() is not %d but %d", 42, c)
 	}
+}
+
+func TestWithOps(t *testing.T) {
+	t.Run("getOptions", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			opts     []AddOpt
+			expected Op
+		}{
+			{
+				name:     "default",
+				opts:     nil,
+				expected: Create | Write | Remove | Rename | Chmod,
+			},
+			{
+				name:     "empty ops",
+				opts:     []AddOpt{WithOps()},
+				expected: 0,
+			},
+			{
+				name:     "single op",
+				opts:     []AddOpt{WithOps(Write)},
+				expected: Write,
+			},
+			{
+				name:     "multiple ops varargs",
+				opts:     []AddOpt{WithOps(Create, Write, Remove)},
+				expected: Create | Write | Remove,
+			},
+			{
+				name:     "multiple ops bitmask",
+				opts:     []AddOpt{WithOps(Create | Write | Remove)},
+				expected: Create | Write | Remove,
+			},
+			{
+				name:     "multiple options last wins",
+				opts:     []AddOpt{WithOps(Create, Write), WithOps(Remove)},
+				expected: Remove,
+			},
+			{
+				name:     "with nil option",
+				opts:     []AddOpt{WithOps(Write), nil},
+				expected: Write,
+			},
+			{
+				name:     "backward compatible withOps",
+				opts:     []AddOpt{withOps(Chmod)},
+				expected: Chmod,
+			},
+			{
+				name:     "backward compatible withOps multiple",
+				opts:     []AddOpt{withOps(Create, Rename)},
+				expected: Create | Rename,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				opts := getOptions(tt.opts...)
+				if opts.op != tt.expected {
+					t.Errorf("got %v (0x%x), want %v (0x%x)", opts.op, opts.op, tt.expected, tt.expected)
+				}
+			})
+		}
+	})
+
+	t.Run("watcher addWith", func(t *testing.T) {
+		t.Parallel()
+		tmp := t.TempDir()
+		w, err := NewWatcher()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer w.Close()
+
+		file := join(tmp, "file")
+		touch(t, file)
+
+		if err := w.AddWith(file, WithOps(Write)); err != nil {
+			t.Fatalf("AddWith single op: %v", err)
+		}
+
+		dir := join(tmp, "dir")
+		mkdir(t, dir)
+		if err := w.AddWith(dir, WithOps(Create, Remove)); err != nil {
+			t.Fatalf("AddWith multiple ops: %v", err)
+		}
+
+		dir2 := join(tmp, "dir2")
+		mkdir(t, dir2)
+		if err := w.AddWith(dir2, withOps(Create)); err != nil {
+			t.Fatalf("AddWith unexported withOps: %v", err)
+		}
+
+		wl := w.WatchList()
+		if !slices.Contains(wl, file) {
+			t.Errorf("watchlist does not contain %s", file)
+		}
+		if !slices.Contains(wl, dir) {
+			t.Errorf("watchlist does not contain %s", dir)
+		}
+		if !slices.Contains(wl, dir2) {
+			t.Errorf("watchlist does not contain %s", dir2)
+		}
+	})
+
+	t.Run("filter events", func(t *testing.T) {
+		if runtime.GOOS != "linux" {
+			t.Skip("operation filtering is only supported on Linux")
+		}
+		t.Parallel()
+
+		tmp := t.TempDir()
+		w, err := NewWatcher()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer w.Close()
+
+		if err := w.AddWith(tmp, WithOps(Write)); err != nil {
+			t.Fatalf("AddWith: %v", err)
+		}
+
+		file := join(tmp, "testfile")
+		touch(t, file)
+
+		fp, err := os.OpenFile(file, os.O_WRONLY|os.O_APPEND, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := fp.WriteString("hello"); err != nil {
+			t.Fatal(err)
+		}
+		fp.Close()
+
+		select {
+		case ev := <-w.Events:
+			if !ev.Has(Write) {
+				t.Errorf("expected Write event, got %v", ev)
+			}
+		case err := <-w.Errors:
+			t.Fatalf("unexpected error: %v", err)
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for Write event")
+		}
+	})
 }

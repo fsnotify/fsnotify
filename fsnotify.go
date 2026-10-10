@@ -292,7 +292,9 @@ func (w *Watcher) Add(path string) error { return w.b.Add(path) }
 //
 //   - [WithBufferSize] sets the buffer size for the Windows backend; no-op on
 //     other platforms. The default is 64K (65536 bytes).
-func (w *Watcher) AddWith(path string, opts ...addOpt) error { return w.b.AddWith(path, opts...) }
+//   - [WithOps] sets which operations to listen for. The default is [Create],
+//     [Write], [Remove], [Rename], and [Chmod].
+func (w *Watcher) AddWith(path string, opts ...AddOpt) error { return w.b.AddWith(path, opts...) }
 
 // Remove stops monitoring the path for changes.
 //
@@ -378,7 +380,9 @@ type (
 		Close() error
 		xSupports(Op) bool
 	}
-	addOpt   func(opt *withOpts)
+	// AddOpt is an option for [Watcher.AddWith].
+	AddOpt   func(opt *withOpts)
+	addOpt   = AddOpt
 	withOpts struct {
 		bufsize    int
 		op         Op
@@ -398,7 +402,7 @@ var defaultOpts = withOpts{
 	op:      Create | Write | Remove | Rename | Chmod,
 }
 
-func getOptions(opts ...addOpt) withOpts {
+func getOptions(opts ...AddOpt) withOpts {
 	with := defaultOpts
 	for _, o := range opts {
 		if o != nil {
@@ -418,7 +422,7 @@ func getOptions(opts ...addOpt) withOpts {
 // you're hitting "queue or buffer overflow" errors ([ErrEventOverflow]).
 //
 // [ReadDirectoryChangesW]: https://learn.microsoft.com/en-gb/windows/win32/api/winbase/nf-winbase-readdirectorychangesw
-func WithBufferSize(bytes int) addOpt {
+func WithBufferSize(bytes int) AddOpt {
 	return func(opt *withOpts) { opt.bufsize = bytes }
 }
 
@@ -436,12 +440,23 @@ func WithBufferSize(bytes int) addOpt {
 //
 // AddWith returns an error when using an unportable operation that's not
 // supported. Use [Watcher.Support] to check for support.
-func withOps(op Op) addOpt {
-	return func(opt *withOpts) { opt.op = op }
+func WithOps(ops ...Op) AddOpt {
+	return func(opt *withOpts) {
+		var op Op
+		for _, o := range ops {
+			op |= o
+		}
+		opt.op = op
+	}
+}
+
+// withOps is an unexported alias for WithOps for backward compatibility.
+func withOps(ops ...Op) AddOpt {
+	return WithOps(ops...)
 }
 
 // "Internal" option for recursive watches on inotify.
-func withCreate() addOpt {
+func withCreate() AddOpt {
 	return func(opt *withOpts) { opt.sendCreate = true }
 }
 

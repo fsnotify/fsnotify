@@ -894,7 +894,7 @@ loop:
 			}
 			do = append(do, func(w *Watcher) {
 				p := tmppath(tmp, c.args[0])
-				err := w.AddWith(p, withOps(op))
+				err := w.AddWith(p, WithOps(op))
 				if err != nil {
 					t.Fatalf("line %d: addWatch(%q): %s", c.line+1, p, err)
 				}

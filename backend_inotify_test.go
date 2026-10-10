@@ -74,6 +74,11 @@ func TestInotifyOverflow(t *testing.T) {
 	// We need to generate many more events than the
 	// fs.inotify.max_queued_events sysctl setting.
 	numDirs, numFiles := 128, 1024
+	if data, err := os.ReadFile("/proc/sys/fs/inotify/max_queued_events"); err == nil {
+		if limit, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil && limit > numDirs*numFiles {
+			t.Skipf("inotify.max_queued_events is %d (> %d), skipping overflow test", limit, numDirs*numFiles)
+		}
+	}
 
 	// All events need to be in the inotify queue before pulling events off it
 	// to trigger this error.
