@@ -1,0 +1,12 @@
+# A dangling symlink created after the watch must not hide later files.
+# kqueue used to stop the directory scan at the first unreadable entry.
+require symlink
+
+watch /
+
+ln -s /nonexistent /dangling
+touch /file
+
+Output:
+	create /dangling
+	create /file

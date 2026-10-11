@@ -616,17 +616,24 @@ func (w *kqueue) dirChange(dir string) error {
 	for _, f := range files {
 		fi, err := f.Info()
 		if err != nil {
+			// The entry disappeared between ReadDir and Info. Keep walking so
+			// a later name in this listing is still reported.
 			if errors.Is(err, os.ErrNotExist) {
-				return nil
+				continue
 			}
 			return fmt.Errorf("fsnotify.dirChange: %w", err)
 		}
 
-		err = w.sendCreateIfNew(filepath.Join(dir, fi.Name()), fi)
+		path := filepath.Join(dir, fi.Name())
+		err = w.sendCreateIfNew(path, fi)
 		if err != nil {
-			// Don't need to send an error if this file isn't readable.
+			// No permission, or the entry resolved to a missing target (a
+			// dangling symlink). Skip it and keep walking, matching
+			// watchDirectoryFiles. Mark it seen so the next directory change
+			// does not send Create for it again.
 			if errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM) || errors.Is(err, os.ErrNotExist) {
-				return nil
+				w.watches.markSeen(filepath.Clean(path), true)
+				continue
 			}
 			return fmt.Errorf("fsnotify.dirChange: %w", err)
 		}
