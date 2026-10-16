@@ -1,13 +1,16 @@
 # Rename watched directory.
 
 mkdir /dir
+touch /dir/existing
 watch /dir
 
 mv /dir /dir-rename
 touch /dir-rename/file
+echo data >>/dir-rename/existing
 
 Output:
 	rename /dir
 
 	windows:  # TODO(v2): Windows should behave the same by default. See #518
 		create /dir/file
+		write  /dir/existing

@@ -7,10 +7,130 @@
 package fsnotify
 
 import (
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
+	"time"
+
+	"golang.org/x/sys/unix"
 )
+
+func TestKqueueRenameDirectory(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		createFile bool
+		writeFile  bool
+		watchFile  bool
+	}{
+		{name: "directory"},
+		{name: "pending directory write", createFile: true},
+		{name: "pending file write", writeFile: true},
+		{name: "explicit file watch", watchFile: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tmp := t.TempDir()
+			dir, renamed := join(tmp, "dir"), join(tmp, "renamed")
+			file := join(dir, "file")
+			mkdir(t, dir, noWait)
+			touch(t, file, noWait)
+
+			// Start reading only after the file operations, so changes to a
+			// directory are coalesced even on a fast machine.
+			fd, pipe, err := newKqueue()
+			if err != nil {
+				t.Fatal(err)
+			}
+			events, errs := make(chan Event, testBuffered), make(chan error)
+			w := &kqueue{
+				shared: newShared(events, errs), Events: events, Errors: errs,
+				kq: fd, closepipe: pipe, watches: newWatches(),
+			}
+			started := false
+			t.Cleanup(func() {
+				if !started {
+					go w.readEvents()
+				}
+				if err := w.Close(); err != nil {
+					t.Error(err)
+				}
+				for range events {
+				}
+			})
+			if err := w.Add(dir); err != nil {
+				t.Fatal(err)
+			}
+			if tt.watchFile {
+				if err := w.Add(file); err != nil {
+					t.Fatal(err)
+				}
+			}
+			child, ok := w.watches.byPath(file)
+			if !ok {
+				t.Fatal("missing file watch")
+			}
+			if tt.createFile {
+				touch(t, dir, "new", noWait)
+			}
+			mv(t, dir, renamed, noWait)
+			if tt.writeFile {
+				echoAppend(t, "data", renamed, "file", noWait)
+			}
+			go w.readEvents()
+			started = true
+
+			select {
+			case e := <-events:
+				if e.Name != dir || !e.Has(Rename) {
+					t.Fatalf("have %s; want Rename %q", e, dir)
+				}
+			case err := <-errs:
+				t.Fatal(err)
+			case <-time.After(2 * time.Second):
+				t.Fatal("no Rename event")
+			}
+
+			var want []string
+			if tt.watchFile {
+				want = []string{file}
+			}
+			if have := w.watches.listPaths(false); !slices.Equal(have, want) {
+				t.Errorf("watches after rename: have %q; want %q", have, want)
+			}
+			var st unix.Stat_t
+			err = unix.Fstat(child.wd, &st)
+			if tt.watchFile {
+				if err != nil {
+					t.Fatalf("explicit file watch was closed: %s", err)
+				}
+				echoAppend(t, "data", renamed, "file", noWait)
+				select {
+				case e := <-events:
+					if e.Name != file || !e.Has(Write) {
+						t.Fatalf("have %s; want Write %q", e, file)
+					}
+				case err := <-errs:
+					t.Fatal(err)
+				case <-time.After(2 * time.Second):
+					t.Fatal("no Write event for explicit file watch")
+				}
+			} else if !errors.Is(err, unix.EBADF) {
+				t.Errorf("file descriptor after rename: have %v; want EBADF", err)
+			}
+
+			// A child event already returned by kevent must not be emitted
+			// with an empty name after its internal watch has been removed.
+			select {
+			case e := <-events:
+				t.Errorf("unexpected event after rename: %s", e)
+			case err := <-errs:
+				t.Error(err)
+			case <-time.After(50 * time.Millisecond):
+			}
+		})
+	}
+}
 
 func TestRemoveState(t *testing.T) {
 	var (

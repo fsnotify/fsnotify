@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"sync"
 	"time"
@@ -474,20 +473,22 @@ func (w *kqueue) readEvents() {
 			// don't really see an obvious location where this is triggered –
 			// this doesn't seem intentional, but idk...
 			//
-			// Technically fd 0 is a valid descriptor, so only skip it if
-			// there's no path, and if we're on macOS.
-			if !ok && kevent.Ident == 0 && runtime.GOOS == "darwin" {
+			// Also skip events for watches removed earlier in this batch,
+			// such as files in a directory that was just renamed.
+			if !ok {
 				continue
 			}
 
 			event := w.newEvent(path.name, path.linkName, mask)
 
 			if event.Has(Rename) || event.Has(Remove) {
-				w.remove(event.Name, false)
+				// A renamed directory's files still exist, so they won't send
+				// their own Remove events to release the internal watches.
+				w.remove(event.Name, event.Has(Rename) && !event.Has(Remove))
 				w.watches.markSeen(event.Name, false)
 			}
 
-			if path.isDir && event.Has(Write) && !event.Has(Remove) {
+			if path.isDir && event.Has(Write) && !event.Has(Remove|Rename) {
 				w.dirChange(event.Name)
 			} else if !w.sendEvent(event) {
 				return
