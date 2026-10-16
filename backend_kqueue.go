@@ -616,8 +616,12 @@ func (w *kqueue) dirChange(dir string) error {
 	for _, f := range files {
 		fi, err := f.Info()
 		if err != nil {
+			// The entry disappeared between ReadDir and Info; skip it but
+			// keep inspecting the rest of the directory, otherwise a single
+			// transiently-missing name would hide every entry that sorts
+			// after it in this scan and on every later change.
 			if errors.Is(err, os.ErrNotExist) {
-				return nil
+				continue
 			}
 			return fmt.Errorf("fsnotify.dirChange: %w", err)
 		}
@@ -625,8 +629,14 @@ func (w *kqueue) dirChange(dir string) error {
 		err = w.sendCreateIfNew(filepath.Join(dir, fi.Name()), fi)
 		if err != nil {
 			// Don't need to send an error if this file isn't readable.
+			// Keep walking the directory instead of returning so a single
+			// dangling symlink or unreadable file (e.g. Emacs lock files
+			// such as `.#name -> user@host.pid:boot`) does not hide Create
+			// events for files that sort after it, nor keep hiding them
+			// on every subsequent directory change for as long as the bad
+			// entry exists.
 			if errors.Is(err, unix.EACCES) || errors.Is(err, unix.EPERM) || errors.Is(err, os.ErrNotExist) {
-				return nil
+				continue
 			}
 			return fmt.Errorf("fsnotify.dirChange: %w", err)
 		}
