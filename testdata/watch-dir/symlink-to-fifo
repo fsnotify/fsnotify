@@ -1,0 +1,17 @@
+# Add() should work if a symlink to a FIFO is already present. open() follows
+# the link, and opening a FIFO for reading blocks until a writer shows up
+# unless O_NONBLOCK is set, which hung Add() on macOS.
+require symlink
+require mkfifo
+
+mkdir             /dir
+mkfifo            /fifo
+ln     -s /fifo   /dir/link
+touch             /dir/file
+
+watch /dir
+
+touch /dir/after
+
+Output:
+	create  /dir/after
