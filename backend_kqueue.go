@@ -379,8 +379,12 @@ func (w *kqueue) addWatch(name string, flags uint32, listDir bool) (string, erro
 			}
 		}
 
+		mode := openMode
+		if listDir {
+			mode |= openSymlink
+		}
 		info.wd, err = internal.IgnoringEINTR(func() (int, error) {
-			return unix.Open(name, openMode, 0)
+			return unix.Open(name, mode, 0)
 		})
 		if err != nil {
 			return "", err

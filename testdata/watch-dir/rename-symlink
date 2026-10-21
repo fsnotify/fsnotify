@@ -12,5 +12,5 @@ Output:
 	rename /link
 	create /link-rename ← /link
 
-	kqueue:  # TODO: this is broken.
+	freebsd, openbsd, netbsd, dragonfly:  # TODO: this is broken.
 		create /link-rename

@@ -15,7 +15,7 @@ Output:
 	# complained so I'm hesitant to fix it now as part of a bugfix.
 	#
 	# TODO: it shouldn't do this; it doesn't work like this on inotify.
-	kqueue:
+	freebsd, openbsd, netbsd:
 		create  /link
 		write   /link
 

@@ -11,5 +11,5 @@ rm /link
 Output:
 	remove /link
 
-	kqueue:  # TODO: this is broken.
+	freebsd, openbsd, netbsd, dragonfly:  # TODO: this is broken.
 		no-events

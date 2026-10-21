@@ -11,7 +11,7 @@ Output:
 	write  /link
 	write  /link
 
-	linux, windows, fen:
+	linux, windows, fen, darwin:
 		remove  /link
 		create  /link
 		write   /link

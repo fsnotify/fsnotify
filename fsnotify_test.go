@@ -1204,3 +1204,85 @@ func TestNewWatcher(t *testing.T) {
 		t.Errorf("cap of NewWatcher() is not %d but %d", 42, c)
 	}
 }
+
+func TestWatchSymlinkOutsideTree(t *testing.T) {
+	if !internal.HasPrivilegesForSymlink() {
+		t.Skip("symlinks not supported or require privileges")
+	}
+	if isKqueue() && runtime.GOOS != "darwin" {
+		t.Skip("BSD kqueue does not support O_SYMLINK")
+	}
+
+	t.Run("symlink created before watch", func(t *testing.T) {
+		t.Parallel()
+		tmp := t.TempDir()
+		root := join(tmp, "root")
+		outside := join(tmp, "outside")
+		mkdir(t, root)
+		mkdir(t, outside)
+
+		touch(t, outside, "file")
+		mkdir(t, outside, "dir")
+
+		symlink(t, join(outside, "file"), root, "filelink")
+		symlink(t, join(outside, "dir"), root, "dirlink")
+
+		w := newCollector(t)
+		addWatch(t, w.w, root)
+		w.collect(t)
+
+		echoAppend(t, "data", outside, "file")
+		touch(t, outside, "dir/newfile")
+
+		have := w.events(t)
+		if len(have) > 0 {
+			t.Fatalf("unexpected events when modifying outside tree: %v", have)
+		}
+
+		rm(t, root, "filelink")
+		symlink(t, join(outside, "file2"), root, "filelink2")
+
+		cmpEvents(t, root, w.events(t), newEvents(t, `
+			remove /filelink
+			create /filelink2
+		`))
+	})
+
+	t.Run("symlink created after watch", func(t *testing.T) {
+		t.Parallel()
+		tmp := t.TempDir()
+		root := join(tmp, "root")
+		outside := join(tmp, "outside")
+		mkdir(t, root)
+		mkdir(t, outside)
+
+		touch(t, outside, "file")
+		mkdir(t, outside, "dir")
+
+		w := newCollector(t)
+		addWatch(t, w.w, root)
+		w.collect(t)
+
+		symlink(t, join(outside, "file"), root, "filelink")
+		symlink(t, join(outside, "dir"), root, "dirlink")
+
+		cmpEvents(t, root, w.events(t), newEvents(t, `
+			create /filelink
+			create /dirlink
+		`))
+
+		echoAppend(t, "data", outside, "file")
+		touch(t, outside, "dir/newfile")
+
+		have := w.events(t)
+		if len(have) > 0 {
+			t.Fatalf("unexpected events when modifying outside tree: %v", have)
+		}
+
+		rm(t, root, "filelink")
+
+		cmpEvents(t, root, w.events(t), newEvents(t, `
+			remove /filelink
+		`))
+	})
+}
