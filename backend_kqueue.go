@@ -303,9 +303,9 @@ func (w *kqueue) remove2(name string, unwatchFiles bool) error {
 		return err
 	}
 
-	unix.Close(info.wd)
-
 	isDir := w.watches.remove(info.wd, name)
+
+	unix.Close(info.wd)
 
 	// Find all watched paths that are in this directory that are not external.
 	if unwatchFiles && isDir {

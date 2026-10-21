@@ -8,7 +8,9 @@ package fsnotify
 
 import (
 	"fmt"
+	"os"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -104,4 +106,128 @@ func TestRemoveState(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(0, 0)
+}
+
+func TestKqueueConcurrentAddRemove(t *testing.T) {
+	countFDs := func() int {
+		entries, err := os.ReadDir("/dev/fd")
+		if err != nil {
+			return -1
+		}
+		return len(entries)
+	}
+
+	fdsBefore := countFDs()
+
+	tmp := t.TempDir()
+	const numFiles = 16
+	files := make([]string, numFiles)
+	for i := range numFiles {
+		files[i] = join(tmp, fmt.Sprintf("file-%d", i))
+		touch(t, files[i])
+	}
+
+	w := newWatcher(t)
+	kq := w.b.(*kqueue)
+
+	var wg sync.WaitGroup
+	for i := range numFiles {
+		wg.Add(1)
+		go func(path string) {
+			defer wg.Done()
+			for range 250 {
+				if err := w.Add(path); err != nil {
+					t.Errorf("Add(%s) failed: %v", path, err)
+					return
+				}
+				if err := w.Remove(path); err != nil {
+					t.Errorf("Remove(%s) failed: %v", path, err)
+					return
+				}
+			}
+		}(files[i])
+	}
+	wg.Wait()
+
+	if t.Failed() {
+		w.Close()
+		return
+	}
+
+	kq.watches.mu.RLock()
+	lenPath := len(kq.watches.path)
+	lenWd := len(kq.watches.wd)
+	lenUser := len(kq.watches.byUser)
+	kq.watches.mu.RUnlock()
+
+	if lenPath != 0 || lenWd != 0 || lenUser != 0 {
+		t.Fatalf("dangling watches: path=%d wd=%d byUser=%d", lenPath, lenWd, lenUser)
+	}
+
+	// Add watches concurrently, verify table integrity, then remove concurrently.
+	for i := range numFiles {
+		wg.Add(1)
+		go func(path string) {
+			defer wg.Done()
+			if err := w.Add(path); err != nil {
+				t.Errorf("Add(%s) failed: %v", path, err)
+			}
+		}(files[i])
+	}
+	wg.Wait()
+
+	if t.Failed() {
+		w.Close()
+		return
+	}
+
+	kq.watches.mu.RLock()
+	if len(kq.watches.path) != numFiles || len(kq.watches.wd) != numFiles {
+		t.Errorf("mismatched table sizes: path=%d wd=%d want=%d",
+			len(kq.watches.path), len(kq.watches.wd), numFiles)
+	}
+	for p, fd := range kq.watches.path {
+		info, ok := kq.watches.wd[fd]
+		if !ok {
+			t.Errorf("missing wd entry for fd %d (path %s)", fd, p)
+		} else if info.name != p {
+			t.Errorf("mismatched watch path for fd %d: have %s, want %s", fd, info.name, p)
+		}
+	}
+	kq.watches.mu.RUnlock()
+
+	for i := range numFiles {
+		wg.Add(1)
+		go func(path string) {
+			defer wg.Done()
+			if err := w.Remove(path); err != nil {
+				t.Errorf("Remove(%s) failed: %v", path, err)
+			}
+		}(files[i])
+	}
+	wg.Wait()
+
+	if t.Failed() {
+		w.Close()
+		return
+	}
+
+	kq.watches.mu.RLock()
+	lenPath = len(kq.watches.path)
+	lenWd = len(kq.watches.wd)
+	lenUser = len(kq.watches.byUser)
+	kq.watches.mu.RUnlock()
+
+	if lenPath != 0 || lenWd != 0 || lenUser != 0 {
+		t.Errorf("uncleaned watches after remove: path=%d wd=%d byUser=%d", lenPath, lenWd, lenUser)
+	}
+
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	fdsAfter := countFDs()
+	if fdsBefore != -1 && fdsAfter != -1 && fdsAfter > fdsBefore {
+		t.Errorf("file descriptor leak: before %d, after %d", fdsBefore, fdsAfter)
+	}
 }
