@@ -90,6 +90,18 @@ func (w *watches) removePath(path string) ([]uint32, error) {
 	}
 
 	watch := w.wd[wd]
+	if watch == nil {
+		// The watch descriptor was already removed from w.wd while w.path
+		// still points at it; this happens when a watched directory is
+		// replaced with another watched directory via rename(2) and Add()
+		// runs before the reader goroutine processes the queued
+		// IN_DELETE_SELF/IN_IGNORED for the old descriptor. There's no
+		// kernel watch left to remove, so just drop the stale entry and
+		// report success. See #798.
+		delete(w.path, path)
+		return nil, nil
+	}
+
 	if recurse && !watch.recurse() {
 		return nil, fmt.Errorf("can't use /... with non-recursive watch %q", path)
 	}
