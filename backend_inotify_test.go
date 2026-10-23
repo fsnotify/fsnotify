@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -150,4 +151,59 @@ func TestInotifyDeleteOpenFile(t *testing.T) {
 	fp.Close()
 	e = w.stop(t)
 	cmpEvents(t, tmp, e, newEvents(t, `remove /file`))
+}
+
+// Removing a watch must not panic when the watched directory was atomically
+// replaced with another watched directory via rename(2) and Add() was called
+// for the replaced path before the reader goroutine processed the queued
+// IN_DELETE_SELF/IN_IGNORED for the old watch descriptor. In that case the
+// path entry in w.watches still points at the dead descriptor and w.wd[wd]
+// is nil. See #798.
+func TestInotifyRemoveAfterRenameReplace(t *testing.T) {
+	t.Parallel()
+
+	var (
+		tmp = t.TempDir()
+		x   = join(tmp, "x")
+		y   = join(tmp, "y")
+	)
+	mkdir(t, x)
+	mkdir(t, y)
+
+	w := newWatcher(t)
+	defer w.Close()
+	addWatch(t, w, tmp)
+	addWatch(t, w, x)
+	addWatch(t, w, y)
+
+	// Atomically replace x with y; os.Rename refuses directory targets, so
+	// use the raw syscall.
+	if err := syscall.Rename(y, x); err != nil {
+		t.Fatal(err)
+	}
+
+	// Don't drain w.Events: the reader goroutine blocks on sending the
+	// queued IN_DELETE_SELF before it reaches IN_IGNORED, which makes the
+	// interleaving below deterministic.
+	time.Sleep(100 * time.Millisecond)
+
+	// inotify_add_watch() returns y's already-tracked descriptor for the new
+	// x, leaving the w.watches entry for x pointing at the dead descriptor.
+	addWatch(t, w, x)
+
+	// Must not panic with a nil pointer dereference; there is no kernel
+	// watch left to remove, so this reports success.
+	if err := w.Remove(x); err != nil {
+		t.Fatalf("Remove(%q): %s", x, err)
+	}
+
+	// The stale entry must be gone; tmp and y are still watched.
+	if n := w.b.(*inotify).watches.len(); n != 2 {
+		t.Fatalf("have %d watches; want 2", n)
+	}
+	for _, p := range w.WatchList() {
+		if p == x {
+			t.Fatalf("%q still in watch list", x)
+		}
+	}
 }
