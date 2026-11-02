@@ -14,6 +14,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestRemoveState(t *testing.T) {
@@ -150,4 +152,66 @@ func TestInotifyDeleteOpenFile(t *testing.T) {
 	fp.Close()
 	e = w.stop(t)
 	cmpEvents(t, tmp, e, newEvents(t, `remove /file`))
+}
+
+// handleEvent() must not block on w.Errors while it holds w.mu: Add(), Remove()
+// and WatchList() need that lock, so a user calling any of them from the
+// goroutine that reads w.Errors would never return, and the reader would never
+// get its error read.
+//
+// The only error handleEvent() produces for a non-recursive watch comes from
+// inotify_rm_watch() on IN_MOVE_SELF, which fails with EINVAL when the kernel
+// already dropped the watch because the moved file was deleted before the
+// reader got to the IN_MOVE_SELF.
+func TestInotifyErrorNotSentUnderLock(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	file := join(tmp, "file")
+	touch(t, file)
+
+	// Always unbuffered: the reader needs to block on sending the Chmod below
+	// so that the move and the delete are both queued before it handles them.
+	w, err := NewWatcher()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+	addWatch(t, w, file)
+
+	chmod(t, 0o600, file, noWait)
+	mv(t, file, join(tmp, "moved"), noWait)
+	rm(t, join(tmp, "moved"), noWait)
+
+	// The reader is blocked sending this; once read it handles IN_MOVE_SELF
+	// for a watch the kernel already removed and reports the EINVAL.
+	select {
+	case e := <-w.Events:
+		if !e.Has(Chmod) {
+			t.Fatalf("unexpected first event: %s", e)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no Chmod event")
+	}
+	eventSeparator()
+
+	done := make(chan struct{})
+	go func() { w.WatchList(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		// Close() needs w.mu too, so read the error to unblock the reader or
+		// the deferred Close() hangs as well.
+		go func() { <-w.Errors }()
+		t.Fatal("WatchList() blocked: handleEvent() is sending on w.Errors while holding w.mu")
+	}
+
+	select {
+	case err := <-w.Errors:
+		if !errors.Is(err, unix.EINVAL) {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no error from inotify_rm_watch()")
+	}
 }

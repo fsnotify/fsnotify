@@ -398,8 +398,8 @@ func (w *inotify) readEvents() {
 				}
 			}
 
-			ev, ok := w.handleEvent(inEvent, &buf, offset)
-			if !ok {
+			ev, err := w.handleEvent(inEvent, &buf, offset)
+			if !w.sendError(err) {
 				return
 			}
 			if !w.sendEvent(ev) {
@@ -412,7 +412,12 @@ func (w *inotify) readEvents() {
 	}
 }
 
-func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offset uint32) (Event, bool) {
+// handleEvent processes one inotify event and returns the Event to send to the
+// user, and any error to report. Both are sent by the caller: this holds w.mu,
+// and sending on w.Events or w.Errors blocks until the user reads from it,
+// which they can't do if they're waiting on the same lock in Add(), Remove(),
+// WatchList(), or Close().
+func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offset uint32) (Event, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -426,7 +431,7 @@ func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offs
 	/// state. Not much we can do about it, so just skip. See #616.
 	watch := w.watches.byWd(uint32(inEvent.Wd))
 	if watch == nil {
-		return Event{}, true
+		return Event{}, nil
 	}
 
 	var (
@@ -443,7 +448,7 @@ func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offs
 
 	if inEvent.Mask&unix.IN_IGNORED != 0 || inEvent.Mask&unix.IN_UNMOUNT != 0 {
 		w.watches.remove(watch)
-		return Event{}, true
+		return Event{}, nil
 	}
 
 	// inotify will automatically remove the watch on deletes; just need
@@ -452,24 +457,24 @@ func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offs
 		w.watches.remove(watch)
 	}
 
+	var err error
+
 	// We can't really update the state when a watched path is moved; only
 	// IN_MOVE_SELF is sent and not IN_MOVED_{FROM,TO}. So remove the watch.
 	if inEvent.Mask&unix.IN_MOVE_SELF == unix.IN_MOVE_SELF {
 		// Watch is set up as part of recurse: do nothing as the move gets
 		// registered from the parent directory.
 		if watch.recurse() && !watch.byUser() {
-			return Event{}, true
+			return Event{}, nil
 		}
 
-		err := w.remove(watch.path)
-		if err != nil && !errors.Is(err, ErrNonExistentWatch) {
-			if !w.sendError(err) {
-				return Event{}, false
-			}
+		err = w.remove(watch.path)
+		if errors.Is(err, ErrNonExistentWatch) {
+			err = nil
 		}
 
 		if watch.recurse() {
-			return Event{Name: watch.path, Op: Rename}, true
+			return Event{Name: watch.path, Op: Rename}, err
 		}
 	}
 
@@ -478,7 +483,7 @@ func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offs
 	if inEvent.Mask&unix.IN_DELETE_SELF != 0 {
 		_, ok := w.watches.path[filepath.Dir(watch.path)]
 		if ok {
-			return Event{}, true
+			return Event{}, err
 		}
 	}
 
@@ -488,10 +493,7 @@ func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offs
 		isDir := inEvent.Mask&unix.IN_ISDIR == unix.IN_ISDIR
 		/// New directory created: set up watch on it.
 		if isDir && ev.Has(Create) {
-			err := w.register(ev.Name, watch.flags, flagRecurse)
-			if !w.sendError(err) {
-				return Event{}, false
-			}
+			err = w.register(ev.Name, watch.flags, flagRecurse)
 
 			// Directory rename, so we need to update all the children.
 			//
@@ -520,7 +522,7 @@ func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offs
 		}
 	}
 
-	return ev, true
+	return ev, err
 }
 
 func inotifyEventName(buf *[65536]byte, offset, nameLen uint32) string {
