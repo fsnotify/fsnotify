@@ -7,6 +7,7 @@
 package fsnotify
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -81,5 +82,23 @@ func TestWindowsRemWatch(t *testing.T) {
 	}
 	if err := w.b.(*readDirChangesW).remWatch(tmp); err == nil {
 		t.Fatal("Should be fail with closed handle")
+	}
+}
+
+// sendError must not swallow the reply channel sent by Close, or readEvents
+// never sees the close request and Close blocks forever.
+func TestSendErrorClosing(t *testing.T) {
+	w := &readDirChangesW{
+		Errors: make(chan error),
+		done:   make(chan chan<- error, 1),
+	}
+	ch := make(chan error)
+	w.done <- ch
+
+	if w.sendError(errors.New("err")) {
+		t.Fatal("sendError returned true")
+	}
+	if len(w.done) != 1 || <-w.done != ch {
+		t.Fatal("reply channel not put back on done")
 	}
 }
