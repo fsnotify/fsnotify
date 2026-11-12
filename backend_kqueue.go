@@ -303,9 +303,11 @@ func (w *kqueue) remove2(name string, unwatchFiles bool) error {
 		return err
 	}
 
-	unix.Close(info.wd)
-
+	// Drop the table entry before closing the fd. Closing first can
+	// let a concurrent Add reuse the same descriptor; the later
+	// remove() would then delete that new watch and leak the fd.
 	isDir := w.watches.remove(info.wd, name)
+	unix.Close(info.wd)
 
 	// Find all watched paths that are in this directory that are not external.
 	if unwatchFiles && isDir {
