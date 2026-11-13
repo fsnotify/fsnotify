@@ -37,6 +37,9 @@ import (
 // A watcher should not be copied (e.g. pass it by pointer, rather than by
 // value).
 //
+// Callers must receive from both the Events and Errors channels to keep the
+// watcher from blocking. A single goroutine can receive from both using select.
+//
 // # Linux notes
 //
 // When a file is removed a Remove event won't be emitted until all file
@@ -101,6 +104,9 @@ type Watcher struct {
 	Events chan Event
 
 	// Errors sends any errors.
+	//
+	// Callers must receive from this channel, even if they don't need to handle
+	// errors. An unread error blocks the watcher from delivering further events.
 	Errors chan error
 }
 
@@ -212,6 +218,9 @@ var (
 	//                  sysctl can be used to increase this).
 	//  - windows:      The buffer size is too small; WithBufferSize() can be used to increase it.
 	//  - kqueue, fen:  Not used.
+	//
+	// Some filesystem events have been lost. Applications that maintain state
+	// from events should rescan the watched paths to recover the current state.
 	ErrEventOverflow = errors.New("fsnotify: queue or buffer overflow")
 
 	// ErrUnsupported is returned by AddWith() when WithOps() specified an
