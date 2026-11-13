@@ -27,6 +27,13 @@ untested.
 
 Usage
 -----
+Receive from both the `Events` and `Errors` channels while the watcher is running.
+An unread error blocks the watcher from delivering further events. A single
+goroutine can receive from both channels with `select`, as in the example below.
+
+`fsnotify.ErrEventOverflow` means that some filesystem events were lost. If you
+maintain state from events, rescan the watched paths to recover the current state.
+
 A basic example:
 
 ```go
