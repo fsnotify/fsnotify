@@ -418,7 +418,7 @@ func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offs
 
 	/// If the event happened to the watched directory or the watched file, the
 	/// kernel doesn't append the filename to the event, but we would like to
-	/// always fill the the "Name" field with a valid filename. We retrieve the
+	/// always fill the "Name" field with a valid filename. We retrieve the
 	/// path of the watch from the "paths" map.
 	///
 	/// Can be nil if Remove() was called in another goroutine for this path
