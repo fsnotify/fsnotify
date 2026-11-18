@@ -63,6 +63,34 @@ func TestRemoveState(t *testing.T) {
 	check(0)
 }
 
+// Close() must not use the inotify fd after closing it: the fd number can be
+// reused by another Watcher, and watch descriptors are numbered per instance,
+// so inotify_rm_watch() on it removes that Watcher's watches.
+func TestInotifyCloseFdReuse(t *testing.T) {
+	dir := t.TempDir()
+	a := newWatcher(t, t.TempDir())
+	ai := a.b.(*inotify)
+
+	closed := make(chan error)
+	go func() { closed <- a.Close() }()
+
+	// Hold w.mu once Close() has started, like a concurrent Add(), Remove(),
+	// or WatchList() would, and give it some time to close the fd.
+	<-ai.done
+	ai.mu.Lock()
+	eventSeparator()
+	b := newWatcher(t, dir)
+	defer b.Close()
+	ai.mu.Unlock()
+
+	if err := <-closed; err != nil {
+		t.Fatal(err)
+	}
+	if err := b.Remove(dir); err != nil {
+		t.Fatalf("watch on other Watcher was removed by Close(): %s", err)
+	}
+}
+
 // Ensure that the correct error is returned on overflows.
 func TestInotifyOverflow(t *testing.T) {
 	t.Parallel()
