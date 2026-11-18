@@ -164,17 +164,21 @@ func (w *inotify) Close() error {
 		return nil
 	}
 
-	// Causes any blocking reads to return with an error, provided the file
-	// still supports deadline operations.
-	err := w.inotifyFile.Close()
-	if err != nil {
-		return err
-	}
+	// Remove the watches before closing the fd, and keep w.mu until it's
+	// closed: once closed the fd number can be reused straight away (e.g. by
+	// another Watcher), and inotify_rm_watch() or inotify_add_watch() on it
+	// would modify that instance's watches.
 	w.mu.Lock()
 	for name := range w.watches.path {
 		w.remove(name)
 	}
+	// Causes any blocking reads to return with an error, provided the file
+	// still supports deadline operations.
+	err := w.inotifyFile.Close()
 	w.mu.Unlock()
+	if err != nil {
+		return err
+	}
 
 	<-w.doneResp // Wait for readEvents() to finish.
 	return nil
@@ -230,6 +234,9 @@ func (w *inotify) AddWith(path string, opts ...addOpt) error {
 
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if w.isClosed() { // Close() may have closed w.fd while we waited for w.mu.
+		return ErrClosed
+	}
 	path, recurse := recursivePath(path)
 	if recurse {
 		return filepath.WalkDir(path, func(root string, d fs.DirEntry, err error) error {
