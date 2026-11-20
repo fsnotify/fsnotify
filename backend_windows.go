@@ -80,7 +80,8 @@ func (w *readDirChangesW) sendError(err error) bool {
 		return true
 	}
 	select {
-	case <-w.done:
+	case ch := <-w.done:
+		w.done <- ch
 		return false
 	case w.Errors <- err:
 		return true

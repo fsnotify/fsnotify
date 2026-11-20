@@ -7,6 +7,7 @@
 package fsnotify
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -83,3 +84,28 @@ func TestWindowsRemWatch(t *testing.T) {
 		t.Fatal("Should be fail with closed handle")
 	}
 }
+
+func TestSendErrorPreservesDone(t *testing.T) {
+	b := &readDirChangesW{
+		Errors: make(chan error), // unbuffered, no receiver
+		done:   make(chan chan<- error, 1),
+	}
+	ch := make(chan error, 1)
+	b.done <- ch
+
+	// sendError when done is pending should return false and keep ch in b.done
+	sent := b.sendError(errors.New("test error"))
+	if sent {
+		t.Fatal("expected sendError to return false when done channel has message")
+	}
+
+	select {
+	case gotCh := <-b.done:
+		if gotCh != ch {
+			t.Fatalf("expected done channel to contain %v, got %v", ch, gotCh)
+		}
+	default:
+		t.Fatal("done channel was emptied by sendError")
+	}
+}
+
